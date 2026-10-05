@@ -36,6 +36,7 @@ QStringList numbered(const QString &fmt, int n)
 QGroupBox *ledGroup(const QString &title, const QStringList &captions, QList<LedIndicator *> &leds)
 {
     auto *g = new QGroupBox(title);
+    g->setProperty("compact", true);   // đệm trên/dưới nhỏ hơn thẻ thường
     auto *l = new QHBoxLayout(g);
     l->setSpacing(theme::kSpace);
     // Khoảng giãn bằng nhau ở hai lề và giữa các đèn: đèn cách đều, cân hai bên.

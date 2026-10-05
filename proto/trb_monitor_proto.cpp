@@ -70,7 +70,11 @@ QString tripBitName(int i, int bit)
     switch (k.kind) {
     case 0:  return QStringLiteral("TRM%1 I_SEN%2").arg(k.index + 1).arg(bit + 1);
     case 1:  return QStringLiteral("TRM%1 PA%2").arg(k.index * 2 + 1 + bit / 4).arg(bit % 4 + 1);
-    case 2:  return QStringLiteral("System bit %1").arg(bit);
+    case 2: {
+        static const char *const kSystem[] = {"TRM temp max", "TRM temp min", "V TRB trip max", "V TRB trip min",
+                                              "I TRB trip max", "I TRB trip min"};
+        return bit < 6 ? QString::fromLatin1(kSystem[bit]) : QString();   // bit 6, 7 chưa dùng
+    }
     default: return {};
     }
 }

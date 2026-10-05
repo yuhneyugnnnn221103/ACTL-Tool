@@ -158,6 +158,13 @@ private slots:
         QCOMPARE(trbmon::tripBitName(5, 5), QStringLiteral("TRM4 PA2"));
         // Trip 7: system
         QCOMPARE(trbmon::tripName(6), QStringLiteral("System"));
+        QCOMPARE(trbmon::tripBitName(6, 0), QStringLiteral("TRM temp max"));
+        QCOMPARE(trbmon::tripBitName(6, 1), QStringLiteral("TRM temp min"));
+        QCOMPARE(trbmon::tripBitName(6, 2), QStringLiteral("V TRB trip max"));
+        QCOMPARE(trbmon::tripBitName(6, 3), QStringLiteral("V TRB trip min"));
+        QCOMPARE(trbmon::tripBitName(6, 4), QStringLiteral("I TRB trip max"));
+        QCOMPARE(trbmon::tripBitName(6, 5), QStringLiteral("I TRB trip min"));
+        QVERIFY(trbmon::tripBitName(6, 6).isEmpty() && trbmon::tripBitName(6, 7).isEmpty());
         // Trip 10-15: như 1-6 nhưng dưới min
         QCOMPARE(trbmon::tripName(9), QStringLiteral("Min I_SEN TRM1"));
         QCOMPARE(trbmon::tripName(12), QStringLiteral("Min I_SEN TRM4"));
