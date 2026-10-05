@@ -6,6 +6,7 @@
 #include "services/trb_monitor.h"
 #include "ui/auth.h"
 #include "ui/main_window.h"
+#include "ui/theme.h"
 #include <QApplication>
 #include <QFile>
 #include <QThread>
@@ -13,7 +14,7 @@
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    QApplication::setStyle(QStringLiteral("Fusion"));
+    ui::theme::apply(app); // Fusion + font + style.qss (resources/style.qss)
     qRegisterMetaType<model::Status>();
 
     AppContext ctx;

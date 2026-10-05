@@ -12,6 +12,9 @@ class QTableWidget;
 
 namespace ui {
 
+class LedIndicator;
+class StatusPill;
+
 // Giám sát chi tiết và điều khiển một TRB.
 class TrbDetailPage : public QWidget {
     Q_OBJECT
@@ -40,10 +43,12 @@ private:
     int m_mb = 0, m_trb = 0;
 
     QComboBox *m_mbBox, *m_trbBox, *m_target, *m_mode;
+    StatusPill *m_pill;
     QLabel *m_status;
     struct Table { QTableWidget *w; int firstField; };
     QList<Table> m_tables;
-    QList<QLabel *> m_metrics, m_ledAdar, m_ledPg, m_ledPa, m_state, m_trip;
+    QList<QLabel *> m_metrics, m_state, m_trip;
+    QList<LedIndicator *> m_ledAdar, m_ledPg, m_ledPa;
     QCheckBox *m_pa[4], *m_start, *m_clearTrip, *m_beamSync, *m_adar[8], *m_ch[4];
     QSpinBox *m_phaseTx, *m_phaseRx, *m_ampTx, *m_ampRx;
 };

@@ -94,6 +94,10 @@ Các khóa hay dùng trong `actl_tool.ini`:
 | `psu/checkCrc` | `true` | Kiểm tra CRC bản tin giám sát và cấu hình PSU |
 | `auth/lockMinutes` | `10` | Tự khóa chế độ kỹ sư sau thời gian không thao tác |
 
+## Giao diện
+
+Style Fusion cộng một file QSS duy nhất (`resources/style.qss`, nạp từ resource khi khởi động). Bảng màu khai báo một chỗ ở `ui/theme.h`; QSS dùng token `@tên@` và được thay màu khi nạp. Nút phụ và nút nguy hiểm đặt bằng thuộc tính `role` (`theme::setRole(widget, "secondary" | "danger")`). Đèn LED, ô trạng thái và lưới tổng quan tự vẽ bằng QPainter (`ui/led_indicator`, `ui/status_pill`, `ui/overview_grid`, `ui/psu_grid`). Màu trạng thái cố định ở `theme::statusColor` và luôn kèm ký hiệu.
+
 ## Kiến trúc
 
 ```

@@ -21,6 +21,10 @@ set(PROJECT_SOURCES
         ui/overview_grid.h ui/overview_grid.cpp
         ui/trb_detail_page.h ui/trb_detail_page.cpp
         ui/psu_page.h ui/psu_page.cpp
+        ui/theme.h ui/theme.cpp
+        ui/status_pill.h ui/status_pill.cpp
+        ui/led_indicator.h ui/led_indicator.cpp
+        resources.qrc
         ui/psu_grid.h ui/psu_grid.cpp
         ui/psu_config_page.h ui/psu_config_page.cpp
 

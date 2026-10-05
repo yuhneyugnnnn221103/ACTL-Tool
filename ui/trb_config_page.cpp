@@ -1,5 +1,6 @@
 #include "trb_config_page.h"
 #include "auth.h"
+#include "theme.h"
 #include "../proto/trb_config_proto.h"
 #include <QComboBox>
 #include <QFile>
@@ -224,6 +225,14 @@ QWidget *TrbConfigPage::buildContent()
     connect(pwBtn, &QPushButton::clicked, this, [this] { if (m_ctx.auth->unlock(this)) m_ctx.auth->changePassword(this); });
     batch->addWidget(pwBtn);
     batch->addWidget(lockBtn);
+
+    // Nút chính: Đọc, Ghi; các nút còn lại là nút phụ.
+    for (QPushButton *b : m_actions) {
+        const QString t = b->text();
+        if (t != QStringLiteral("Đọc") && t != QStringLiteral("Ghi và kiểm tra") && !t.startsWith(QStringLiteral("Ghi toàn bộ")))
+            theme::setRole(b, "secondary");
+    }
+    for (QPushButton *b : {m_cancel, lockBtn, pwBtn}) theme::setRole(b, "secondary");
 
     auto *right = new QVBoxLayout;
     right->addLayout(single);

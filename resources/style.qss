@@ -1,0 +1,229 @@
+/* Style toàn app, nạp một lần bằng qApp->setStyleSheet (xem ui/theme.cpp).
+   Màu viết dạng @token@, bảng màu khai báo ở ui/theme.h. Bo góc: 6px nút/ô nhập, 8px thẻ.
+   Chỉ có hai cỡ chữ: 13px (chung) và 20px (QLabel[role="metric"]). Khoảng cách theo bội số của 4px. */
+
+* {
+    font-family: "Segoe UI", "Roboto", "Noto Sans", sans-serif;
+    font-size: 13px;
+    color: @text@;
+}
+
+QMainWindow, QDialog, QMessageBox {
+    background: @bg@;
+}
+QWidget#page, QStackedWidget, QSplitter {
+    background: transparent;
+}
+QToolTip {
+    background: @text@;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+QLabel {
+    background: transparent;
+}
+QLabel[role="muted"] {
+    color: @textMuted@;
+}
+QLabel[role="title"] {
+    font-weight: 700;
+}
+QLabel[role="metric"] {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+/* ---------- Nút ---------- */
+QPushButton {
+    background: @accent@;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    min-height: 20px;
+    font-weight: 600;
+}
+QPushButton:hover { background: @accentHover@; }
+QPushButton:pressed { background: @accentPressed@; }
+QPushButton:disabled { background: @disabledBg@; color: @disabledText@; }
+QPushButton:focus { outline: none; }
+
+QPushButton[role="secondary"] {
+    background: transparent;
+    color: @text@;
+    border: 1px solid @border@;
+}
+QPushButton[role="secondary"]:hover { background: @accentSoft@; border-color: @accent@; color: @accent@; }
+QPushButton[role="secondary"]:pressed { background: @border@; }
+QPushButton[role="secondary"]:disabled { background: transparent; color: @disabledText@; border-color: @border@; }
+
+QPushButton[role="danger"] { background: @danger@; color: white; }
+QPushButton[role="danger"]:hover { background: @dangerHover@; }
+QPushButton[role="danger"]:pressed { background: @dangerPressed@; }
+QPushButton[role="danger"]:disabled { background: @disabledBg@; color: @disabledText@; }
+
+/* ---------- Ô nhập ---------- */
+QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+    background: @surface@;
+    border: 1px solid @border@;
+    border-radius: 6px;
+    padding: 5px 8px;
+    min-height: 20px;
+    selection-background-color: @accentSoft@;
+    selection-color: @text@;
+}
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus, QComboBox:on {
+    border: 1px solid @accent@;
+}
+QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {
+    background: @surfaceAlt@;
+    color: @disabledText@;
+}
+QLineEdit:read-only { background: @surfaceAlt@; }
+QComboBox QAbstractItemView {
+    background: @surface@;
+    border: 1px solid @border@;
+    border-radius: 6px;
+    selection-background-color: @accentSoft@;
+    selection-color: @text@;
+    outline: none;
+}
+
+QComboBox::drop-down { border: none; width: 24px; }
+QComboBox::down-arrow { image: url(:/arrow-down.png); width: 12px; height: 12px; }
+QSpinBox::up-button, QDoubleSpinBox::up-button { subcontrol-origin: border; subcontrol-position: top right; width: 20px; border: none; }
+QSpinBox::down-button, QDoubleSpinBox::down-button { subcontrol-origin: border; subcontrol-position: bottom right; width: 20px; border: none; }
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow { image: url(:/arrow-up.png); width: 10px; height: 10px; }
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow { image: url(:/arrow-down.png); width: 10px; height: 10px; }
+
+QCheckBox, QRadioButton { spacing: 8px; background: transparent; }
+QCheckBox:disabled, QRadioButton:disabled { color: @disabledText@; }
+QCheckBox::indicator, QRadioButton::indicator { width: 18px; height: 18px; border: 1px solid @disabledText@; background: @surface@; }
+QCheckBox::indicator { border-radius: 4px; }
+QRadioButton::indicator { border-radius: 10px; }
+QCheckBox::indicator:hover, QRadioButton::indicator:hover { border-color: @accent@; }
+QCheckBox::indicator:checked { background: @accent@; border-color: @accent@; image: url(:/check.png); }
+QRadioButton::indicator:checked {
+    border-color: @accent@;
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0 @accent@, stop:0.45 @accent@, stop:0.5 @surface@, stop:1 @surface@);
+}
+QCheckBox::indicator:disabled, QRadioButton::indicator:disabled { background: @surfaceAlt@; border-color: @disabledBg@; }
+QTableView::indicator, QTreeView::indicator, QListView::indicator { width: 16px; height: 16px; border: 1px solid @disabledText@; border-radius: 4px; background: @surface@; }
+QTreeView::indicator:indeterminate { background: @accentSoft@; border-color: @accent@; }
+QTableView::indicator:checked, QTreeView::indicator:checked, QListView::indicator:checked { background: @accent@; border-color: @accent@; image: url(:/check.png); }
+
+/* ---------- Thẻ ---------- */
+QGroupBox {
+    background: @surface@;
+    border: 1px solid @border@;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding: 16px 12px 12px 12px;
+    font-weight: 700;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 12px;
+    padding: 0 4px;
+    background: @surface@;
+    font-weight: 700;
+}
+QGroupBox QLabel, QGroupBox QCheckBox, QGroupBox QRadioButton { font-weight: 400; }
+QGroupBox[card="false"] { border: none; background: transparent; }
+
+/* ---------- Bảng, cây, danh sách ---------- */
+QTableWidget, QTableView, QTreeWidget, QTreeView, QListWidget {
+    background: @surface@;
+    alternate-background-color: @surfaceAlt@;
+    border: 1px solid @border@;
+    border-radius: 8px;
+    gridline-color: @grid@;
+    selection-background-color: @accentSoft@;
+    selection-color: @text@;
+    outline: none;
+}
+QTableWidget::item, QTableView::item { border: none; padding: 4px 8px; }
+QTreeWidget::item, QListWidget::item { padding: 4px 8px; border-radius: 6px; }
+QTreeWidget::item:selected, QListWidget::item:selected { background: @accentSoft@; color: @text@; }
+QTableCornerButton::section { background: @surfaceAlt@; border: none; }
+QHeaderView { background: @surfaceAlt@; }
+QHeaderView::section {
+    background: @surfaceAlt@;
+    color: @text@;
+    font-weight: 700;
+    padding: 6px 8px;
+    border: none;
+    border-bottom: 2px solid @border@;
+}
+QHeaderView::section:vertical {
+    border-bottom: none;
+    border-right: 2px solid @border@;
+}
+
+/* Thanh điều hướng trái */
+QListWidget#nav {
+    background: @surface@;
+    border: 1px solid @border@;
+    border-radius: 8px;
+    padding: 8px;
+}
+QListWidget#nav::item { padding: 10px 12px; margin-bottom: 4px; border-radius: 6px; font-weight: 600; }
+QListWidget#nav::item:hover { background: @bg@; }
+QListWidget#nav::item:selected { background: @accentSoft@; color: @accent@; }
+
+/* ---------- Tab ---------- */
+QTabWidget::pane {
+    background: @surface@;
+    border: 1px solid @border@;
+    border-radius: 8px;
+    top: -1px;
+}
+QTabBar { background: transparent; }
+QTabBar::tab {
+    background: transparent;
+    color: @textMuted@;
+    padding: 8px 16px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-weight: 600;
+}
+QTabBar::tab:hover { color: @text@; }
+QTabBar::tab:selected { color: @accent@; border-bottom: 2px solid @accent@; }
+
+/* ---------- Log ---------- */
+QPlainTextEdit, QTextEdit {
+    background: @surface@;
+    border: 1px solid @border@;
+    border-radius: 8px;
+    padding: 4px 8px;
+    selection-background-color: @accentSoft@;
+    selection-color: @text@;
+}
+
+/* ---------- Tiến độ, cuộn ---------- */
+QProgressBar {
+    background: @border@;
+    border: none;
+    border-radius: 6px;
+    min-height: 12px;
+    max-height: 12px;
+    text-align: center;
+    color: @text@;
+}
+QProgressBar::chunk { background: @accent@; border-radius: 6px; }
+
+QScrollBar:vertical { background: transparent; width: 12px; margin: 2px; }
+QScrollBar::handle:vertical { background: @disabledBg@; border-radius: 4px; min-height: 24px; }
+QScrollBar::handle:vertical:hover { background: @disabledText@; }
+QScrollBar:horizontal { background: transparent; height: 12px; margin: 2px; }
+QScrollBar::handle:horizontal { background: @disabledBg@; border-radius: 4px; min-width: 24px; }
+QScrollBar::handle:horizontal:hover { background: @disabledText@; }
+QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
+QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
+
+QSplitter::handle { background: transparent; }
+QSplitter::handle:vertical { height: 8px; }
+QSplitter::handle:horizontal { width: 8px; }

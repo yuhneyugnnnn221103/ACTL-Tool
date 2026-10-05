@@ -1,5 +1,6 @@
 #include "psu_grid.h"
 #include "overview_grid.h"
+#include "theme.h"
 #include "../proto/psu_monitor_proto.h"
 #include <QHelpEvent>
 #include <QMouseEvent>
@@ -65,8 +66,10 @@ void PsuGrid::paintEvent(QPaintEvent *)
     auto fill = [&](const QRectF &r, Status s, const QString &text) {
         p.setPen(Qt::NoPen);
         p.setBrush(OverviewGrid::statusColor(s));
-        p.drawRoundedRect(r, 4, 4);
-        p.setPen(s == Status::NoData ? QColor(0x444441) : QColor(Qt::white));
+        p.drawRoundedRect(r, 6, 6);
+        QColor fg = theme::statusTextColor(s);
+        if (s == Status::Ok) fg.setAlpha(170);
+        p.setPen(fg);
         const QString mark = OverviewGrid::statusMark(s);
         p.drawText(r, Qt::AlignCenter, text.isEmpty() ? mark : (mark.isEmpty() ? text : text + ' ' + mark));
     };

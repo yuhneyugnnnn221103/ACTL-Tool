@@ -5,6 +5,8 @@
 #include "psu_config_page.h"
 #include "psu_grid.h"
 #include "psu_page.h"
+#include "status_pill.h"
+#include "theme.h"
 #include "trb_config_page.h"
 #include "trb_detail_page.h"
 #include "../proto/psu_monitor_proto.h"
@@ -33,11 +35,6 @@ namespace ui {
 using model::Status;
 
 namespace {
-QString pill(const QString &text, const QColor &bg, const QColor &fg = Qt::white)
-{
-    return QStringLiteral("<span style='background:%1;color:%2;'>&nbsp;%3&nbsp;</span>")
-        .arg(bg.name(), fg.name(), text);
-}
 QString trbName(int mb, int trb) { return QStringLiteral("MB%1 / TRB%2").arg(mb).arg(trb); }
 }
 
@@ -48,7 +45,8 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
 
     // Điều hướng trái + các trang.
     m_nav = new QListWidget;
-    m_nav->setFixedWidth(120);
+    m_nav->setObjectName(QStringLiteral("nav"));
+    m_nav->setFixedWidth(168);
     m_pages = new QStackedWidget;
     m_nav->addItem(QStringLiteral("Tổng quan"));
     m_pages->addWidget(buildOverviewPage());
@@ -93,6 +91,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     auto *body = new QWidget;
     auto *bodyLayout = new QHBoxLayout(body);
     bodyLayout->setContentsMargins(0, 0, 0, 0);
+    bodyLayout->setSpacing(theme::kSpace);
     bodyLayout->addWidget(m_nav);
     bodyLayout->addWidget(m_pages, 1);
 
@@ -104,6 +103,8 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
 
     auto *central = new QWidget;
     auto *layout = new QVBoxLayout(central);
+    layout->setContentsMargins(theme::kMargin, theme::kMargin, theme::kMargin, theme::kMargin);
+    layout->setSpacing(theme::kSpace);
     layout->addWidget(buildTopBar());
     layout->addWidget(split, 1);
     setCentralWidget(central);
@@ -142,7 +143,7 @@ QWidget *MainWindow::buildTopBar()
     m_tcpPort->setRange(1, 65535);
     m_tcpPort->setValue(cfg.monitorPort);
     m_tcpButton = new QPushButton;
-    m_tcpPill = new QLabel;
+    m_tcpPill = new StatusPill;
     connect(m_tcpButton, &QPushButton::clicked, this, &MainWindow::toggleTcp);
     l->addWidget(m_tcpPill);
     if (m_ctx.tcp) {
@@ -160,10 +161,11 @@ QWidget *MainWindow::buildTopBar()
     m_comBaud->addItems({"115200", "460800", "921600", "1000000"});
     m_comBaud->setCurrentText(QString::number(cfg.serviceBaud));
     auto *rescan = new QPushButton(QStringLiteral("↻"));
-    rescan->setFixedWidth(28);
+    rescan->setFixedWidth(36);
+    theme::setRole(rescan, "secondary");
     rescan->setToolTip(QStringLiteral("Quét lại cổng COM"));
     m_comButton = new QPushButton;
-    m_comPill = new QLabel;
+    m_comPill = new StatusPill;
     connect(rescan, &QPushButton::clicked, this, &MainWindow::refreshPorts);
     connect(m_comButton, &QPushButton::clicked, this, &MainWindow::toggleSerial);
     refreshPorts();
@@ -175,15 +177,17 @@ QWidget *MainWindow::buildTopBar()
     l->addSpacing(16);
 
     m_rxErrLabel = new QLabel(QStringLiteral("Lỗi CRC: 0 · Byte bỏ qua: 0"));
-    m_counters = new QLabel;
     l->addWidget(m_rxErrLabel);
     l->addStretch(1);
-    l->addWidget(m_counters);
+    for (StatusPill *&pill : m_counterPills) {
+        pill = new StatusPill;
+        l->addWidget(pill);
+    }
     return bar;
 }
 
 // Theo dõi một link: nhãn trạng thái, chữ trên nút, sự kiện, hex thô.
-void MainWindow::watchLink(core::Link *link, const QString &title, QLabel *pillLabel, QPushButton *button)
+void MainWindow::watchLink(core::Link *link, const QString &title, StatusPill *pillLabel, QPushButton *button)
 {
     using S = core::Transport::State;
     const bool isTcp = link == m_ctx.monitorLink;
@@ -191,8 +195,9 @@ void MainWindow::watchLink(core::Link *link, const QString &title, QLabel *pillL
         (isTcp ? m_tcpState : m_comState) = s;
         const QString state = s == S::Connected ? QStringLiteral("đã kết nối")
                             : s == S::Waiting   ? QStringLiteral("chờ Gateway") : QStringLiteral("đóng");
-        pillLabel->setText(pill(title + QStringLiteral(": ") + state,
-                                s == S::Connected ? QColor(0x3B6D11) : s == S::Waiting ? QColor(0x854F0B) : QColor(0x5F5E5A)));
+        const Status look = s == S::Connected ? Status::Ok : s == S::Waiting ? Status::Warning : Status::Lost;
+        pillLabel->setPill(theme::statusMark(look) + QLatin1Char(' ') + title + QStringLiteral(": ") + state,
+                           theme::statusColor(look), theme::statusTextColor(look));
         button->setText(s == S::Closed ? (isTcp ? QStringLiteral("Lắng nghe") : QStringLiteral("Mở")) : QStringLiteral("Đóng"));
         m_tcpAddress->setEnabled(m_tcpState == S::Closed);
         m_tcpPort->setEnabled(m_tcpState == S::Closed);
@@ -294,6 +299,7 @@ QWidget *MainWindow::buildLogPanel()
     }
     m_hexEnable = new QCheckBox(QStringLiteral("Hiện bản tin hex"));
     auto *clear = new QPushButton(QStringLiteral("Xóa"));
+    theme::setRole(clear, "secondary");
 
     auto *tabs = new QTabWidget;
     tabs->addTab(m_eventLog, QStringLiteral("Sự kiện"));
@@ -304,6 +310,7 @@ QWidget *MainWindow::buildLogPanel()
     cl->addWidget(m_hexEnable);
     if (m_ctx.logger) {
         auto *open = new QPushButton(QStringLiteral("Mở thư mục log"));
+        theme::setRole(open, "secondary");
         connect(open, &QPushButton::clicked, this, [this] {
             QDir().mkpath(m_ctx.logger->dir());
             QDesktopServices::openUrl(QUrl::fromLocalFile(m_ctx.logger->dir()));
@@ -346,15 +353,17 @@ void MainWindow::refresh()
     if (m_pages->currentWidget() == m_detail) m_detail->refresh();
     if (m_pages->currentWidget() == m_psu) m_psu->refresh();
 
-    auto item = [this](Status s, const QString &label) {
-        return pill(QStringLiteral("%1 %2").arg(m_store->count(s)).arg(label), OverviewGrid::statusColor(s),
-                    s == Status::NoData ? QColor(0x444441) : QColor(Qt::white));
-    };
-    m_counters->setText(item(Status::Ok, QStringLiteral("tốt")) + ' '
-                        + item(Status::Warning, QStringLiteral("quá ngưỡng")) + ' '
-                        + item(Status::Trip, QStringLiteral("trip")) + ' '
-                        + item(Status::Lost, QStringLiteral("mất kết nối")) + ' '
-                        + item(Status::NoData, QStringLiteral("chưa có dữ liệu")));
+    const std::pair<Status, QString> counters[] = {
+        {Status::Ok, QStringLiteral("tốt")}, {Status::Warning, QStringLiteral("quá ngưỡng")},
+        {Status::Trip, QStringLiteral("trip")}, {Status::Lost, QStringLiteral("mất kết nối")},
+        {Status::NoData, QStringLiteral("chưa có dữ liệu")}};
+    for (int i = 0; i < 5; ++i) {
+        const Status st = counters[i].first;
+        const QString mark = theme::statusMark(st);
+        m_counterPills[i]->setPill(QStringLiteral("%1%2 %3").arg(mark.isEmpty() ? QString() : mark + QLatin1Char(' '))
+                                       .arg(m_store->count(st)).arg(counters[i].second),
+                                   theme::statusColor(st), theme::statusTextColor(st));
+    }
     if (m_listDirty) rebuildAbnormalList();
 }
 

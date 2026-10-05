@@ -1,4 +1,5 @@
 #include "overview_grid.h"
+#include "theme.h"
 #include <QHelpEvent>
 #include <QMouseEvent>
 #include <QPainter>
@@ -13,29 +14,9 @@ constexpr int kLeft = 52, kTop = 26, kGap = 3;
 
 }
 
-QString OverviewGrid::statusMark(Status s)
-{
-    switch (s) {
-    case Status::Warning:  return QStringLiteral("▲");
-    case Status::Trip:     return QStringLiteral("!");
-    case Status::Lost:     return QStringLiteral("✕");
-    case Status::Updating: return QStringLiteral("↻");
-    default:               return {};
-    }
-}
+QString OverviewGrid::statusMark(Status s) { return theme::statusMark(s); }
 
-QColor OverviewGrid::statusColor(Status s)
-{
-    switch (s) {
-    case Status::NoData:   return QColor(0xE4E2DA);
-    case Status::Ok:       return QColor(0x7DB93B);
-    case Status::Warning:  return QColor(0xEF9F27);
-    case Status::Trip:     return QColor(0xE24B4A);
-    case Status::Lost:     return QColor(0x888780);
-    case Status::Updating: return QColor(0x378ADD);
-    }
-    return {};
-}
+QColor OverviewGrid::statusColor(Status s) { return theme::statusColor(s); }
 
 OverviewGrid::OverviewGrid(const model::DeviceStore *store, QWidget *parent)
     : QWidget(parent), m_store(store)
@@ -92,15 +73,15 @@ void OverviewGrid::paintEvent(QPaintEvent *)
             const QRectF c = cellRect(mb, trb);
             p.setPen(Qt::NoPen);
             p.setBrush(statusColor(s));
-            p.drawRoundedRect(c, 4, 4);
+            p.drawRoundedRect(c, 6, 6);
             if (const QString mark = statusMark(s); !mark.isEmpty()) {
-                p.setPen(Qt::white);
+                p.setPen(QColor(255, 255, 255, s == Status::Ok ? 170 : 255)); // ✓ của ô tốt mờ hơn để lưới không rối
                 p.drawText(c, Qt::AlignCenter, mark);
             }
             if (mb == m_selMb && trb == m_selTrb) {
                 p.setPen(QPen(palette().color(QPalette::WindowText), 2));
                 p.setBrush(Qt::NoBrush);
-                p.drawRoundedRect(c.adjusted(1, 1, -1, -1), 4, 4);
+                p.drawRoundedRect(c.adjusted(1, 1, -1, -1), 6, 6);
             }
         }
     }

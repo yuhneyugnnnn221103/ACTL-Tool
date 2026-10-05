@@ -1,5 +1,6 @@
 #include "firmware_page.h"
 #include "auth.h"
+#include "theme.h"
 #include <QCheckBox>
 #include <QDateTime>
 #include <QFile>
@@ -93,6 +94,7 @@ QWidget *FirmwarePage::buildFpgaTab()
     file->setReadOnly(true);
     auto *fileInfo = new QLabel;
     auto *browse = new QPushButton(QStringLiteral("Chọn file .bin…"));
+    theme::setRole(browse, "secondary");
     connect(browse, &QPushButton::clicked, this, [=] {
         const QByteArray d = pickFile(this, file, fileInfo);
         if (!d.isEmpty()) m_fpgaImage = d;
@@ -181,6 +183,10 @@ QWidget *FirmwarePage::buildFpgaTab()
     form->addRow(QStringLiteral("Nghỉ giữa các gói"), m_fpgaGap);
     auto *buttons = new QHBoxLayout;
     for (QPushButton *b : {check, load, boot, m_fpgaSkip, m_fpgaCancel}) buttons->addWidget(b);
+    theme::setRole(load, "danger");   // xóa flash / nạp / boot: màu riêng để không bấm nhầm
+    theme::setRole(boot, "danger");
+    theme::setRole(m_fpgaSkip, "secondary");
+    theme::setRole(m_fpgaCancel, "secondary");
     buttons->addWidget(m_fpgaProgress, 1);
 
     auto *w = new QWidget;
@@ -263,6 +269,7 @@ QWidget *FirmwarePage::buildStmTab()
         edit->setReadOnly(true);
         auto *info = new QLabel;
         auto *browse = new QPushButton(QStringLiteral("Chọn file .bin…"));
+        theme::setRole(browse, "secondary");
         connect(browse, &QPushButton::clicked, this, [=] {
             const QByteArray d = pickFile(this, edit, info);
             if (!d.isEmpty()) *image = d;
@@ -311,6 +318,8 @@ QWidget *FirmwarePage::buildStmTab()
         m_ctx.stmOta->start(selected(), m_stmImageA, m_stmImageB, quint32(m_stmVersion->value()), m_stmAutoCommit->isChecked());
     }));
     buttons->addWidget(m_stmCancel);
+    for (QPushButton *b : m_stmActions) theme::setRole(b, b->text().startsWith(QStringLiteral("Nạp")) ? "danger" : "secondary");
+    theme::setRole(m_stmCancel, "secondary");
     buttons->addStretch(1);
 
     services::StmOta *ota = m_ctx.stmOta;

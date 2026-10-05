@@ -7,6 +7,8 @@ class QLabel;
 class QPushButton;
 class QTableWidget;
 
+namespace ui { class StatusPill; }
+
 namespace ui {
 
 // Giám sát và điều khiển PSU: chọn PSU ở hàng nút trên cùng, số liệu thô theo 4 cụm DCM, nguồn phụ, trip code.
@@ -26,6 +28,7 @@ private:
     AppContext m_ctx;
     int m_addr;
     QList<QPushButton *> m_selectors;
+    StatusPill *m_pill;
     QLabel *m_status;
     QTableWidget *m_cluster, *m_supply;
     QList<QLabel *> m_rtc, m_trip;

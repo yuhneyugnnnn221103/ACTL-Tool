@@ -1,5 +1,7 @@
 #include "psu_page.h"
 #include "overview_grid.h"
+#include "status_pill.h"
+#include "theme.h"
 #include "../proto/psu_monitor_proto.h"
 #include <QCheckBox>
 #include <QDateTime>
@@ -50,9 +52,11 @@ PsuPage::PsuPage(const AppContext &ctx, QWidget *parent)
         m_selectors << b;
         head->addWidget(b);
     }
+    m_pill = new StatusPill;
     m_status = new QLabel;
-    m_status->setTextFormat(Qt::RichText);
+    theme::setRole(m_status, "muted");
     head->addSpacing(12);
+    head->addWidget(m_pill);
     head->addWidget(m_status, 1);
 
     auto *body = new QHBoxLayout;
@@ -60,6 +64,7 @@ PsuPage::PsuPage(const AppContext &ctx, QWidget *parent)
     body->addWidget(buildControl());
 
     auto *layout = new QVBoxLayout(this);
+    layout->setSpacing(theme::kSpace);
     layout->addLayout(head);
     layout->addLayout(body, 1);
     refresh();
@@ -138,10 +143,11 @@ QWidget *PsuPage::buildControl()
     form->addRow(send);
     connect(send, &QPushButton::clicked, this, &PsuPage::sendControl);
 
+    theme::addShadow(ctl);   // thẻ tĩnh
     auto *w = new QWidget;
-    w->setFixedWidth(300);
+    w->setFixedWidth(320);
     auto *l = new QVBoxLayout(w);
-    l->setContentsMargins(0, 0, 0, 0);
+    l->setContentsMargins(4, 4, 4, 12);   // chừa chỗ cho bóng đổ
     l->addWidget(ctl);
     l->addStretch(1);
     return w;
@@ -169,14 +175,14 @@ void PsuPage::refresh()
 
     const model::PsuState &s = store->psu(m_addr);
     const bool has = s.frames > 0;
-    QString text = QStringLiteral("<span style='background:%1;color:%2;'>&nbsp;PSU %3: %4&nbsp;</span>")
-                       .arg(OverviewGrid::statusColor(s.status).name(),
-                            s.status == Status::NoData ? QStringLiteral("#444441") : QStringLiteral("#ffffff"))
-                       .arg(m_addr).arg(statusText(s.status));
+    m_pill->setPill(QStringLiteral("PSU %1: %2%3").arg(m_addr).arg(theme::statusMark(s.status) + (theme::statusMark(s.status).isEmpty() ? QString() : QStringLiteral(" ")),
+                                                      statusText(s.status)),
+                    OverviewGrid::statusColor(s.status), theme::statusTextColor(s.status));
+    QString text;
     if (has)
-        text += QStringLiteral("&nbsp; Cập nhật %1 s trước · %2 bản tin")
-                    .arg((QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs) / 1000.0, 0, 'f', 1).arg(s.frames);
-    if (s.status == Status::Lost) text += QStringLiteral(" · <b>số liệu bên dưới là số liệu cũ</b>");
+        text = QStringLiteral("Cập nhật %1 s trước · %2 bản tin")
+                   .arg((QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs) / 1000.0, 0, 'f', 1).arg(s.frames);
+    if (s.status == Status::Lost) text += QStringLiteral(" · SỐ LIỆU BÊN DƯỚI LÀ SỐ LIỆU CŨ");
     m_status->setText(text);
 
     auto val = [&](int idx) { return has ? QString::number(s.values.at(idx)) : kDash; };

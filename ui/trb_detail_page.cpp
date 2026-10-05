@@ -1,5 +1,8 @@
 #include "trb_detail_page.h"
+#include "led_indicator.h"
 #include "overview_grid.h"
+#include "status_pill.h"
+#include "theme.h"
 #include "../proto/trb_monitor_proto.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -28,30 +31,19 @@ QStringList numbered(const QString &fmt, int n)
     return l;
 }
 
-void setLed(QLabel *led, bool known, bool on)
+// Thẻ đèn LED lớn: tiêu đề + một hàng đèn có nhãn.
+QGroupBox *ledGroup(const QString &title, const QStringList &captions, QList<LedIndicator *> &leds)
 {
-    const char *color = !known ? "#B4B2A9" : on ? "#3B9E2F" : "#E24B4A";
-    led->setStyleSheet(QStringLiteral("background:%1; border-radius:7px;").arg(color));
-    led->setToolTip(!known ? QString() : on ? QStringLiteral("1") : QStringLiteral("0"));
-}
-
-// Hàng "tiêu đề: [led nhãn] [led nhãn] ..."
-QWidget *ledRow(const QStringList &names, QList<QLabel *> &leds)
-{
-    auto *w = new QWidget;
-    auto *l = new QHBoxLayout(w);
-    l->setContentsMargins(0, 0, 0, 0);
-    for (const QString &n : names) {
-        auto *led = new QLabel;
-        led->setFixedSize(14, 14);
-        setLed(led, false, false);
+    auto *g = new QGroupBox(title);
+    auto *l = new QHBoxLayout(g);
+    l->setSpacing(theme::kSpace);
+    for (const QString &c : captions) {
+        auto *led = new LedIndicator(c);
         leds << led;
         l->addWidget(led);
-        l->addWidget(new QLabel(n));
-        l->addSpacing(8);
     }
     l->addStretch(1);
-    return w;
+    return g;
 }
 
 QWidget *checkRow(const QStringList &names, QCheckBox **out)
@@ -75,8 +67,11 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     for (int i = 0; i < store->trbPerMb(); ++i) m_trbBox->addItem(QStringLiteral("TRB%1").arg(i));
     auto *prev = new QPushButton(QStringLiteral("◀ Trước"));
     auto *next = new QPushButton(QStringLiteral("Sau ▶"));
+    theme::setRole(prev, "secondary");
+    theme::setRole(next, "secondary");
+    m_pill = new StatusPill;
     m_status = new QLabel;
-    m_status->setTextFormat(Qt::RichText);
+    theme::setRole(m_status, "muted");
 
     auto *head = new QHBoxLayout;
     head->addWidget(m_mbBox);
@@ -84,6 +79,7 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     head->addWidget(prev);
     head->addWidget(next);
     head->addSpacing(12);
+    head->addWidget(m_pill);
     head->addWidget(m_status, 1);
 
     auto *body = new QHBoxLayout;
@@ -91,6 +87,7 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     body->addWidget(buildControl());
 
     auto *layout = new QVBoxLayout(this);
+    layout->setSpacing(theme::kSpace);
     layout->addLayout(head);
     layout->addLayout(body, 1);
 
@@ -145,18 +142,20 @@ QWidget *TrbDetailPage::buildMonitor()
                                 QStringLiteral("Độ ẩm power")}) {
         auto *v = new QLabel(kDash);
         v->setAlignment(Qt::AlignCenter);
-        QFont f = v->font();
-        f.setPointSizeF(f.pointSizeF() * 1.4);
-        v->setFont(f);
+        v->setProperty("role", "metric");
         m_metrics << v;
         metrics->addWidget(titled(name, v));
     }
 
-    auto *flags = new QGroupBox(QStringLiteral("Trạng thái"));
+    // Đèn trạng thái ADAR, PG, PA đặt trên cùng, to và có nhãn để nhìn là biết ngay.
+    auto *leds = new QHBoxLayout;
+    leds->setSpacing(theme::kSpace);
+    leds->addWidget(ledGroup(QStringLiteral("Init ADAR"), numbered(QStringLiteral("ADAR%1"), 8), m_ledAdar), 2);
+    leds->addWidget(ledGroup(QStringLiteral("PG (power good)"), numbered(QStringLiteral("TRM%1"), 4), m_ledPg), 1);
+    leds->addWidget(ledGroup(QStringLiteral("PA"), numbered(QStringLiteral("TRM%1"), 4), m_ledPa), 1);
+
+    auto *flags = new QGroupBox(QStringLiteral("Mã trạng thái"));
     auto *form = new QFormLayout(flags);
-    form->addRow(QStringLiteral("Init ADAR"), ledRow(numbered(QStringLiteral("ADAR%1"), 8), m_ledAdar));
-    form->addRow(QStringLiteral("PG"), ledRow(numbered(QStringLiteral("TRM%1"), 4), m_ledPg));
-    form->addRow(QStringLiteral("PA"), ledRow(numbered(QStringLiteral("TRM%1"), 4), m_ledPa));
     auto valueRow = [](int n, QList<QLabel *> &out, const QString &prefix) {
         auto *w = new QWidget;
         auto *l = new QHBoxLayout(w);
@@ -179,6 +178,8 @@ QWidget *TrbDetailPage::buildMonitor()
     auto *w = new QWidget;
     auto *l = new QVBoxLayout(w);
     l->setContentsMargins(0, 0, 0, 0);
+    l->setSpacing(theme::kSpace);
+    l->addLayout(leds);
     l->addLayout(tables, 1);
     l->addLayout(metrics);
     l->addWidget(flags);
@@ -192,7 +193,7 @@ QWidget *TrbDetailPage::buildControl()
 
     auto *ctl = new QGroupBox(QStringLiteral("Điều khiển"));
     auto *cf = new QFormLayout(ctl);
-    cf->addRow(QStringLiteral("PA"), checkRow(numbered(QStringLiteral("TRM%1"), 4), m_pa));
+    cf->addRow(QStringLiteral("PA (TRM)"), checkRow(numbered(QStringLiteral("%1"), 4), m_pa));
     cf->addRow(QStringLiteral("Chạy"), m_start = new QCheckBox(QStringLiteral("Start (bỏ chọn = Stop)")));
     m_mode = new QComboBox;
     m_mode->addItems({QStringLiteral("Normal"), QStringLiteral("Debug")});
@@ -220,10 +221,13 @@ QWidget *TrbDetailPage::buildControl()
     connect(sendCtl, &QPushButton::clicked, this, &TrbDetailPage::sendControl);
     connect(sendBeamBtn, &QPushButton::clicked, this, &TrbDetailPage::sendBeam);
 
+    theme::addShadow(ctl);   // thẻ tĩnh, không cập nhật liên tục
+    theme::addShadow(beam);
     auto *w = new QWidget;
-    w->setFixedWidth(350);
+    w->setFixedWidth(360);
     auto *l = new QVBoxLayout(w);
-    l->setContentsMargins(0, 0, 0, 0);
+    l->setContentsMargins(4, 4, 4, 12);   // chừa chỗ cho bóng đổ
+    l->setSpacing(theme::kMargin);
     auto *tf = new QFormLayout;
     tf->addRow(QStringLiteral("Gửi tới"), m_target);
     l->addLayout(tf);
@@ -264,14 +268,14 @@ void TrbDetailPage::refresh()
     const model::TrbState &s = m_store->trb(m_mb, m_trb);
     const bool has = s.frames > 0;
 
-    QString text = QStringLiteral("<span style='background:%1;color:%2;'>&nbsp;%3&nbsp;</span>")
-                       .arg(OverviewGrid::statusColor(s.status).name(),
-                            s.status == Status::NoData ? QStringLiteral("#444441") : QStringLiteral("#ffffff"),
-                            statusText(s.status));
+    m_pill->setPill(theme::statusMark(s.status) + (theme::statusMark(s.status).isEmpty() ? QString() : QStringLiteral(" "))
+                        + statusText(s.status),
+                    OverviewGrid::statusColor(s.status), theme::statusTextColor(s.status));
+    QString text;
     if (has)
-        text += QStringLiteral("&nbsp; Cập nhật %1 s trước · %2 bản tin")
-                    .arg((QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs) / 1000.0, 0, 'f', 1).arg(s.frames);
-    if (s.status == Status::Lost) text += QStringLiteral(" · <b>số liệu bên dưới là số liệu cũ</b>");
+        text = QStringLiteral("Cập nhật %1 s trước · %2 bản tin")
+                   .arg((QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs) / 1000.0, 0, 'f', 1).arg(s.frames);
+    if (s.status == Status::Lost) text += QStringLiteral(" · SỐ LIỆU BÊN DƯỚI LÀ SỐ LIỆU CŨ");
     m_status->setText(text);
 
     auto val = [&](int idx) { return has ? QString::number(s.values.at(idx)) : kDash; };
@@ -305,9 +309,19 @@ void TrbDetailPage::refresh()
                                         ? QStringLiteral("background:#EF9F27; font-weight:bold;") : QString());
     }
 
-    for (int i = 0; i < m_ledAdar.size(); ++i) setLed(m_ledAdar[i], has, bits(trbmon::kIdxInitAdar) >> i & 1);
-    for (int i = 0; i < m_ledPg.size(); ++i) setLed(m_ledPg[i], has, bits(trbmon::kIdxPg) >> i & 1);
-    for (int i = 0; i < m_ledPa.size(); ++i) setLed(m_ledPa[i], has, bits(trbmon::kIdxPa) >> i & 1);
+    // Số liệu cũ (mất kết nối) thì đèn về "không rõ" thay vì hiện trạng thái đã cũ như đang đúng.
+    using Led = LedIndicator::State;
+    const bool fresh = has && s.status != Status::Lost;
+    auto setLeds = [&](const QList<LedIndicator *> &list, int field, Led off, const QString &name) {
+        for (int i = 0; i < list.size(); ++i) {
+            const bool on = bits(field) >> i & 1;
+            list[i]->setState(!fresh ? Led::Unknown : on ? Led::On : off,
+                              !has ? QString() : QStringLiteral("%1 %2 = %3").arg(name).arg(i + 1).arg(on ? 1 : 0));
+        }
+    };
+    setLeds(m_ledAdar, trbmon::kIdxInitAdar, Led::Fault, QStringLiteral("ADAR"));
+    setLeds(m_ledPg, trbmon::kIdxPg, Led::Fault, QStringLiteral("PG TRM"));
+    setLeds(m_ledPa, trbmon::kIdxPa, Led::Idle, QStringLiteral("PA TRM")); // PA tắt là trạng thái Stop bình thường
     for (int i = 0; i < m_state.size(); ++i) m_state[i]->setText(val(trbmon::kIdxState0 + i));
     for (int i = 0; i < m_trip.size(); ++i) {
         const int code = bits(trbmon::kIdxTrip0 + i);

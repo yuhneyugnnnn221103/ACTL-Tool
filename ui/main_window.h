@@ -5,6 +5,7 @@
 class QCheckBox;
 class QComboBox;
 class QLabel;
+class QHBoxLayout;
 class QLineEdit;
 class QListWidget;
 class QPlainTextEdit;
@@ -16,6 +17,7 @@ namespace ui {
 
 class OverviewGrid;
 class PsuGrid;
+class StatusPill;
 class PsuPage;
 class TrbDetailPage;
 
@@ -30,7 +32,7 @@ private:
     QWidget *buildTopBar();
     QWidget *buildOverviewPage();
     QWidget *buildLogPanel();
-    void watchLink(core::Link *link, const QString &title, QLabel *pill, QPushButton *button);
+    void watchLink(core::Link *link, const QString &title, StatusPill *pill, QPushButton *button);
     void toggleTcp();
     void toggleSerial();
     void refreshPorts();
@@ -48,7 +50,9 @@ private:
     QSpinBox *m_tcpPort;
     QComboBox *m_comPort, *m_comBaud;
     QPushButton *m_tcpButton, *m_comButton;
-    QLabel *m_tcpPill, *m_comPill, *m_rxErrLabel, *m_counters;
+    StatusPill *m_tcpPill, *m_comPill;
+    QLabel *m_rxErrLabel;
+    StatusPill *m_counterPills[5];
     core::Transport::State m_tcpState = core::Transport::State::Closed, m_comState = core::Transport::State::Closed;
 
     OverviewGrid *m_grid;

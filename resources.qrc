@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="style.qss">resources/style.qss</file>
+        <file alias="check.png">resources/check.png</file>
+        <file alias="check@2x.png">resources/check@2x.png</file>
+        <file alias="arrow-down.png">resources/arrow-down.png</file>
+        <file alias="arrow-down@2x.png">resources/arrow-down@2x.png</file>
+        <file alias="arrow-up.png">resources/arrow-up.png</file>
+        <file alias="arrow-up@2x.png">resources/arrow-up@2x.png</file>
+    </qresource>
+</RCC>
