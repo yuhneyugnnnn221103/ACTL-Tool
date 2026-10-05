@@ -50,9 +50,9 @@ File chạy là `build/actl_tool`.
 
 - **Tổng quan**: mỗi ô là một TRB, tô màu theo trạng thái (tốt, quá ngưỡng, trip, mất kết nối, chưa có dữ liệu). Bấm vào ô để mở trang chi tiết.
 - **Chi tiết TRB**: toàn bộ số liệu giám sát, giá trị quá ngưỡng được tô màu, rê chuột để xem min/max. Bên phải là lệnh điều khiển và beam.
-- **Cấu hình TRB**: đọc, sửa, ghi và đọc lại để kiểm tra (chỉ bước ghi hỏi mật khẩu). Đánh dấu nhiều TRB để áp các trường đã sửa cho hàng loạt; các trường khác của từng TRB được giữ nguyên.
+- **Cấu hình TRB**: đọc, sửa, ghi và đọc lại để kiểm tra (chỉ bước ghi hỏi mật khẩu). Đánh dấu nhiều TRB rồi chọn một trong hai cách ghi hàng loạt: "Áp ô đã sửa" chỉ ghi các trường đã sửa (các trường khác của từng TRB được giữ nguyên), hoặc "Ghi toàn bộ" ghi nguyên cột "Giá trị mới" (từ thiết bị, file hoặc mặc định) và ghi đè cấu hình của từng TRB.
 - **PSU**: chọn PSU ở hàng nút trên cùng; số liệu thô của 4 cụm DCM, nguồn phụ, RTC và trip code. Bên phải là lệnh điều khiển: mỗi lệnh ghi đè bật/tắt cả 4 cụm (ô chọn = bật) nên luôn có hộp xác nhận. Clear trip làm PSU xóa hết trip code. Giá trị không có ngưỡng trong cấu hình (PEAK, VALLEY, RMS, nhiệt độ FET/XDP, trip) chỉ hiển thị, không so sánh.
-- **Cấu hình PSU**: giống cấu hình TRB (đọc, sửa, ghi, đọc lại; hàng loạt). Thanh ghi hiển thị dạng hex, rê chuột để xem mô tả. Nút "Mặc định" điền giá trị hãng gợi ý (OPERATION, ENABLE_FAULTS, MASK_FAULTS, RETRY), hoặc lấy từ `psu_default_config.json` nếu có file này cạnh file chạy.
+- **Cấu hình PSU**: giống cấu hình TRB (đọc, sửa, ghi, đọc lại; hàng loạt cả "Áp ô đã sửa" lẫn "Ghi toàn bộ"). Thanh ghi hiển thị dạng hex, rê chuột để xem mô tả. Nút "Mặc định" điền giá trị hãng gợi ý (OPERATION, ENABLE_FAULTS, MASK_FAULTS, RETRY), hoặc lấy từ `psu_default_config.json` nếu có file này cạnh file chạy.
 - **Nạp code**: tab FPGA (kiểm tra kết nối, xóa flash và nạp, boot và xác nhận) và tab STM32 (nạp lần lượt từng PSU).
 - **Khung log**: tab Sự kiện và tab Hex thô (bật bằng ô "Hiện bản tin hex").
 

@@ -178,7 +178,26 @@ QWidget *PsuConfigPage::buildContent()
         setBusy(true);
         m_ctx.psuConfig->readDevices(devs);
     }));
-    batch->addWidget(button(QStringLiteral("Áp các ô đã sửa cho PSU đã đánh dấu"), [this] {
+    batch->addWidget(button(QStringLiteral("Ghi toàn bộ cho PSU đã đánh dấu"), [this] {
+        const QList<int> devs = checkedDevices();
+        if (!ready()) return;
+        if (!m_hasNew) {
+            QMessageBox::information(this, QStringLiteral("Cấu hình hàng loạt"),
+                QStringLiteral("Chưa có giá trị để ghi. Hãy Đọc từ thiết bị, Mở file hoặc Mặc định trước."));
+            return;
+        }
+        if (devs.isEmpty()) {
+            QMessageBox::information(this, QStringLiteral("Cấu hình hàng loạt"), QStringLiteral("Cần đánh dấu ít nhất một PSU."));
+            return;
+        }
+        if (QMessageBox::question(this, QStringLiteral("Cấu hình hàng loạt"),
+                QStringLiteral("Ghi TOÀN BỘ cột \"Giá trị mới\" xuống %1 PSU? Cấu hình hiện có của từng PSU bị ghi đè hoàn toàn.")
+                    .arg(devs.size())) != QMessageBox::Yes) return;
+        if (!m_ctx.auth->unlock(this)) return;
+        setBusy(true);
+        m_ctx.psuConfig->writeFullMany(devs, newValues());
+    }));
+    batch->addWidget(button(QStringLiteral("Áp ô đã sửa cho PSU đã đánh dấu"), [this] {
         const QList<int> devs = checkedDevices();
         const QHash<int, double> changes = editedFields();
         if (!ready()) return;
@@ -195,9 +214,11 @@ QWidget *PsuConfigPage::buildContent()
         setBusy(true);
         m_ctx.psuConfig->applyChanges(devs, changes);
     }));
-    batch->addWidget(m_progress, 1);
-    batch->addWidget(m_progressText);
-    batch->addWidget(m_cancel);
+    batch->addStretch(1);
+    auto *progressRow = new QHBoxLayout;
+    progressRow->addWidget(m_progress, 1);
+    progressRow->addWidget(m_progressText);
+    progressRow->addWidget(m_cancel);
     auto *lockBtn = new QPushButton(QStringLiteral("Khóa"));
     auto *pwBtn = new QPushButton(QStringLiteral("Đổi mật khẩu"));
     connect(lockBtn, &QPushButton::clicked, this, [this] { m_ctx.auth->lock(); });
@@ -209,6 +230,7 @@ QWidget *PsuConfigPage::buildContent()
     right->addLayout(single);
     right->addWidget(m_table, 1);
     right->addLayout(batch);
+    right->addLayout(progressRow);
 
     auto *w = new QWidget;
     auto *l = new QHBoxLayout(w);

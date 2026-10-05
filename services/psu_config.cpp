@@ -36,6 +36,13 @@ void PsuConfig::writeFull(int addr, const QList<double> &values)
     start({Task{addr, true, values}});
 }
 
+void PsuConfig::writeFullMany(const QList<int> &addrs, const QList<double> &values)
+{
+    QList<Task> t;
+    for (int a : addrs) t.append({a, true, values});
+    start(t);
+}
+
 void PsuConfig::applyChanges(const QList<int> &addrs, const QHash<int, double> &changes)
 {
     if (busy()) return;

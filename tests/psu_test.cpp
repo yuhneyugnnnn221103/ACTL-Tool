@@ -290,6 +290,29 @@ private slots:
         QVERIFY(device.last().at(2).toString().contains("KHÔNG khớp"));
     }
 
+    void configWriteFullToManyDevices()
+    {
+        core::FrameRegistry registry;
+        services::PsuConfig::registerFrames(registry, true);
+        auto *tp = new FakeTransport;
+        core::Link link("service", tp, &registry);
+        link.start();
+        FakePsu psu;
+        psu.attach(tp);
+        psu.config[2] = QList<double>(psucfg::table().size(), 9.0);   // cấu hình cũ phải bị ghi đè hoàn toàn
+
+        model::Thresholds thr(&psumon::table());
+        services::PsuConfig cfg(&link, &thr, QString(), 500, 0);
+        QSignalSpy finished(&cfg, &services::PsuConfig::finished);
+
+        const QList<double> v = psucfg::defaultValues();
+        cfg.writeFullMany({1, 2, 3}, v);
+        QVERIFY(finished.wait(5000));
+        QCOMPARE(finished.last().at(0).toInt(), 3);
+        QCOMPARE(finished.last().at(1).toInt(), 0);
+        for (int a : {1, 2, 3}) QCOMPARE(psu.config.value(a), v);
+    }
+
     void configReadTimeoutAndBatchApply()
     {
         core::FrameRegistry registry;

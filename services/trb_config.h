@@ -22,6 +22,7 @@ public:
 
     void readDevices(const QList<Device> &devices);
     void writeFull(Device device, const QList<double> &values);                       // ghi cả khung rồi kiểm tra
+    void writeFullMany(const QList<Device> &devices, const QList<double> &values);    // cùng một khung cho nhiều thiết bị
     void applyChanges(const QList<Device> &devices, const QHash<int, double> &changes); // đọc - sửa - ghi - kiểm tra
     void cancel();
 

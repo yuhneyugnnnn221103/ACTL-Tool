@@ -177,7 +177,26 @@ QWidget *TrbConfigPage::buildContent()
         setBusy(true);
         m_ctx.trbConfig->readDevices(devs);
     }));
-    batch->addWidget(button(QStringLiteral("Áp các ô đã sửa cho TRB đã đánh dấu"), [this] {
+    batch->addWidget(button(QStringLiteral("Ghi toàn bộ cho TRB đã đánh dấu"), [this] {
+        const QList<Device> devs = checkedDevices();
+        if (!ready()) return;
+        if (!m_hasNew) {
+            QMessageBox::information(this, QStringLiteral("Cấu hình hàng loạt"),
+                QStringLiteral("Chưa có giá trị để ghi. Hãy Đọc từ thiết bị, Mở file trước."));
+            return;
+        }
+        if (devs.isEmpty()) {
+            QMessageBox::information(this, QStringLiteral("Cấu hình hàng loạt"), QStringLiteral("Cần đánh dấu ít nhất một TRB."));
+            return;
+        }
+        if (QMessageBox::question(this, QStringLiteral("Cấu hình hàng loạt"),
+                QStringLiteral("Ghi TOÀN BỘ cột \"Giá trị mới\" xuống %1 TRB? Cấu hình hiện có của từng TRB bị ghi đè hoàn toàn.")
+                    .arg(devs.size())) != QMessageBox::Yes) return;
+        if (!m_ctx.auth->unlock(this)) return;
+        setBusy(true);
+        m_ctx.trbConfig->writeFullMany(devs, newValues());
+    }));
+    batch->addWidget(button(QStringLiteral("Áp ô đã sửa cho TRB đã đánh dấu"), [this] {
         const QList<Device> devs = checkedDevices();
         const QHash<int, double> changes = editedFields();
         if (!ready()) return;
@@ -194,9 +213,11 @@ QWidget *TrbConfigPage::buildContent()
         setBusy(true);
         m_ctx.trbConfig->applyChanges(devs, changes);
     }));
-    batch->addWidget(m_progress, 1);
-    batch->addWidget(m_progressText);
-    batch->addWidget(m_cancel);
+    batch->addStretch(1);
+    auto *progressRow = new QHBoxLayout;
+    progressRow->addWidget(m_progress, 1);
+    progressRow->addWidget(m_progressText);
+    progressRow->addWidget(m_cancel);
     auto *lockBtn = new QPushButton(QStringLiteral("Khóa"));
     auto *pwBtn = new QPushButton(QStringLiteral("Đổi mật khẩu"));
     connect(lockBtn, &QPushButton::clicked, this, [this] { m_ctx.auth->lock(); });
@@ -208,6 +229,7 @@ QWidget *TrbConfigPage::buildContent()
     right->addLayout(single);
     right->addWidget(m_table, 1);
     right->addLayout(batch);
+    right->addLayout(progressRow);
 
     auto *w = new QWidget;
     auto *l = new QHBoxLayout(w);

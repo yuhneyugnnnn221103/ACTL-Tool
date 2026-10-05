@@ -19,6 +19,7 @@ public:
 
     void readDevices(const QList<int> &addrs);
     void writeFull(int addr, const QList<double> &values);                          // ghi cả khung rồi kiểm tra
+    void writeFullMany(const QList<int> &addrs, const QList<double> &values);       // cùng một khung cho nhiều PSU
     void applyChanges(const QList<int> &addrs, const QHash<int, double> &changes);  // đọc - sửa - ghi - kiểm tra
     void cancel();
 

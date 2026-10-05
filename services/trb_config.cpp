@@ -38,6 +38,13 @@ void TrbConfig::writeFull(Device device, const QList<double> &values)
     start({Task{device, true, values}});
 }
 
+void TrbConfig::writeFullMany(const QList<Device> &devices, const QList<double> &values)
+{
+    QList<Task> t;
+    for (const Device &d : devices) t.append({d, true, values});
+    start(t);
+}
+
 void TrbConfig::applyChanges(const QList<Device> &devices, const QHash<int, double> &changes)
 {
     m_changes = changes;
