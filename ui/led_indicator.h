@@ -4,8 +4,8 @@
 
 namespace ui {
 
-// Đèn LED tự vẽ (QPainter, gradient hướng tâm) kèm nhãn bên dưới. Trạng thái luôn có ký hiệu trong đèn
-// (✓ ✕ – ?) nên không chỉ dựa vào màu.
+// Đèn LED tự vẽ (QPainter, gradient hướng tâm) kèm nhãn bên dưới. Chỉ dùng màu, không có ký hiệu trong đèn:
+// xanh = bật, đỏ = lỗi, xám đậm = tắt bình thường, xám nhạt = chưa rõ.
 class LedIndicator : public QWidget {
     Q_OBJECT
 public:

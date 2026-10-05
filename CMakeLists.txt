@@ -24,6 +24,7 @@ set(PROJECT_SOURCES
         ui/theme.h ui/theme.cpp
         ui/status_pill.h ui/status_pill.cpp
         ui/led_indicator.h ui/led_indicator.cpp
+        ui/bit_cells.h ui/bit_cells.cpp
         resources.qrc
         ui/psu_grid.h ui/psu_grid.cpp
         ui/psu_config_page.h ui/psu_config_page.cpp

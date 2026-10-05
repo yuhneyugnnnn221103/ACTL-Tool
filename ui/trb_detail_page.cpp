@@ -1,4 +1,5 @@
 #include "trb_detail_page.h"
+#include "bit_cells.h"
 #include "led_indicator.h"
 #include "overview_grid.h"
 #include "status_pill.h"
@@ -108,6 +109,8 @@ QTableWidget *TrbDetailPage::makeTable(const QStringList &rows, int firstField)
     t->setSelectionMode(QAbstractItemView::NoSelection);
     t->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     t->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    t->verticalHeader()->setMinimumSectionSize(24);
+    t->setMinimumHeight(t->horizontalHeader()->sizeHint().height() + rows.size() * 24 + 8);
     for (int r = 0; r < rows.size(); ++r) {
         for (int c = 0; c < trbmon::kNumTrm; ++c) {
             auto *it = new QTableWidgetItem(kDash);
@@ -144,7 +147,9 @@ QWidget *TrbDetailPage::buildMonitor()
         v->setAlignment(Qt::AlignCenter);
         v->setProperty("role", "metric");
         m_metrics << v;
-        metrics->addWidget(titled(name, v));
+        auto *card = titled(name, v);
+        card->setProperty("compact", true);   // thẻ thấp: ít đệm trên/dưới (xem style.qss)
+        metrics->addWidget(card);
     }
 
     // Đèn trạng thái ADAR, PG, PA đặt trên cùng, to và có nhãn để nhìn là biết ngay.
@@ -154,7 +159,7 @@ QWidget *TrbDetailPage::buildMonitor()
     leds->addWidget(ledGroup(QStringLiteral("PG (power good)"), numbered(QStringLiteral("TRM%1"), 4), m_ledPg), 1);
     leds->addWidget(ledGroup(QStringLiteral("PA"), numbered(QStringLiteral("TRM%1"), 4), m_ledPa), 1);
 
-    auto *flags = new QGroupBox(QStringLiteral("Mã trạng thái"));
+    auto *flags = new QGroupBox(QStringLiteral("State TRM và trip code"));
     auto *form = new QFormLayout(flags);
     auto valueRow = [](int n, QList<QLabel *> &out, const QString &prefix) {
         auto *w = new QWidget;
@@ -173,7 +178,9 @@ QWidget *TrbDetailPage::buildMonitor()
         return w;
     };
     form->addRow(QStringLiteral("State TRM (mã thô)"), valueRow(trbmon::kNumTrm, m_state, QStringLiteral("TRM%1")));
-    form->addRow(QStringLiteral("Trip code 1–16 (hex)"), valueRow(trbmon::kNumTrip, m_trip, QString()));
+    // Mỗi trip code là một byte, hiện thành 8 ô bit (bit 7 ... bit 0), bit 1 tô đỏ.
+    form->addRow(QStringLiteral("Trip code (bit 7 ... 0)"),
+                 BitCells::makeGrid(trbmon::kNumTrip, 6, QStringLiteral("T%1"), m_trip));
 
     auto *w = new QWidget;
     auto *l = new QVBoxLayout(w);
@@ -323,11 +330,7 @@ void TrbDetailPage::refresh()
     setLeds(m_ledPg, trbmon::kIdxPg, Led::Fault, QStringLiteral("PG TRM"));
     setLeds(m_ledPa, trbmon::kIdxPa, Led::Idle, QStringLiteral("PA TRM")); // PA tắt là trạng thái Stop bình thường
     for (int i = 0; i < m_state.size(); ++i) m_state[i]->setText(val(trbmon::kIdxState0 + i));
-    for (int i = 0; i < m_trip.size(); ++i) {
-        const int code = bits(trbmon::kIdxTrip0 + i);
-        m_trip[i]->setText(has ? QStringLiteral("%1").arg(code, 2, 16, QLatin1Char('0')).toUpper() : kDash);
-        m_trip[i]->setStyleSheet(code ? QStringLiteral("background:#E24B4A; color:white; font-weight:bold;") : QString());
-    }
+    for (int i = 0; i < m_trip.size(); ++i) m_trip[i]->setValue(bits(trbmon::kIdxTrip0 + i), has);
 }
 
 bool TrbDetailPage::confirmTarget(int &mb, int &trb)

@@ -30,12 +30,11 @@ QSize LedIndicator::sizeHint() const
 void LedIndicator::paintEvent(QPaintEvent *)
 {
     QColor base;
-    QString glyph;
     switch (m_state) {
-    case State::On:      base = theme::statusColor(model::Status::Ok);   glyph = QStringLiteral("✓"); break;
-    case State::Fault:   base = theme::statusColor(model::Status::Trip); glyph = QStringLiteral("✕"); break;
-    case State::Idle:    base = QColor(0xB4, 0xB2, 0xA9);                glyph = QStringLiteral("–"); break;
-    case State::Unknown: base = theme::statusColor(model::Status::NoData); glyph = QStringLiteral("?"); break;
+    case State::On:      base = theme::statusColor(model::Status::Ok); break;
+    case State::Fault:   base = theme::statusColor(model::Status::Trip); break;
+    case State::Idle:    base = QColor(0xA8, 0xA6, 0x9C); break;     // tắt bình thường: xám đậm
+    case State::Unknown: base = theme::statusColor(model::Status::NoData); break;
     }
 
     QPainter p(this);
@@ -49,13 +48,6 @@ void LedIndicator::paintEvent(QPaintEvent *)
     p.setPen(QPen(base.darker(150), 1));
     p.setBrush(g);
     p.drawEllipse(led);
-
-    QFont f = font();
-    f.setBold(true);
-    f.setPixelSize(20);
-    p.setFont(f);
-    p.setPen(m_state == State::Unknown ? QColor(0x6B, 0x72, 0x80) : QColor(Qt::white));
-    p.drawText(led, Qt::AlignCenter, glyph);
 
     p.setFont(font());
     p.setPen(palette().color(QPalette::WindowText));

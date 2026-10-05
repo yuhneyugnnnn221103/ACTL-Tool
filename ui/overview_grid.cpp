@@ -14,8 +14,6 @@ constexpr int kLeft = 52, kTop = 26, kGap = 3;
 
 }
 
-QString OverviewGrid::statusMark(Status s) { return theme::statusMark(s); }
-
 QColor OverviewGrid::statusColor(Status s) { return theme::statusColor(s); }
 
 OverviewGrid::OverviewGrid(const model::DeviceStore *store, QWidget *parent)
@@ -64,9 +62,6 @@ void OverviewGrid::paintEvent(QPaintEvent *)
                    QStringLiteral("TRB%1").arg(trb));
     }
 
-    QFont markFont = font();
-    markFont.setBold(true);
-    p.setFont(markFont);
     for (int mb = 0; mb < m_store->mbCount(); ++mb) {
         for (int trb = 0; trb < m_store->trbPerMb(); ++trb) {
             const Status s = m_store->trb(mb, trb).status;
@@ -74,10 +69,6 @@ void OverviewGrid::paintEvent(QPaintEvent *)
             p.setPen(Qt::NoPen);
             p.setBrush(statusColor(s));
             p.drawRoundedRect(c, 6, 6);
-            if (const QString mark = statusMark(s); !mark.isEmpty()) {
-                p.setPen(QColor(255, 255, 255, s == Status::Ok ? 170 : 255)); // ✓ của ô tốt mờ hơn để lưới không rối
-                p.drawText(c, Qt::AlignCenter, mark);
-            }
             if (mb == m_selMb && trb == m_selTrb) {
                 p.setPen(QPen(palette().color(QPalette::WindowText), 2));
                 p.setBrush(Qt::NoBrush);

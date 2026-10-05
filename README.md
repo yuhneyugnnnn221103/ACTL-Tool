@@ -96,7 +96,7 @@ Các khóa hay dùng trong `actl_tool.ini`:
 
 ## Giao diện
 
-Style Fusion cộng một file QSS duy nhất (`resources/style.qss`, nạp từ resource khi khởi động). Bảng màu khai báo một chỗ ở `ui/theme.h`; QSS dùng token `@tên@` và được thay màu khi nạp. Nút phụ và nút nguy hiểm đặt bằng thuộc tính `role` (`theme::setRole(widget, "secondary" | "danger")`). Đèn LED, ô trạng thái và lưới tổng quan tự vẽ bằng QPainter (`ui/led_indicator`, `ui/status_pill`, `ui/overview_grid`, `ui/psu_grid`). Màu trạng thái cố định ở `theme::statusColor` và luôn kèm ký hiệu.
+Style Fusion cộng một file QSS duy nhất (`resources/style.qss`, nạp từ resource khi khởi động). Bảng màu khai báo một chỗ ở `ui/theme.h`; QSS dùng token `@tên@` và được thay màu khi nạp. Nút phụ và nút nguy hiểm đặt bằng thuộc tính `role` (`theme::setRole(widget, "secondary" | "danger")`). Đèn LED, ô trạng thái và lưới tổng quan tự vẽ bằng QPainter (`ui/led_indicator`, `ui/status_pill`, `ui/overview_grid`, `ui/psu_grid`). Màu trạng thái cố định ở `theme::statusColor`. Ô lưới tổng quan và đèn LED chỉ dùng màu (không ký hiệu trong ô); các nhãn trạng thái dạng chữ ở thanh trên cùng có kèm ký hiệu. Trip code hiện thành 8 ô bit mỗi byte (`ui/bit_cells`).
 
 ## Kiến trúc
 

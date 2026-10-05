@@ -1,4 +1,5 @@
 #include "psu_page.h"
+#include "bit_cells.h"
 #include "overview_grid.h"
 #include "status_pill.h"
 #include "theme.h"
@@ -111,7 +112,8 @@ QWidget *PsuPage::buildMonitor()
     auto *flags = new QGroupBox(QStringLiteral("Thời gian và trip"));
     auto *form = new QFormLayout(flags);
     form->addRow(QStringLiteral("RTC (thô)"), valueRow(psumon::kNumRtc, m_rtc, rtcNames));
-    form->addRow(QStringLiteral("Trip code 1–10 (hex)"), valueRow(psumon::kNumTrip, m_trip, {}));
+    form->addRow(QStringLiteral("Trip code (bit 7 ... bit 0)"),
+                 BitCells::makeGrid(psumon::kNumTrip, 5, QStringLiteral("T%1"), m_trip));
 
     auto *tables = new QHBoxLayout;
     tables->addWidget(titled(QStringLiteral("4 cụm DCM"), m_cluster), 3);
@@ -185,10 +187,11 @@ void PsuPage::refresh()
     if (s.status == Status::Lost) text += QStringLiteral(" · SỐ LIỆU BÊN DƯỚI LÀ SỐ LIỆU CŨ");
     m_status->setText(text);
 
-    auto val = [&](int idx) { return has ? QString::number(s.values.at(idx)) : kDash; };
+    auto num = [](double v) { return QString::number(v, 'g', 10); };   // giá trị thô 24 bit không được hiện dạng 1.2e+06
+    auto val = [&](int idx) { return has ? num(s.values.at(idx)) : kDash; };
     auto limitText = [&](int field) {
         const model::Limit l = m_ctx.psuThresholds->get(m_addr, 0, field);
-        return l.isSet() ? QStringLiteral("Ngưỡng: %1 … %2").arg(l.min).arg(l.max)
+        return l.isSet() ? QStringLiteral("Ngưỡng: %1 … %2").arg(num(l.min), num(l.max))
                          : QStringLiteral("Không có ngưỡng (chỉ hiển thị)");
     };
     auto fill = [&](QTableWidgetItem *it, int field) {
@@ -206,11 +209,8 @@ void PsuPage::refresh()
     for (int i = 0; i < psumon::kNumSupply; ++i) fill(m_supply->item(i, 0), psumon::kIdxSupply0 + i);
 
     for (int i = 0; i < m_rtc.size(); ++i) m_rtc[i]->setText(val(psumon::kIdxRtc0 + i));
-    for (int i = 0; i < m_trip.size(); ++i) {
-        const int code = has ? int(s.values.at(psumon::kIdxTrip0 + i)) : 0;
-        m_trip[i]->setText(has ? QStringLiteral("%1").arg(code, 2, 16, QLatin1Char('0')).toUpper() : kDash);
-        m_trip[i]->setStyleSheet(code ? QStringLiteral("background:#E24B4A; color:white; font-weight:bold;") : QString());
-    }
+    for (int i = 0; i < m_trip.size(); ++i)
+        m_trip[i]->setValue(has ? int(s.values.at(psumon::kIdxTrip0 + i)) : 0, has);
 }
 
 void PsuPage::sendControl()

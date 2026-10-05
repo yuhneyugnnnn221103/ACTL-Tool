@@ -67,11 +67,8 @@ void PsuGrid::paintEvent(QPaintEvent *)
         p.setPen(Qt::NoPen);
         p.setBrush(OverviewGrid::statusColor(s));
         p.drawRoundedRect(r, 6, 6);
-        QColor fg = theme::statusTextColor(s);
-        if (s == Status::Ok) fg.setAlpha(170);
-        p.setPen(fg);
-        const QString mark = OverviewGrid::statusMark(s);
-        p.drawText(r, Qt::AlignCenter, text.isEmpty() ? mark : (mark.isEmpty() ? text : text + ' ' + mark));
+        p.setPen(theme::statusTextColor(s));
+        p.drawText(r, Qt::AlignCenter, text);
     };
     for (int row = 0; row < m_store->count(); ++row) {
         const int addr = m_store->firstAddr() + row;

@@ -7,7 +7,7 @@ class QLabel;
 class QPushButton;
 class QTableWidget;
 
-namespace ui { class StatusPill; }
+namespace ui { class BitCells; class StatusPill; }
 
 namespace ui {
 
@@ -31,7 +31,8 @@ private:
     StatusPill *m_pill;
     QLabel *m_status;
     QTableWidget *m_cluster, *m_supply;
-    QList<QLabel *> m_rtc, m_trip;
+    QList<QLabel *> m_rtc;
+    QList<BitCells *> m_trip;
     QCheckBox *m_enable[4], *m_clearTrip;
 };
 

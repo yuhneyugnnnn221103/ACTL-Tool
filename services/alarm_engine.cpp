@@ -16,13 +16,14 @@ QList<int> AlarmEngine::check(int mb, int trb, const QList<double> &values)
         if (bad == active.contains(i)) continue;
 
         const QString name = m_table->fields().at(i).name;
+        auto num = [](double v) { return QString::number(v, 'g', 10); };   // số nguyên lớn không hiện dạng 1.2e+06
         if (bad) {
             active.insert(i);
             emit alarmEvent(mb, trb, QStringLiteral("%1 = %2 ngoài ngưỡng [%3 … %4]")
-                                         .arg(name).arg(values.at(i)).arg(l.min).arg(l.max), true);
+                                         .arg(name, num(values.at(i)), num(l.min), num(l.max)), true);
         } else {
             active.remove(i);
-            emit alarmEvent(mb, trb, QStringLiteral("%1 = %2 trở lại trong ngưỡng").arg(name).arg(values.at(i)), false);
+            emit alarmEvent(mb, trb, QStringLiteral("%1 = %2 trở lại trong ngưỡng").arg(name, num(values.at(i))), false);
         }
     }
     return now;
