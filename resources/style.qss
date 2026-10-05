@@ -136,6 +136,14 @@ QGroupBox[compact="true"] QLabel { padding: 0; margin: 0; }
 QGroupBox QLabel, QGroupBox QCheckBox, QGroupBox QRadioButton { font-weight: 400; }
 QGroupBox[card="false"] { border: none; background: transparent; }
 
+/* Thẻ số liệu một dòng (QFrame[card="true"]) */
+QFrame[card="true"] {
+    background: @surface@;
+    border: 1px solid @border@;
+    border-radius: 8px;
+}
+QFrame[card="true"] QLabel { background: transparent; }
+
 /* ---------- Bảng, cây, danh sách ---------- */
 QTableWidget, QTableView, QTreeWidget, QTreeView, QListWidget {
     background: @surface@;

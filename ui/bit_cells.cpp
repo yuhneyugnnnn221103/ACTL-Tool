@@ -8,7 +8,7 @@
 namespace ui {
 
 namespace {
-constexpr int kCell = 14, kGap = 2, kBits = 8, kCaptionGap = 6;
+constexpr int kCell = 18, kGap = 3, kBits = 8, kCaptionGap = 8;
 }
 
 BitCells::BitCells(const QString &caption, QWidget *parent) : QWidget(parent), m_caption(caption)
@@ -79,7 +79,7 @@ QWidget *BitCells::makeGrid(int count, int columns, const QString &captionFmt, Q
     auto *grid = new QGridLayout(w);
     grid->setContentsMargins(0, 0, 0, 0);
     grid->setHorizontalSpacing(theme::kMargin + 4);
-    grid->setVerticalSpacing(theme::kSpace);
+    grid->setVerticalSpacing(4);
     // Số thứ tự chạy xuống từng cột trước (1..rows ở cột đầu) để đọc theo cột.
     const int rows = (count + columns - 1) / columns;
     for (int i = 0; i < count; ++i) {

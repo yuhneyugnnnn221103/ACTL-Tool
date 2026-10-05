@@ -38,12 +38,14 @@ QGroupBox *ledGroup(const QString &title, const QStringList &captions, QList<Led
     auto *g = new QGroupBox(title);
     auto *l = new QHBoxLayout(g);
     l->setSpacing(theme::kSpace);
+    // Khoảng giãn bằng nhau ở hai lề và giữa các đèn: đèn cách đều, cân hai bên.
+    l->addStretch(1);
     for (const QString &c : captions) {
         auto *led = new LedIndicator(c);
         leds << led;
         l->addWidget(led);
+        l->addStretch(1);
     }
-    l->addStretch(1);
     return g;
 }
 
@@ -110,7 +112,7 @@ QTableWidget *TrbDetailPage::makeTable(const QStringList &rows, int firstField)
     t->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     t->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     t->verticalHeader()->setMinimumSectionSize(24);
-    t->setMinimumHeight(t->horizontalHeader()->sizeHint().height() + rows.size() * 24 + 8);
+    t->setMinimumHeight(qMax(32, t->horizontalHeader()->sizeHint().height()) + rows.size() * 24 + 20);   // header chưa áp QSS nên lấy tối thiểu 32px
     for (int r = 0; r < rows.size(); ++r) {
         for (int c = 0; c < trbmon::kNumTrm; ++c) {
             auto *it = new QTableWidgetItem(kDash);
@@ -139,17 +141,26 @@ QWidget *TrbDetailPage::buildMonitor()
                              makeTable(numbered(QStringLiteral("Nhiệt độ %1"), 4) + numbered(QStringLiteral("Dòng PA %1"), 4)
                                            << QStringLiteral("Dòng LNA"), 16)));
 
+    // Thẻ số liệu một dòng: tên bên trái, giá trị bên phải, thấp hơn thẻ có tiêu đề.
     auto *metrics = new QHBoxLayout;
+    metrics->setSpacing(theme::kSpace);
     for (const QString &name : {QStringLiteral("Điện áp TRB"), QStringLiteral("Dòng điện TRB"),
                                 QStringLiteral("Nhiệt độ power TRB"), QStringLiteral("Nhiệt độ MCU"),
                                 QStringLiteral("Độ ẩm power")}) {
+        auto *card = new QFrame;
+        card->setProperty("card", true);
+        auto *row = new QHBoxLayout(card);
+        row->setContentsMargins(12, 4, 12, 4);
+        auto *title = new QLabel(name);
+        theme::setRole(title, "muted");
         auto *v = new QLabel(kDash);
-        v->setAlignment(Qt::AlignCenter);
-        v->setProperty("role", "metric");
+        theme::setRole(v, "metric");
+        v->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         m_metrics << v;
-        auto *card = titled(name, v);
-        card->setProperty("compact", true);   // thẻ thấp: ít đệm trên/dưới (xem style.qss)
-        metrics->addWidget(card);
+        row->addWidget(title);
+        row->addStretch(1);
+        row->addWidget(v);
+        metrics->addWidget(card, 1);
     }
 
     // Đèn trạng thái ADAR, PG, PA đặt trên cùng, to và có nhãn để nhìn là biết ngay.
@@ -159,28 +170,19 @@ QWidget *TrbDetailPage::buildMonitor()
     leds->addWidget(ledGroup(QStringLiteral("PG (power good)"), numbered(QStringLiteral("TRM%1"), 4), m_ledPg), 1);
     leds->addWidget(ledGroup(QStringLiteral("PA"), numbered(QStringLiteral("TRM%1"), 4), m_ledPa), 1);
 
-    auto *flags = new QGroupBox(QStringLiteral("State TRM và trip code"));
-    auto *form = new QFormLayout(flags);
-    auto valueRow = [](int n, QList<QLabel *> &out, const QString &prefix) {
-        auto *w = new QWidget;
-        auto *l = new QHBoxLayout(w);
-        l->setContentsMargins(0, 0, 0, 0);
-        for (int i = 0; i < n; ++i) {
-            if (!prefix.isEmpty()) l->addWidget(new QLabel(prefix.arg(i + 1)));
-            auto *v = new QLabel(kDash);
-            v->setMinimumWidth(26);
-            v->setAlignment(Qt::AlignCenter);
-            v->setFrameShape(QFrame::StyledPanel);
-            out << v;
-            l->addWidget(v);
-        }
-        l->addStretch(1);
-        return w;
-    };
-    form->addRow(QStringLiteral("State TRM (mã thô)"), valueRow(trbmon::kNumTrm, m_state, QStringLiteral("TRM%1")));
+    // Hàng "Trạng thái" riêng: hiện chuỗi text (hiện là mã thô State của 4 TRM, sau này parse thành chữ).
+    auto *state = new QGroupBox(QStringLiteral("Trạng thái"));
+    state->setProperty("compact", true);
+    auto *stateLayout = new QHBoxLayout(state);
+    m_stateText = new QLabel(kDash);
+    m_stateText->setWordWrap(true);
+    m_stateText->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    stateLayout->addWidget(m_stateText, 1);
+
     // Mỗi trip code là một byte, hiện thành 8 ô bit (bit 7 ... bit 0), bit 1 tô đỏ.
-    form->addRow(QStringLiteral("Trip code (bit 7 ... 0)"),
-                 BitCells::makeGrid(trbmon::kNumTrip, 6, QStringLiteral("T%1"), m_trip));
+    auto *trip = new QGroupBox(QStringLiteral("Trip code (mỗi byte: bit 7 ... bit 0)"));
+    auto *tripLayout = new QVBoxLayout(trip);
+    tripLayout->addWidget(BitCells::makeGrid(trbmon::kNumTrip, 4, QStringLiteral("T%1"), m_trip));
 
     auto *w = new QWidget;
     auto *l = new QVBoxLayout(w);
@@ -189,7 +191,8 @@ QWidget *TrbDetailPage::buildMonitor()
     l->addLayout(leds);
     l->addLayout(tables, 1);
     l->addLayout(metrics);
-    l->addWidget(flags);
+    l->addWidget(state);
+    l->addWidget(trip);
     return w;
 }
 
@@ -329,7 +332,9 @@ void TrbDetailPage::refresh()
     setLeds(m_ledAdar, trbmon::kIdxInitAdar, Led::Fault, QStringLiteral("ADAR"));
     setLeds(m_ledPg, trbmon::kIdxPg, Led::Fault, QStringLiteral("PG TRM"));
     setLeds(m_ledPa, trbmon::kIdxPa, Led::Idle, QStringLiteral("PA TRM")); // PA tắt là trạng thái Stop bình thường
-    for (int i = 0; i < m_state.size(); ++i) m_state[i]->setText(val(trbmon::kIdxState0 + i));
+    QStringList stateParts;
+    for (int i = 0; i < trbmon::kNumTrm; ++i) stateParts << QStringLiteral("TRM%1: %2").arg(i + 1).arg(val(trbmon::kIdxState0 + i));
+    m_stateText->setText(stateParts.join(QStringLiteral("   ·   ")));
     for (int i = 0; i < m_trip.size(); ++i) m_trip[i]->setValue(bits(trbmon::kIdxTrip0 + i), has);
 }
 
