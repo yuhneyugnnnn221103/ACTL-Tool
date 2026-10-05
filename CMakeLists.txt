@@ -21,6 +21,7 @@ set(PROJECT_SOURCES
         ui/overview_grid.h ui/overview_grid.cpp
         ui/trb_detail_page.h ui/trb_detail_page.cpp
         ui/psu_page.h ui/psu_page.cpp
+        ui/psu_grid.h ui/psu_grid.cpp
         ui/psu_config_page.h ui/psu_config_page.cpp
 
 

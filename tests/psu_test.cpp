@@ -235,6 +235,23 @@ private slots:
         QCOMPARE(store.psu(3).status, model::Status::Lost);
     }
 
+    void clusterStatusFollowsAlarmsPerCluster()
+    {
+        model::PsuStore store(1, 5);
+        QCOMPARE(store.clusterStatus(2, 0), model::Status::NoData);
+        const int c1 = psumon::clusterField(1, psumon::TempFet);
+        store.updatePsu(2, QList<double>(psumon::kNumFields, 0.0), {}, 1000, model::Status::Warning, {c1});
+        QCOMPARE(store.clusterStatus(2, 0), model::Status::Ok);
+        QCOMPARE(store.clusterStatus(2, 1), model::Status::Warning);
+        QCOMPARE(store.clusterAlarms(2, 1), QList<int>{c1});
+        QVERIFY(store.clusterAlarms(2, 3).isEmpty());
+        // Trip cấp PSU không gán cho cụm nào; cụm vẫn theo ngưỡng của chính nó.
+        store.updatePsu(2, QList<double>(psumon::kNumFields, 0.0), {}, 2000, model::Status::Trip, {});
+        QCOMPARE(store.clusterStatus(2, 1), model::Status::Ok);
+        store.markStale(10000, 3000);
+        for (int c = 0; c < 4; ++c) QCOMPARE(store.clusterStatus(2, c), model::Status::Lost);
+    }
+
     void configWriteVerifyAndThresholds()
     {
         core::FrameRegistry registry;

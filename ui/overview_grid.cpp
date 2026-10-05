@@ -11,8 +11,9 @@ using model::Status;
 namespace {
 constexpr int kLeft = 52, kTop = 26, kGap = 3;
 
-// Ký hiệu đi kèm màu để không phụ thuộc hoàn toàn vào màu sắc.
-QString statusMark(Status s)
+}
+
+QString OverviewGrid::statusMark(Status s)
 {
     switch (s) {
     case Status::Warning:  return QStringLiteral("▲");
@@ -21,7 +22,6 @@ QString statusMark(Status s)
     case Status::Updating: return QStringLiteral("↻");
     default:               return {};
     }
-}
 }
 
 QColor OverviewGrid::statusColor(Status s)

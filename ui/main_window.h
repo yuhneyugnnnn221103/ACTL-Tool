@@ -15,6 +15,7 @@ class QStackedWidget;
 namespace ui {
 
 class OverviewGrid;
+class PsuGrid;
 class PsuPage;
 class TrbDetailPage;
 
@@ -34,9 +35,11 @@ private:
     void toggleSerial();
     void refreshPorts();
     void showDetail(int mb, int trb);
+    void showPsu(int addr);
     void refresh();
     void rebuildAbnormalList();
     QString trbTooltip(int mb, int trb) const;
+    QString psuTooltip(int addr, int cluster) const;
 
     AppContext m_ctx;
     model::DeviceStore *m_store;
@@ -51,6 +54,7 @@ private:
     OverviewGrid *m_grid;
     TrbDetailPage *m_detail;
     PsuPage *m_psu;
+    PsuGrid *m_psuGrid;
     QListWidget *m_nav, *m_abnormal;
     QStackedWidget *m_pages;
     QPlainTextEdit *m_eventLog, *m_hexLog;

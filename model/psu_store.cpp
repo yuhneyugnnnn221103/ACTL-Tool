@@ -1,9 +1,26 @@
 #include "psu_store.h"
+#include "../proto/psu_monitor_proto.h"
 
 namespace model {
 
 PsuStore::PsuStore(int firstAddr, int count, QObject *parent)
     : QObject(parent), m_firstAddr(firstAddr), m_psus(count) {}
+
+QList<int> PsuStore::clusterAlarms(int addr, int cluster) const
+{
+    QList<int> out;
+    const int first = proto::psumon::clusterField(cluster, proto::psumon::ClusterField(0));
+    for (int f : psu(addr).alarms)
+        if (f >= first && f < first + proto::psumon::kClusterFields) out.append(f);
+    return out;
+}
+
+Status PsuStore::clusterStatus(int addr, int cluster) const
+{
+    const Status s = psu(addr).status;
+    if (s == Status::NoData || s == Status::Lost || s == Status::Updating) return s;
+    return clusterAlarms(addr, cluster).isEmpty() ? Status::Ok : Status::Warning;
+}
 
 void PsuStore::updatePsu(int addr, const QList<double> &values, const QByteArray &raw, qint64 timestampMs,
                          Status status, const QList<int> &alarms)

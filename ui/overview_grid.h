@@ -12,6 +12,7 @@ public:
     explicit OverviewGrid(const model::DeviceStore *store, QWidget *parent = nullptr);
 
     static QColor statusColor(model::Status s);
+    static QString statusMark(model::Status s); // ký hiệu đi kèm màu để không phụ thuộc hoàn toàn vào màu sắc
     void setTooltipProvider(std::function<QString(int mb, int trb)> f) { m_tooltip = std::move(f); }
     void select(int mb, int trb);
 

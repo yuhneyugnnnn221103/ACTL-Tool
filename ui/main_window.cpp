@@ -3,9 +3,11 @@
 #include "auth.h"
 #include "firmware_page.h"
 #include "psu_config_page.h"
+#include "psu_grid.h"
 #include "psu_page.h"
 #include "trb_config_page.h"
 #include "trb_detail_page.h"
+#include "../proto/psu_monitor_proto.h"
 #include "../proto/trb_monitor_proto.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -76,6 +78,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
         logEvent(QStringLiteral("Cấu hình PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m));
     });
     connect(ctx.psuStore, &model::PsuStore::psuStatusChanged, this, [this](int addr, Status from, Status to) {
+        m_listDirty = true;
         if (from == Status::NoData && to == Status::Ok) return; // lần đầu thấy PSU: không cần báo
         logEvent(QStringLiteral("PSU %1: %2 → %3").arg(addr).arg(statusText(from), statusText(to)));
     });
@@ -253,7 +256,8 @@ QWidget *MainWindow::buildOverviewPage()
 
     m_abnormal = new QListWidget;
     connect(m_abnormal, &QListWidget::itemClicked, this, [this](QListWidgetItem *it) {
-        showDetail(it->data(Qt::UserRole).toInt(), it->data(Qt::UserRole + 1).toInt());
+        if (it->data(Qt::UserRole + 2).isValid()) showPsu(it->data(Qt::UserRole + 2).toInt()); // PSU
+        else showDetail(it->data(Qt::UserRole).toInt(), it->data(Qt::UserRole + 1).toInt());
     });
     connect(m_grid, &OverviewGrid::trbClicked, this, &MainWindow::showDetail);
     auto *side = new QWidget;
@@ -263,9 +267,17 @@ QWidget *MainWindow::buildOverviewPage()
     sideLayout->addWidget(new QLabel(QStringLiteral("Thiết bị bất thường")));
     sideLayout->addWidget(m_abnormal, 1);
 
+    m_psuGrid = new PsuGrid(m_ctx.psuStore);
+    m_psuGrid->setTooltipProvider([this](int addr, int cluster) { return psuTooltip(addr, cluster); });
+    connect(m_psuGrid, &PsuGrid::psuClicked, this, &MainWindow::showPsu);
+    auto *grids = new QVBoxLayout;
+    grids->addWidget(m_grid, 1);
+    grids->addWidget(new QLabel(QStringLiteral("PSU · 4 cụm DCM")));
+    grids->addWidget(m_psuGrid);
+
     auto *page = new QWidget;
     auto *l = new QHBoxLayout(page);
-    l->addWidget(m_grid, 1);
+    l->addLayout(grids, 1);
     l->addWidget(side);
     return page;
 }
@@ -319,10 +331,17 @@ void MainWindow::showDetail(int mb, int trb)
     m_nav->setCurrentRow(1);
 }
 
+void MainWindow::showPsu(int addr)
+{
+    m_psu->setDevice(addr);
+    m_nav->setCurrentRow(m_pages->indexOf(m_psu));
+}
+
 void MainWindow::refresh()
 {
     m_store->markStale(QDateTime::currentMSecsSinceEpoch(), m_ctx.settings.staleMs);
     m_grid->update();
+    m_psuGrid->update();
     m_ctx.psuStore->markStale(QDateTime::currentMSecsSinceEpoch(), m_ctx.settings.staleMs);
     if (m_pages->currentWidget() == m_detail) m_detail->refresh();
     if (m_pages->currentWidget() == m_psu) m_psu->refresh();
@@ -360,7 +379,45 @@ void MainWindow::rebuildAbnormalList()
                 m_abnormal->addItem(it);
             }
         }
+        for (int i = 0; i < m_ctx.psuStore->count(); ++i) {
+            const int addr = m_ctx.psuStore->firstAddr() + i;
+            const model::PsuState &s = m_ctx.psuStore->psu(addr);
+            if (s.status != want) continue;
+            QString why = statusText(want);
+            if (want == Status::Warning && !s.alarms.isEmpty()) {
+                why = proto::psumon::table().fields().at(s.alarms.first()).name;
+                if (s.alarms.size() > 1) why += QStringLiteral(" (+%1)").arg(s.alarms.size() - 1);
+            }
+            auto *it = new QListWidgetItem(QStringLiteral("PSU %1 · %2").arg(addr).arg(why));
+            it->setData(Qt::UserRole + 2, addr);
+            it->setForeground(OverviewGrid::statusColor(want).darker(130));
+            m_abnormal->addItem(it);
+        }
     }
+}
+
+QString MainWindow::psuTooltip(int addr, int cluster) const
+{
+    using namespace proto::psumon;
+    const model::PsuState &s = m_ctx.psuStore->psu(addr);
+    QString t = QStringLiteral("PSU %1").arg(addr);
+    if (cluster >= 0) t += QStringLiteral(" · Cụm %1").arg(cluster + 1);
+    t += QStringLiteral("\nTrạng thái: %1").arg(statusText(cluster >= 0 ? m_ctx.psuStore->clusterStatus(addr, cluster) : s.status));
+    if (cluster >= 0 && s.status == Status::Trip)
+        t += QStringLiteral("\nPSU đang Trip (chưa xác định được cụm nào, chờ bảng trip code)");
+    if (s.frames == 0) return t;
+
+    t += QStringLiteral("\nCập nhật: %1 s trước · %2 bản tin")
+             .arg((QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs) / 1000.0, 0, 'f', 1).arg(s.frames);
+    if (cluster < 0) {
+        QStringList trips;
+        for (int i = 0; i < kNumTrip; ++i)
+            trips << QStringLiteral("%1").arg(int(s.values.at(kIdxTrip0 + i)), 2, 16, QLatin1Char('0')).toUpper();
+        t += QStringLiteral("\nTrip code: ") + trips.join(' ');
+    }
+    const QList<int> bad = cluster >= 0 ? m_ctx.psuStore->clusterAlarms(addr, cluster) : s.alarms;
+    for (int f : bad) t += QStringLiteral("\nQuá ngưỡng: ") + table().fields().at(f).name;
+    return t;
 }
 
 QString MainWindow::trbTooltip(int mb, int trb) const

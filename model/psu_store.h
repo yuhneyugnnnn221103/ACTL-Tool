@@ -23,6 +23,11 @@ public:
     bool contains(int addr) const { return addr >= m_firstAddr && addr < m_firstAddr + m_psus.size(); }
     const PsuState &psu(int addr) const { return m_psus.at(addr - m_firstAddr); }
 
+    // Trạng thái một cụm DCM (0..3): mất kết nối/chưa có dữ liệu theo PSU, Quá ngưỡng nếu có giá trị của cụm
+    // vượt ngưỡng, còn lại Tốt. Trip chưa gán được cho cụm vì chưa có bảng trip code, nên không hiện ở đây.
+    Status clusterStatus(int addr, int cluster) const;
+    QList<int> clusterAlarms(int addr, int cluster) const; // chỉ số trường (trong bảng giám sát) đang vượt ngưỡng
+
     void updatePsu(int addr, const QList<double> &values, const QByteArray &raw, qint64 timestampMs,
                    Status status, const QList<int> &alarms = {});
     void markStale(qint64 nowMs, int staleMs); // quá hạn -> Lost
