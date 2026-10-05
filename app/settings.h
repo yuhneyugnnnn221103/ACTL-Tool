@@ -11,10 +11,10 @@ struct Settings {
     int replayIntervalMs;
     QString servicePort;       // cổng COM của đường RS485 (cấu hình, nạp code)
     int serviceBaud;
-    bool trbCheckCrc;
+    bool trbCheckCrc, psuCheckCrc;
     int cfgReadTimeoutMs, cfgWriteGapMs;
     bool logEnabled;
-    QString logDir, thresholdsFile;
+    QString logDir, thresholdsFile, psuThresholdsFile, psuDefaultConfigFile;
     int logPeriodMs, logMaxFileMb;
     int fpgaEraseWaitSec, fpgaPacketGapMs, fpgaBootWaitMs;
     int psuCount, psuFirstAddr;
@@ -46,6 +46,7 @@ struct Settings {
         s.servicePort = get("service/port", "").toString();
         s.serviceBaud = get("service/baud", 1000000).toInt();
         s.trbCheckCrc = get("trb/checkCrc", true).toBool();
+        s.psuCheckCrc = get("psu/checkCrc", true).toBool();
         s.cfgReadTimeoutMs = get("config/readTimeoutMs", 3000).toInt();
         s.cfgWriteGapMs = get("config/writeGapMs", 300).toInt();
         s.logEnabled = get("log/enabled", true).toBool();
@@ -53,6 +54,8 @@ struct Settings {
         s.logPeriodMs = get("log/periodMs", 10000).toInt(); // chu kỳ ghi mỗi TRB; đổi trạng thái thì ghi ngay
         s.logMaxFileMb = get("log/maxFileMb", 100).toInt();
         s.thresholdsFile = get("alarm/thresholdsFile", appDir + "/thresholds.json").toString();
+        s.psuThresholdsFile = get("alarm/psuThresholdsFile", appDir + "/psu_thresholds.json").toString();
+        s.psuDefaultConfigFile = get("psu/defaultConfigFile", appDir + "/psu_default_config.json").toString();
         s.fpgaEraseWaitSec = get("fpgaOta/eraseWaitSec", 420).toInt();
         s.fpgaPacketGapMs = get("fpgaOta/packetGapMs", 5).toInt();
         s.fpgaBootWaitMs = get("fpgaOta/bootWaitMs", 3000).toInt();

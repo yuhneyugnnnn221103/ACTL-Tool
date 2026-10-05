@@ -7,13 +7,17 @@ namespace services {
 static const char *kTimeFormat = "yyyy-MM-dd HH:mm:ss.zzz";
 
 CsvLogger::CsvLogger(const QString &dir, int periodMs, qint64 maxFileBytes, const proto::FieldTable *trbTable,
-                     QObject *parent)
-    : QObject(parent), m_dir(dir), m_periodMs(periodMs), m_maxFileBytes(maxFileBytes), m_trbTable(trbTable)
+                     const proto::FieldTable *psuTable, QObject *parent)
+    : QObject(parent), m_dir(dir), m_periodMs(periodMs), m_maxFileBytes(maxFileBytes)
 {
     QStringList cols{"time", "mb", "trb", "status"};
     for (const proto::Field &f : trbTable->fields()) cols << f.name;
     m_trb.prefix = QStringLiteral("trb");
     m_trb.header = cols.join(',');
+    QStringList psuCols{"time", "addr", "status"};
+    for (const proto::Field &f : psuTable->fields()) psuCols << f.name;
+    m_psu.prefix = QStringLiteral("psu");
+    m_psu.header = psuCols.join(',');
     m_events.prefix = QStringLiteral("events");
     m_events.header = QStringLiteral("time,event");
 
@@ -33,6 +37,18 @@ void CsvLogger::logTrb(int mb, int trb, const model::TrbState &s, bool force)
     write(m_trb, line);
 }
 
+void CsvLogger::logPsu(int addr, const model::PsuState &s, bool force)
+{
+    qint64 &last = m_lastLoggedPsu[addr];
+    if (!force && s.lastSeenMs - last < m_periodMs) return;
+    last = s.lastSeenMs;
+
+    QByteArray line = QDateTime::fromMSecsSinceEpoch(s.lastSeenMs).toString(kTimeFormat).toLatin1();
+    line += ',' + QByteArray::number(addr) + ',' + statusText(s.status).toUtf8();
+    for (double v : s.values) line += ',' + QByteArray::number(v, 'g', 10);
+    write(m_psu, line);
+}
+
 void CsvLogger::logEvent(const QString &text)
 {
     QString quoted = text;
@@ -43,6 +59,7 @@ void CsvLogger::logEvent(const QString &text)
 void CsvLogger::flush()
 {
     if (m_trb.file.isOpen()) m_trb.file.flush();
+    if (m_psu.file.isOpen()) m_psu.file.flush();
     if (m_events.file.isOpen()) m_events.file.flush();
 }
 

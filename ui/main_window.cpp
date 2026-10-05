@@ -2,6 +2,8 @@
 #include "overview_grid.h"
 #include "auth.h"
 #include "firmware_page.h"
+#include "psu_config_page.h"
+#include "psu_page.h"
 #include "trb_config_page.h"
 #include "trb_detail_page.h"
 #include "../proto/trb_monitor_proto.h"
@@ -42,7 +44,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
 {
     setWindowTitle(QStringLiteral("ACTL Tool"));
 
-    // Điều hướng trái + các trang. Trang Nạp code và PSU thêm ở các bước sau.
+    // Điều hướng trái + các trang.
     m_nav = new QListWidget;
     m_nav->setFixedWidth(120);
     m_pages = new QStackedWidget;
@@ -52,6 +54,10 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     m_pages->addWidget(m_detail = new TrbDetailPage(m_store, ctx.trbControl, ctx.thresholds));
     m_nav->addItem(QStringLiteral("Cấu hình TRB"));
     m_pages->addWidget(new TrbConfigPage(ctx));
+    m_nav->addItem(QStringLiteral("PSU"));
+    m_pages->addWidget(m_psu = new PsuPage(ctx));
+    m_nav->addItem(QStringLiteral("Cấu hình PSU"));
+    m_pages->addWidget(new PsuConfigPage(ctx));
     m_nav->addItem(QStringLiteral("Nạp code"));
     m_pages->addWidget(new FirmwarePage(ctx));
     connect(m_nav, &QListWidget::currentRowChanged, m_pages, &QStackedWidget::setCurrentIndex);
@@ -62,6 +68,16 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     });
     connect(ctx.trbConfig, &services::TrbConfig::deviceFinished, this, [this](int mb, int trb, bool ok, const QString &m) {
         logEvent(QStringLiteral("Cấu hình %1: %2%3").arg(trbName(mb, trb), ok ? QString() : QStringLiteral("LỖI, "), m));
+    });
+    connect(ctx.psuControl, &services::PsuControl::commandFinished, this, [this](const QString &d, bool sent) {
+        logEvent((sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d);
+    });
+    connect(ctx.psuConfig, &services::PsuConfig::deviceFinished, this, [this](int addr, bool ok, const QString &m) {
+        logEvent(QStringLiteral("Cấu hình PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m));
+    });
+    connect(ctx.psuStore, &model::PsuStore::psuStatusChanged, this, [this](int addr, Status from, Status to) {
+        if (from == Status::NoData && to == Status::Ok) return; // lần đầu thấy PSU: không cần báo
+        logEvent(QStringLiteral("PSU %1: %2 → %3").arg(addr).arg(statusText(from), statusText(to)));
     });
     connect(ctx.fpgaOta, &services::FpgaOta::finished, this, [this](const QString &s) { logEvent(QStringLiteral("Nạp FPGA: ") + s); });
     connect(ctx.stmOta, &services::StmOta::deviceFinished, this, [this](int addr, bool ok, const QString &m) {
@@ -307,7 +323,9 @@ void MainWindow::refresh()
 {
     m_store->markStale(QDateTime::currentMSecsSinceEpoch(), m_ctx.settings.staleMs);
     m_grid->update();
+    m_ctx.psuStore->markStale(QDateTime::currentMSecsSinceEpoch(), m_ctx.settings.staleMs);
     if (m_pages->currentWidget() == m_detail) m_detail->refresh();
+    if (m_pages->currentWidget() == m_psu) m_psu->refresh();
 
     auto item = [this](Status s, const QString &label) {
         return pill(QStringLiteral("%1 %2").arg(m_store->count(s)).arg(label), OverviewGrid::statusColor(s),

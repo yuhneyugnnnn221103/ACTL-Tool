@@ -1,6 +1,8 @@
 #include "app/context.h"
 #include "core/replay_transport.h"
+#include "proto/psu_monitor_proto.h"
 #include "proto/trb_monitor_proto.h"
+#include "services/psu_monitor.h"
 #include "services/trb_monitor.h"
 #include "ui/auth.h"
 #include "ui/main_window.h"
@@ -22,6 +24,8 @@ int main(int argc, char *argv[])
     core::FrameRegistry registry;
     services::TrbMonitor::registerFrames(registry, cfg.trbCheckCrc);
     services::TrbConfig::registerFrames(registry, cfg.trbCheckCrc);
+    services::PsuMonitor::registerFrames(registry, cfg.psuCheckCrc);
+    services::PsuConfig::registerFrames(registry, cfg.psuCheckCrc);
     services::FpgaOta::registerFrames(registry);
     services::StmOta::registerFrames(registry);
 
@@ -50,21 +54,42 @@ int main(int argc, char *argv[])
     ctx.store = &store;
     ctx.thresholds = &thresholds;
 
+    // PSU: ngưỡng khóa theo (địa chỉ PSU, 0), cùng cơ chế với TRB nhưng file riêng.
+    model::PsuStore psuStore(cfg.psuFirstAddr, cfg.psuCount);
+    model::Thresholds psuThresholds(&proto::psumon::table());
+    QString psuThresholdError;
+    if (!QFile::exists(cfg.psuThresholdsFile)) psuThresholds.save(cfg.psuThresholdsFile);
+    else if (!psuThresholds.load(cfg.psuThresholdsFile, &psuThresholdError))
+        psuThresholdError = "Không đọc được file ngưỡng PSU: " + psuThresholdError;
+    ctx.psuStore = &psuStore;
+    ctx.psuThresholds = &psuThresholds;
+
     services::AlarmEngine alarms(&thresholds, &proto::trbmon::table());
     services::TrbMonitor trbMonitor(ctx.monitorLink, &store, &alarms);
     services::TrbControl trbControl(ctx.monitorLink);
     services::TrbConfig trbConfig(ctx.serviceLink, &thresholds, cfg.thresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
-    services::CsvLogger logger(cfg.logDir, cfg.logPeriodMs, qint64(cfg.logMaxFileMb) * 1024 * 1024, &proto::trbmon::table());
+    services::AlarmEngine psuAlarms(&psuThresholds, &proto::psumon::table());
+    services::PsuMonitor psuMonitor(ctx.monitorLink, &psuStore, &psuAlarms);
+    services::PsuControl psuControl(ctx.monitorLink);
+    services::PsuConfig psuConfig(ctx.serviceLink, &psuThresholds, cfg.psuThresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
+    services::CsvLogger logger(cfg.logDir, cfg.logPeriodMs, qint64(cfg.logMaxFileMb) * 1024 * 1024,
+                               &proto::trbmon::table(), &proto::psumon::table());
     services::FpgaOta fpgaOta(ctx.serviceLink);
     services::StmOta stmOta(ctx.serviceLink);
     ctx.fpgaOta = &fpgaOta;
     ctx.stmOta = &stmOta;
     ui::Auth auth(cfg.passwordHash, cfg.lockMinutes);
     ctx.trbControl = &trbControl;
+    ctx.psuControl = &psuControl;
+    ctx.psuConfig = &psuConfig;
     ctx.trbConfig = &trbConfig;
     ctx.logger = cfg.logEnabled ? &logger : nullptr;
     ctx.auth = &auth;
 
+    if (cfg.logEnabled)
+        QObject::connect(&psuMonitor, &services::PsuMonitor::psuUpdated, &logger, [&](int addr, bool changed) {
+            logger.logPsu(addr, psuStore.psu(addr), changed);
+        });
     if (cfg.logEnabled)
         QObject::connect(&trbMonitor, &services::TrbMonitor::trbUpdated, &logger, [&](int mb, int trb, bool changed) {
             logger.logTrb(mb, trb, store.trb(mb, trb), changed);
@@ -74,8 +99,12 @@ int main(int argc, char *argv[])
     QObject::connect(&alarms, &services::AlarmEngine::alarmEvent, &window, [&](int mb, int trb, const QString &t, bool) {
         window.logEvent(QStringLiteral("MB%1 / TRB%2: %3").arg(mb).arg(trb).arg(t));
     });
+    QObject::connect(&psuAlarms, &services::AlarmEngine::alarmEvent, &window, [&](int addr, int, const QString &t, bool) {
+        window.logEvent(QStringLiteral("PSU %1: %2").arg(addr).arg(t));
+    });
     QObject::connect(&logger, &services::CsvLogger::errorOccurred, &window, &ui::MainWindow::logEvent);
     if (!thresholdError.isEmpty()) window.logEvent(thresholdError);
+    if (!psuThresholdError.isEmpty()) window.logEvent(psuThresholdError);
     window.showMaximized();
 
     ioThread.start();

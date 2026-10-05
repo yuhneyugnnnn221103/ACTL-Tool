@@ -15,6 +15,7 @@ class QStackedWidget;
 namespace ui {
 
 class OverviewGrid;
+class PsuPage;
 class TrbDetailPage;
 
 class MainWindow : public QMainWindow {
@@ -49,6 +50,7 @@ private:
 
     OverviewGrid *m_grid;
     TrbDetailPage *m_detail;
+    PsuPage *m_psu;
     QListWidget *m_nav, *m_abnormal;
     QStackedWidget *m_pages;
     QPlainTextEdit *m_eventLog, *m_hexLog;

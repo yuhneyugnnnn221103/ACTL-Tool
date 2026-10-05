@@ -20,6 +20,8 @@ set(PROJECT_SOURCES
         ui/main_window.h ui/main_window.cpp
         ui/overview_grid.h ui/overview_grid.cpp
         ui/trb_detail_page.h ui/trb_detail_page.cpp
+        ui/psu_page.h ui/psu_page.cpp
+        ui/psu_config_page.h ui/psu_config_page.cpp
 
 
 )
@@ -50,6 +52,13 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         services/csv_logger.h services/csv_logger.cpp
         model/device_store.h model/device_store.cpp
         services/trb_monitor.h services/trb_monitor.cpp
+        model/psu_store.h model/psu_store.cpp
+        proto/psu_monitor_proto.h proto/psu_monitor_proto.cpp
+        proto/psu_control_proto.h proto/psu_control_proto.cpp
+        proto/psu_config_proto.h proto/psu_config_proto.cpp
+        services/psu_monitor.h services/psu_monitor.cpp
+        services/psu_control.h services/psu_control.cpp
+        services/psu_config.h services/psu_config.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET ACTL_Tool APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -95,4 +104,24 @@ install(TARGETS ACTL_Tool
 
 if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(ACTL_Tool)
+endif()
+
+# Test (cần Qt Test): ctest --test-dir build
+find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Test)
+if(Qt${QT_VERSION_MAJOR}Test_FOUND)
+    enable_testing()
+    add_executable(psu_test
+        tests/psu_test.cpp
+        core/transport.h core/link.h
+        core/frame.cpp core/frame_parser.cpp core/link.cpp
+        proto/field_table.cpp
+        proto/trb_monitor_proto.cpp proto/trb_config_proto.cpp proto/fpga_ota_proto.cpp proto/stm_ota_proto.cpp
+        proto/psu_monitor_proto.cpp proto/psu_control_proto.cpp proto/psu_config_proto.cpp
+        model/device_store.cpp model/psu_store.cpp model/thresholds.cpp
+        services/alarm_engine.cpp services/trb_monitor.cpp services/trb_config.cpp
+        services/fpga_ota.cpp services/stm_ota.cpp
+        services/psu_monitor.cpp services/psu_config.cpp
+    )
+    target_link_libraries(psu_test PRIVATE Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Core)
+    add_test(NAME psu_test COMMAND psu_test)
 endif()

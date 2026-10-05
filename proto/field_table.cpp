@@ -40,4 +40,26 @@ void FieldTable::encode(const QList<double> &values, QByteArray &frame) const
     }
 }
 
+QJsonObject FieldTable::toJson(const QList<double> &values) const
+{
+    QJsonObject root;
+    for (int i = 0; i < m_fields.size(); ++i) {
+        const Field &f = m_fields.at(i);
+        QJsonObject g = root.value(f.group).toObject();
+        g.insert(f.name, values.at(i));
+        root.insert(f.group, g);
+    }
+    return root;
+}
+
+void FieldTable::fromJson(const QJsonObject &json, QList<double> &values) const
+{
+    for (int i = 0; i < m_fields.size(); ++i) {
+        const Field &f = m_fields.at(i);
+        const QJsonValue v = json.value(f.group).toObject().value(f.name);
+        const double max = f.size >= 4 ? 4294967295.0 : double((1u << (8 * f.size)) - 1);
+        if (v.isDouble() && v.toDouble() >= 0 && v.toDouble() <= max) values[i] = v.toDouble();
+    }
+}
+
 } // namespace proto
