@@ -4,8 +4,8 @@
 
 namespace ui {
 
-// Khóa chế độ kỹ sư (cấu hình, nạp code). Đây là khóa chống thao tác nhầm của người vận hành,
-// không phải bảo mật: hash mật khẩu nằm trong file ini.
+// Mật khẩu chế độ kỹ sư, chỉ hỏi khi ghi cấu hình xuống thiết bị hoặc nạp code; xem, đọc, kiểm tra thì không cần.
+// Đây là khóa chống thao tác nhầm của người vận hành, không phải bảo mật: hash mật khẩu nằm trong file ini.
 class Auth : public QObject {
     Q_OBJECT
 public:
@@ -14,7 +14,7 @@ public:
     Auth(const QString &passwordHash, int lockMinutes, QObject *parent = nullptr);
 
     bool isUnlocked() const { return m_unlocked; }
-    bool unlock(QWidget *parent);          // hỏi mật khẩu
+    bool unlock(QWidget *parent);          // đã mở khóa thì trả về true ngay, chưa thì hỏi mật khẩu
     void lock();
     void touch();                          // có thao tác: lùi thời điểm tự khóa
     bool changePassword(QWidget *parent);

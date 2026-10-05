@@ -28,14 +28,9 @@ const QString kDash = QStringLiteral("--");
 PsuConfigPage::PsuConfigPage(const AppContext &ctx, QWidget *parent)
     : QWidget(parent), m_ctx(ctx), m_addr(ctx.psuStore->firstAddr())
 {
-    m_stack = new QStackedWidget;
-    m_stack->addWidget(buildLockPanel());
-    m_stack->addWidget(buildContent());
     auto *l = new QVBoxLayout(this);
     l->setContentsMargins(0, 0, 0, 0);
-    l->addWidget(m_stack);
-
-    connect(ctx.auth, &Auth::lockedChanged, this, [this](bool locked) { m_stack->setCurrentIndex(locked ? 0 : 1); });
+    l->addWidget(buildContent());
 
     auto *cfg = ctx.psuConfig;
     connect(cfg, &services::PsuConfig::configRead, this, [this](int addr) {
@@ -56,20 +51,6 @@ PsuConfigPage::PsuConfigPage(const AppContext &ctx, QWidget *parent)
         m_progressText->setText(QStringLiteral("Xong: %1 thành công, %2 lỗi").arg(ok).arg(fail));
     });
     selectDevice(m_addr);
-}
-
-QWidget *PsuConfigPage::buildLockPanel()
-{
-    auto *w = new QWidget;
-    auto *l = new QVBoxLayout(w);
-    auto *text = new QLabel(QStringLiteral("Cấu hình PSU cần mở khóa chế độ kỹ sư."));
-    auto *btn = new QPushButton(QStringLiteral("Nhập mật khẩu"));
-    l->addStretch(1);
-    l->addWidget(text, 0, Qt::AlignHCenter);
-    l->addWidget(btn, 0, Qt::AlignHCenter);
-    l->addStretch(1);
-    connect(btn, &QPushButton::clicked, this, [this] { m_ctx.auth->unlock(this); });
-    return w;
 }
 
 QWidget *PsuConfigPage::buildContent()
@@ -156,6 +137,7 @@ QWidget *PsuConfigPage::buildContent()
         if (QMessageBox::question(this, QStringLiteral("Ghi cấu hình"),
                                   QStringLiteral("Ghi toàn bộ cột \"Giá trị mới\" xuống PSU %1?").arg(m_addr))
             != QMessageBox::Yes) return;
+        if (!m_ctx.auth->unlock(this)) return; // chỉ hỏi mật khẩu khi thật sự gửi cấu hình xuống thiết bị
         setBusy(true);
         m_ctx.psuConfig->writeFull(m_addr, newValues());
     }));
@@ -209,6 +191,7 @@ QWidget *PsuConfigPage::buildContent()
         if (QMessageBox::question(this, QStringLiteral("Cấu hình hàng loạt"),
                 QStringLiteral("Ghi %1 trường đã sửa xuống %2 PSU? Các trường khác của từng PSU được giữ nguyên.")
                     .arg(changes.size()).arg(devs.size())) != QMessageBox::Yes) return;
+        if (!m_ctx.auth->unlock(this)) return;
         setBusy(true);
         m_ctx.psuConfig->applyChanges(devs, changes);
     }));
@@ -218,7 +201,7 @@ QWidget *PsuConfigPage::buildContent()
     auto *lockBtn = new QPushButton(QStringLiteral("Khóa"));
     auto *pwBtn = new QPushButton(QStringLiteral("Đổi mật khẩu"));
     connect(lockBtn, &QPushButton::clicked, this, [this] { m_ctx.auth->lock(); });
-    connect(pwBtn, &QPushButton::clicked, this, [this] { m_ctx.auth->changePassword(this); });
+    connect(pwBtn, &QPushButton::clicked, this, [this] { if (m_ctx.auth->unlock(this)) m_ctx.auth->changePassword(this); });
     batch->addWidget(pwBtn);
     batch->addWidget(lockBtn);
 
@@ -237,7 +220,7 @@ QWidget *PsuConfigPage::buildContent()
 bool PsuConfigPage::ready()
 {
     m_ctx.auth->touch();
-    return m_ctx.auth->isUnlocked() && !m_ctx.serviceBusy();
+    return !m_ctx.serviceBusy();
 }
 
 void PsuConfigPage::setBusy(bool busy)

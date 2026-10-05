@@ -44,32 +44,18 @@ bool yes(QWidget *parent, const QString &title, const QString &text)
 
 FirmwarePage::FirmwarePage(const AppContext &ctx, QWidget *parent) : QWidget(parent), m_ctx(ctx)
 {
-    auto *lock = new QWidget;
-    auto *ll = new QVBoxLayout(lock);
-    auto *unlock = new QPushButton(QStringLiteral("Nhập mật khẩu"));
-    ll->addStretch(1);
-    ll->addWidget(new QLabel(QStringLiteral("Nạp code cần mở khóa chế độ kỹ sư.")), 0, Qt::AlignHCenter);
-    ll->addWidget(unlock, 0, Qt::AlignHCenter);
-    ll->addStretch(1);
-    connect(unlock, &QPushButton::clicked, this, [this] { m_ctx.auth->unlock(this); });
-
     auto *tabs = new QTabWidget;
     tabs->addTab(buildFpgaTab(), QStringLiteral("FPGA trên TRB"));
     tabs->addTab(buildStmTab(), QStringLiteral("STM32 trên PSU"));
 
-    auto *stack = new QStackedWidget;
-    stack->addWidget(lock);
-    stack->addWidget(tabs);
     auto *l = new QVBoxLayout(this);
     l->setContentsMargins(0, 0, 0, 0);
-    l->addWidget(stack);
-    connect(ctx.auth, &Auth::lockedChanged, this, [stack](bool locked) { stack->setCurrentIndex(locked ? 0 : 1); });
+    l->addWidget(tabs);
 }
 
 bool FirmwarePage::ready()
 {
     m_ctx.auth->touch();
-    if (!m_ctx.auth->isUnlocked()) return false;
     if (m_ctx.serviceBusy()) {
         QMessageBox::information(this, QStringLiteral("Đường RS485 đang bận"),
                                  QStringLiteral("Đang có thao tác cấu hình hoặc nạp code khác chạy trên đường RS485."));
@@ -157,6 +143,7 @@ QWidget *FirmwarePage::buildFpgaTab()
         const QString who = m_fpgaBroadcast->isChecked() ? QStringLiteral("MỌI TRB trong hệ thống (broadcast)")
                                                          : QStringLiteral("%1 TRB đã kiểm tra ở bước 1").arg(m_ctx.fpgaOta->nodes().size());
         if (!yes(this, QStringLiteral("Xóa flash và nạp"), QStringLiteral("Xóa vùng flash cập nhật và nạp %1 byte cho %2?").arg(m_fpgaImage.size()).arg(who))) return;
+        if (!m_ctx.auth->unlock(this)) return; // chỉ hỏi mật khẩu khi thật sự xóa flash / nạp / boot / nạp STM32
         fpgaSetBusy(true);
         m_ctx.fpgaOta->eraseAndLoad(m_fpgaImage, fpgaOptions());
     });
@@ -168,6 +155,7 @@ QWidget *FirmwarePage::buildFpgaTab()
         if (failed) text += QStringLiteral("\n\nCó %1 TRB báo lỗi khi nạp.").arg(failed)
                           + (m_fpgaBroadcast->isChecked() ? QStringLiteral(" Lệnh boot broadcast vẫn tới cả các TRB này.") : QString());
         if (!yes(this, QStringLiteral("Boot"), text)) return;
+        if (!m_ctx.auth->unlock(this)) return;
         fpgaSetBusy(true);
         m_ctx.fpgaOta->bootAndVerify(fpgaOptions());
     });
@@ -317,6 +305,7 @@ QWidget *FirmwarePage::buildStmTab()
         if (!yes(this, QStringLiteral("Nạp STM32"),
                  QStringLiteral("Nạp firmware version %1 cho %2 PSU, lần lượt từng thiết bị?\n\nThiết bị phải đang ở SAFE_OFF mới chấp nhận.")
                      .arg(m_stmVersion->value()).arg(selected().size()))) return;
+        if (!m_ctx.auth->unlock(this)) return;
         for (int r = 0; r < count; ++r) { m_stmTable->item(r, 3)->setText({}); m_stmTable->item(r, 4)->setText({}); m_stmTable->item(r, 4)->setBackground({}); }
         setBusy(true);
         m_ctx.stmOta->start(selected(), m_stmImageA, m_stmImageB, quint32(m_stmVersion->value()), m_stmAutoCommit->isChecked());

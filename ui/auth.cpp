@@ -21,7 +21,7 @@ QString Auth::hash(const QString &password)
 
 bool Auth::unlock(QWidget *parent)
 {
-    if (m_unlocked) return true;
+    if (m_unlocked) { touch(); return true; }
     bool ok = false;
     const QString pw = QInputDialog::getText(parent, QStringLiteral("Chế độ kỹ sư"), QStringLiteral("Mật khẩu:"),
                                              QLineEdit::Password, {}, &ok);

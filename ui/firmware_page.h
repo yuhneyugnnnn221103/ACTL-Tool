@@ -14,7 +14,7 @@ class QTableWidget;
 
 namespace ui {
 
-// Nạp code: FPGA trên TRB (broadcast hoặc gửi riêng) và STM32 trên PSU (lần lượt). Cần mở khóa kỹ sư.
+// Nạp code: FPGA trên TRB (broadcast hoặc gửi riêng) và STM32 trên PSU (lần lượt). Hỏi mật khẩu kỹ sư trước khi xóa flash, nạp hoặc boot.
 class FirmwarePage : public QWidget {
     Q_OBJECT
 public:

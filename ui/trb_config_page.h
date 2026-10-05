@@ -6,14 +6,13 @@ class QComboBox;
 class QLabel;
 class QProgressBar;
 class QPushButton;
-class QStackedWidget;
 class QTableWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
 
 namespace ui {
 
-// Cấu hình TRB: đọc/ghi một thiết bị, hoặc áp các trường đã sửa cho nhiều thiết bị. Cần mở khóa kỹ sư.
+// Cấu hình TRB: đọc/ghi một thiết bị, hoặc áp các trường đã sửa cho nhiều thiết bị. Hỏi mật khẩu kỹ sư khi ghi xuống thiết bị.
 class TrbConfigPage : public QWidget {
     Q_OBJECT
 public:
@@ -22,7 +21,6 @@ public:
 private:
     using Device = services::TrbConfig::Device;
 
-    QWidget *buildLockPanel();
     QWidget *buildContent();
     void selectDevice(int mb, int trb);
     void showDeviceColumn();
@@ -36,7 +34,6 @@ private:
     bool ready();
 
     AppContext m_ctx;
-    QStackedWidget *m_stack;
     QTreeWidget *m_tree;
     QTableWidget *m_table;
     QComboBox *m_group;

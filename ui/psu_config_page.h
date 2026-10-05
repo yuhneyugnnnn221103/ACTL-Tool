@@ -7,19 +7,17 @@ class QLabel;
 class QListWidget;
 class QProgressBar;
 class QPushButton;
-class QStackedWidget;
 class QTableWidget;
 
 namespace ui {
 
-// Cấu hình PSU: đọc/ghi một PSU, hoặc áp các trường đã sửa cho nhiều PSU. Cần mở khóa kỹ sư.
+// Cấu hình PSU: đọc/ghi một PSU, hoặc áp các trường đã sửa cho nhiều PSU. Hỏi mật khẩu kỹ sư khi ghi xuống thiết bị.
 class PsuConfigPage : public QWidget {
     Q_OBJECT
 public:
     explicit PsuConfigPage(const AppContext &ctx, QWidget *parent = nullptr);
 
 private:
-    QWidget *buildLockPanel();
     QWidget *buildContent();
     void selectDevice(int addr);
     void showDeviceColumn();
@@ -35,7 +33,6 @@ private:
     bool ready();
 
     AppContext m_ctx;
-    QStackedWidget *m_stack;
     QListWidget *m_list;
     QTableWidget *m_table;
     QComboBox *m_group;
