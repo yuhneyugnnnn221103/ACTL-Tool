@@ -1,0 +1,132 @@
+#include "overview_grid.h"
+#include <QHelpEvent>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QToolTip>
+
+namespace ui {
+
+using model::Status;
+
+namespace {
+constexpr int kLeft = 52, kTop = 26, kGap = 3;
+
+// Ký hiệu đi kèm màu để không phụ thuộc hoàn toàn vào màu sắc.
+QString statusMark(Status s)
+{
+    switch (s) {
+    case Status::Warning:  return QStringLiteral("▲");
+    case Status::Trip:     return QStringLiteral("!");
+    case Status::Lost:     return QStringLiteral("✕");
+    case Status::Updating: return QStringLiteral("↻");
+    default:               return {};
+    }
+}
+}
+
+QColor OverviewGrid::statusColor(Status s)
+{
+    switch (s) {
+    case Status::NoData:   return QColor(0xE4E2DA);
+    case Status::Ok:       return QColor(0x7DB93B);
+    case Status::Warning:  return QColor(0xEF9F27);
+    case Status::Trip:     return QColor(0xE24B4A);
+    case Status::Lost:     return QColor(0x888780);
+    case Status::Updating: return QColor(0x378ADD);
+    }
+    return {};
+}
+
+OverviewGrid::OverviewGrid(const model::DeviceStore *store, QWidget *parent)
+    : QWidget(parent), m_store(store)
+{
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+}
+
+void OverviewGrid::select(int mb, int trb)
+{
+    m_selMb = mb;
+    m_selTrb = trb;
+    update();
+}
+
+QRectF OverviewGrid::cellRect(int mb, int trb) const
+{
+    const qreal w = qreal(width() - kLeft) / m_store->mbCount();
+    const qreal h = qreal(height() - kTop) / m_store->trbPerMb();
+    return QRectF(kLeft + mb * w, kTop + trb * h, w - kGap, h - kGap);
+}
+
+bool OverviewGrid::hitTest(const QPointF &p, int &mb, int &trb) const
+{
+    if (p.x() < kLeft || p.y() < kTop) return false;
+    mb = int((p.x() - kLeft) * m_store->mbCount() / (width() - kLeft));
+    trb = int((p.y() - kTop) * m_store->trbPerMb() / (height() - kTop));
+    return m_store->contains(mb, trb) && cellRect(mb, trb).contains(p);
+}
+
+void OverviewGrid::paintEvent(QPaintEvent *)
+{
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QColor labelColor = palette().color(QPalette::Disabled, QPalette::WindowText);
+
+    p.setPen(labelColor);
+    for (int mb = 0; mb < m_store->mbCount(); ++mb) {
+        const QRectF c = cellRect(mb, 0);
+        p.drawText(QRectF(c.left(), 0, c.width(), kTop - 4), Qt::AlignCenter,
+                   c.width() >= 44 ? QStringLiteral("MB%1").arg(mb) : QString::number(mb));
+    }
+    for (int trb = 0; trb < m_store->trbPerMb(); ++trb) {
+        const QRectF c = cellRect(0, trb);
+        p.drawText(QRectF(0, c.top(), kLeft - 8, c.height()), Qt::AlignRight | Qt::AlignVCenter,
+                   QStringLiteral("TRB%1").arg(trb));
+    }
+
+    QFont markFont = font();
+    markFont.setBold(true);
+    p.setFont(markFont);
+    for (int mb = 0; mb < m_store->mbCount(); ++mb) {
+        for (int trb = 0; trb < m_store->trbPerMb(); ++trb) {
+            const Status s = m_store->trb(mb, trb).status;
+            const QRectF c = cellRect(mb, trb);
+            p.setPen(Qt::NoPen);
+            p.setBrush(statusColor(s));
+            p.drawRoundedRect(c, 4, 4);
+            if (const QString mark = statusMark(s); !mark.isEmpty()) {
+                p.setPen(Qt::white);
+                p.drawText(c, Qt::AlignCenter, mark);
+            }
+            if (mb == m_selMb && trb == m_selTrb) {
+                p.setPen(QPen(palette().color(QPalette::WindowText), 2));
+                p.setBrush(Qt::NoBrush);
+                p.drawRoundedRect(c.adjusted(1, 1, -1, -1), 4, 4);
+            }
+        }
+    }
+}
+
+void OverviewGrid::mousePressEvent(QMouseEvent *e)
+{
+    int mb, trb;
+    if (e->button() == Qt::LeftButton && hitTest(e->position(), mb, trb)) {
+        select(mb, trb);
+        emit trbClicked(mb, trb);
+    }
+}
+
+bool OverviewGrid::event(QEvent *e)
+{
+    if (e->type() == QEvent::ToolTip) {
+        auto *he = static_cast<QHelpEvent *>(e);
+        int mb, trb;
+        if (m_tooltip && hitTest(he->pos(), mb, trb))
+            QToolTip::showText(he->globalPos(), m_tooltip(mb, trb), this, cellRect(mb, trb).toRect());
+        else
+            QToolTip::hideText();
+        return true;
+    }
+    return QWidget::event(e);
+}
+
+} // namespace ui
