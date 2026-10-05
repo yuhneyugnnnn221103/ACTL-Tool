@@ -1,4 +1,5 @@
 #pragma once
+#include <QStringList>
 #include <QWidget>
 
 namespace ui {
@@ -10,10 +11,12 @@ public:
     explicit BitCells(const QString &caption, QWidget *parent = nullptr);
 
     void setValue(int byte, bool known = true);   // known = false: chưa có dữ liệu, mọi ô nhạt
+    void setBitNames(const QStringList &names);   // names[bit] (8 phần tử): ý nghĩa từng bit, hiện ở tooltip
+    void setCaptionWidth(int px);                 // để các hàng trong cùng cột thẳng hàng
+    int captionTextWidth() const;
 
-    // Lưới nhiều byte: captionFmt dạng "T%1" (đánh số từ 1), xếp columns cột.
-    static QWidget *makeGrid(int count, int columns, const QString &captionFmt, QList<BitCells *> &out,
-                             QWidget *parent = nullptr);
+    // Lưới nhiều byte xếp columns cột, đánh số chạy xuống từng cột; chữ nhãn của mỗi cột được căn thẳng hàng.
+    static QWidget *makeGrid(const QStringList &captions, int columns, QList<BitCells *> &out, QWidget *parent = nullptr);
 
 protected:
     void paintEvent(QPaintEvent *) override;
@@ -26,6 +29,8 @@ private:
     int cellsLeft() const;
 
     QString m_caption;
+    QStringList m_bitNames;
+    int m_captionWidth = -1;
     int m_value = 0;
     bool m_known = false;
 };

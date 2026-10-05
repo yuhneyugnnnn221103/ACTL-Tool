@@ -39,6 +39,42 @@ static FieldTable build()
     return t;
 }
 
+namespace {
+// Trip i (0..15) -> {loại, chỉ số trong loại}. Loại: 0 I_SEN, 1 PA, 2 system, -1 dự phòng.
+struct TripKind { int kind; bool isMin; int index; };
+TripKind tripKind(int i)
+{
+    const bool isMin = i >= 9 && i <= 14;
+    const int base = isMin ? i - 9 : i;                    // 0..5 cho cả hai nhóm
+    if (i == 6) return {2, false, 0};
+    if (i == 7 || i == 8 || i == 15) return {-1, false, 0};
+    return {base < 4 ? 0 : 1, isMin, base < 4 ? base : base - 4};
+}
+}
+
+QString tripName(int i)
+{
+    const TripKind k = tripKind(i);
+    const QString lim = k.isMin ? QStringLiteral("Min") : QStringLiteral("Max");
+    switch (k.kind) {
+    case 0:  return QStringLiteral("%1 I_SEN TRM%2").arg(lim).arg(k.index + 1);
+    case 1:  return QStringLiteral("%1 PA TRM%2-%3").arg(lim).arg(k.index * 2 + 1).arg(k.index * 2 + 2);
+    case 2:  return QStringLiteral("System");
+    default: return QStringLiteral("Dự phòng");
+    }
+}
+
+QString tripBitName(int i, int bit)
+{
+    const TripKind k = tripKind(i);
+    switch (k.kind) {
+    case 0:  return QStringLiteral("TRM%1 I_SEN%2").arg(k.index + 1).arg(bit + 1);
+    case 1:  return QStringLiteral("TRM%1 PA%2").arg(k.index * 2 + 1 + bit / 4).arg(bit % 4 + 1);
+    case 2:  return QStringLiteral("System bit %1").arg(bit);
+    default: return {};
+    }
+}
+
 const FieldTable &table()
 {
     static const FieldTable t = build();

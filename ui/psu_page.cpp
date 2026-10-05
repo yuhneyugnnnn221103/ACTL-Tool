@@ -42,6 +42,15 @@ QTableWidget *makeTable(int rows, const QStringList &columns, const QStringList 
 }
 }
 
+namespace {
+QStringList psuTripCaptions()
+{
+    QStringList l;
+    for (int i = 1; i <= psumon::kNumTrip; ++i) l << QStringLiteral("T%1").arg(i);   // chưa có bảng trip code PSU
+    return l;
+}
+}
+
 PsuPage::PsuPage(const AppContext &ctx, QWidget *parent)
     : QWidget(parent), m_ctx(ctx), m_addr(ctx.psuStore->firstAddr())
 {
@@ -113,7 +122,7 @@ QWidget *PsuPage::buildMonitor()
     auto *form = new QFormLayout(flags);
     form->addRow(QStringLiteral("RTC (thô)"), valueRow(psumon::kNumRtc, m_rtc, rtcNames));
     form->addRow(QStringLiteral("Trip code (bit 7 ... bit 0)"),
-                 BitCells::makeGrid(psumon::kNumTrip, 5, QStringLiteral("T%1"), m_trip));
+                 BitCells::makeGrid(psuTripCaptions(), 5, m_trip));
 
     auto *tables = new QHBoxLayout;
     tables->addWidget(titled(QStringLiteral("4 cụm DCM"), m_cluster), 3);

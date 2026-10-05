@@ -182,7 +182,14 @@ QWidget *TrbDetailPage::buildMonitor()
     // Mỗi trip code là một byte, hiện thành 8 ô bit (bit 7 ... bit 0), bit 1 tô đỏ.
     auto *trip = new QGroupBox(QStringLiteral("Trip code (mỗi byte: bit 7 ... bit 0)"));
     auto *tripLayout = new QVBoxLayout(trip);
-    tripLayout->addWidget(BitCells::makeGrid(trbmon::kNumTrip, 4, QStringLiteral("T%1"), m_trip));
+    QStringList captions;
+    for (int i = 0; i < trbmon::kNumTrip; ++i) captions << QStringLiteral("%1  %2").arg(i + 1).arg(trbmon::tripName(i));
+    tripLayout->addWidget(BitCells::makeGrid(captions, 4, m_trip));
+    for (int i = 0; i < m_trip.size(); ++i) {                  // tooltip từng bit: bit 0 ... bit 7
+        QStringList bits;
+        for (int b = 0; b < 8; ++b) bits << trbmon::tripBitName(i, b);
+        m_trip[i]->setBitNames(bits);
+    }
 
     auto *w = new QWidget;
     auto *l = new QVBoxLayout(w);

@@ -8,7 +8,7 @@
 namespace ui {
 
 namespace {
-constexpr int kCell = 18, kGap = 3, kBits = 8, kCaptionGap = 8;
+constexpr int kCell = 16, kGap = 2, kBits = 8, kCaptionGap = 8;
 }
 
 BitCells::BitCells(const QString &caption, QWidget *parent) : QWidget(parent), m_caption(caption)
@@ -25,7 +25,18 @@ void BitCells::setValue(int byte, bool known)
     update();
 }
 
-int BitCells::cellsLeft() const { return fontMetrics().horizontalAdvance(m_caption) + kCaptionGap; }
+int BitCells::captionTextWidth() const { return fontMetrics().horizontalAdvance(m_caption); }
+
+void BitCells::setCaptionWidth(int px)
+{
+    m_captionWidth = px;
+    updateGeometry();
+    update();
+}
+
+void BitCells::setBitNames(const QStringList &names) { m_bitNames = names; }
+
+int BitCells::cellsLeft() const { return (m_captionWidth >= 0 ? m_captionWidth : captionTextWidth()) + kCaptionGap; }
 
 QSize BitCells::sizeHint() const
 {
@@ -64,28 +75,44 @@ bool BitCells::event(QEvent *e)
         auto *he = static_cast<QHelpEvent *>(e);
         if (!m_known) { QToolTip::hideText(); return true; }
         const int bit = bitAt(he->pos());
-        const QString text = bit >= 0
-            ? QStringLiteral("%1 · bit %2 = %3").arg(m_caption).arg(bit).arg(m_value >> bit & 1)
-            : QStringLiteral("%1 = 0x%2").arg(m_caption).arg(m_value, 2, 16, QLatin1Char('0')).toUpper();
+        auto bitName = [this](int b) { return b < m_bitNames.size() && !m_bitNames.at(b).isEmpty() ? m_bitNames.at(b) : QString(); };
+        QString text;
+        if (bit >= 0) {
+            text = QStringLiteral("%1 · bit %2 = %3").arg(m_caption).arg(bit).arg(m_value >> bit & 1);
+            if (!bitName(bit).isEmpty()) text += QStringLiteral("\n") + bitName(bit);
+        } else {
+            text = QStringLiteral("%1 = 0x%2").arg(m_caption).arg(m_value, 2, 16, QLatin1Char('0')).toUpper();
+            QStringList active;
+            for (int b = 7; b >= 0; --b)
+                if (m_value >> b & 1) active << (bitName(b).isEmpty() ? QStringLiteral("bit %1").arg(b) : bitName(b));
+            if (!active.isEmpty()) text += QStringLiteral("\nĐang báo: ") + active.join(QStringLiteral(", "));
+        }
         QToolTip::showText(he->globalPos(), text, this);
         return true;
     }
     return QWidget::event(e);
 }
 
-QWidget *BitCells::makeGrid(int count, int columns, const QString &captionFmt, QList<BitCells *> &out, QWidget *parent)
+QWidget *BitCells::makeGrid(const QStringList &captions, int columns, QList<BitCells *> &out, QWidget *parent)
 {
     auto *w = new QWidget(parent);
     auto *grid = new QGridLayout(w);
     grid->setContentsMargins(0, 0, 0, 0);
-    grid->setHorizontalSpacing(theme::kMargin + 4);
+    grid->setHorizontalSpacing(theme::kSpace);
     grid->setVerticalSpacing(4);
-    // Số thứ tự chạy xuống từng cột trước (1..rows ở cột đầu) để đọc theo cột.
-    const int rows = (count + columns - 1) / columns;
+    // Số thứ tự chạy xuống từng cột trước để đọc theo cột.
+    const int count = captions.size(), rows = (count + columns - 1) / columns;
+    QList<BitCells *> cells;
     for (int i = 0; i < count; ++i) {
-        auto *c = new BitCells(captionFmt.arg(i + 1), w);
+        auto *c = new BitCells(captions.at(i), w);
+        cells << c;
         out << c;
         grid->addWidget(c, i % rows, i / rows);
+    }
+    for (int col = 0; col < columns; ++col) {          // nhãn mỗi cột có chung độ rộng: các cụm 8 ô thẳng hàng
+        int widest = 0;
+        for (int i = col * rows; i < qMin(count, (col + 1) * rows); ++i) widest = qMax(widest, cells[i]->captionTextWidth());
+        for (int i = col * rows; i < qMin(count, (col + 1) * rows); ++i) cells[i]->setCaptionWidth(widest);
     }
     grid->setColumnStretch(columns, 1);
     return w;

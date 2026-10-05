@@ -141,6 +141,41 @@ private slots:
         QCOMPARE(trbmon::table().decode(f), v);
     }
 
+    void tripCodeNames()
+    {
+        // Trip 1-4: vượt max I_SEN của TRM1..4; bit 0 = I_SEN1, bit 7 = I_SEN8
+        QCOMPARE(trbmon::tripName(0), QStringLiteral("Max I_SEN TRM1"));
+        QCOMPARE(trbmon::tripName(3), QStringLiteral("Max I_SEN TRM4"));
+        QCOMPARE(trbmon::tripBitName(1, 0), QStringLiteral("TRM2 I_SEN1"));
+        QCOMPARE(trbmon::tripBitName(2, 7), QStringLiteral("TRM3 I_SEN8"));
+        // Trip 5: PA của TRM1 (bit 0-3) và TRM2 (bit 4-7); Trip 6: TRM3 và TRM4
+        QCOMPARE(trbmon::tripName(4), QStringLiteral("Max PA TRM1-2"));
+        QCOMPARE(trbmon::tripBitName(4, 0), QStringLiteral("TRM1 PA1"));
+        QCOMPARE(trbmon::tripBitName(4, 3), QStringLiteral("TRM1 PA4"));
+        QCOMPARE(trbmon::tripBitName(4, 4), QStringLiteral("TRM2 PA1"));
+        QCOMPARE(trbmon::tripBitName(4, 7), QStringLiteral("TRM2 PA4"));
+        QCOMPARE(trbmon::tripName(5), QStringLiteral("Max PA TRM3-4"));
+        QCOMPARE(trbmon::tripBitName(5, 5), QStringLiteral("TRM4 PA2"));
+        // Trip 7: system
+        QCOMPARE(trbmon::tripName(6), QStringLiteral("System"));
+        // Trip 10-15: như 1-6 nhưng dưới min
+        QCOMPARE(trbmon::tripName(9), QStringLiteral("Min I_SEN TRM1"));
+        QCOMPARE(trbmon::tripName(12), QStringLiteral("Min I_SEN TRM4"));
+        QCOMPARE(trbmon::tripBitName(12, 7), QStringLiteral("TRM4 I_SEN8"));
+        QCOMPARE(trbmon::tripName(13), QStringLiteral("Min PA TRM1-2"));
+        QCOMPARE(trbmon::tripName(14), QStringLiteral("Min PA TRM3-4"));
+        QCOMPARE(trbmon::tripBitName(14, 6), QStringLiteral("TRM4 PA3"));
+        // Trip 8, 9, 16 dự phòng
+        for (int i : {7, 8, 15}) {
+            QCOMPARE(trbmon::tripName(i), QStringLiteral("Dự phòng"));
+            QVERIFY(trbmon::tripBitName(i, 0).isEmpty());
+        }
+        QSet<QString> names;                                    // 13 trip có nghĩa, tên không trùng nhau
+        for (int i = 0; i < trbmon::kNumTrip; ++i)
+            if (trbmon::tripName(i) != QStringLiteral("Dự phòng")) names.insert(trbmon::tripName(i));
+        QCOMPARE(names.size(), 13);
+    }
+
     // ---------- Khung điều khiển ----------
     void controlFrame()
     {
