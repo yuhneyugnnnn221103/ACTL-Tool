@@ -1,0 +1,626 @@
+// Test phần TRB: bảng trường và khung bản tin, tách khung, giám sát, cảnh báo, điều khiển, cấu hình
+// (qua Link với TRB giả lập), ngưỡng, log CSV.
+#include "../core/frame_parser.h"
+#include "../core/link.h"
+#include "../model/device_store.h"
+#include "../model/thresholds.h"
+#include "../proto/trb_config_proto.h"
+#include "../proto/trb_control_proto.h"
+#include "../proto/trb_monitor_proto.h"
+#include "../services/alarm_engine.h"
+#include "../services/csv_logger.h"
+#include "../services/trb_config.h"
+#include "../services/trb_control.h"
+#include "../services/trb_monitor.h"
+#include "test_support.h"
+#include <QSignalSpy>
+#include <QTemporaryDir>
+#include <QtTest>
+
+using namespace proto;
+using testsupport::FakeTransport;
+using testsupport::crcOk;
+
+namespace {
+
+QByteArray monitorFrame(int mb, int trb, const QList<double> &values)
+{
+    QByteArray f(trbmon::kLength, 0);
+    f[2] = f[3] = char(0x11);
+    f[trbmon::kOffMb] = char(mb);
+    f[trbmon::kOffTrb] = char(trb);
+    trbmon::table().encode(values, f);
+    core::seal(f, trbmon::kCrcStart);
+    return f;
+}
+
+QByteArray configReply(int mb, int trb, const QList<double> &values)
+{
+    QByteArray f(trbcfg::kLength, 0);
+    f[2] = f[3] = char(0xA4);
+    f[trbcfg::kOffMb] = char(mb);
+    f[trbcfg::kOffTrb] = char(trb);
+    trbcfg::table().encode(values, f);
+    core::seal(f, 4);
+    return f;
+}
+
+QList<double> zeros(int n) { return QList<double>(n, 0.0); }
+
+// TRB giả lập trên RS485: nhớ cấu hình đã ghi, trả lời lệnh đọc.
+struct FakeTrb {
+    QHash<int, QList<double>> config;     // khóa mb << 8 | trb
+    int corruptField = -1;                // >= 0: lưu sai trường này để thử đọc lại không khớp
+    int writes = 0;
+
+    static int key(int mb, int trb) { return mb << 8 | trb; }
+
+    void attach(FakeTransport *t)
+    {
+        t->onWrite = [this, t](const QByteArray &d) {
+            const int mb = quint8(d.at(4)), trb = quint8(d.at(5));
+            if (quint8(d.at(2)) == 0xA1) {
+                ++writes;
+                config[key(mb, trb)] = trbcfg::table().decode(d);
+                if (corruptField >= 0) config[key(mb, trb)][corruptField] += 1;
+            } else if (quint8(d.at(2)) == 0xA3 && config.contains(key(mb, trb))) {
+                t->injectLater(configReply(mb, trb, config.value(key(mb, trb))));
+            }
+        };
+    }
+};
+
+struct Rig {
+    core::FrameRegistry registry;
+    FakeTransport *transport = new FakeTransport;
+    core::Link link;
+    explicit Rig(const QString &name = "link") : link(name, transport, &registry) {}
+};
+}
+
+class TrbTest : public QObject {
+    Q_OBJECT
+private slots:
+    // ---------- Bố cục bản tin ----------
+    void monitorTableLayout()
+    {
+        const FieldTable &t = trbmon::table();
+        QCOMPARE(t.size(), trbmon::kNumFields);
+        int end = 6;
+        for (const Field &f : t.fields()) { QCOMPARE(f.offset, end); end += f.size; }
+        QCOMPARE(end, trbmon::kLength - 4 - 37);              // 37 byte dự phòng rồi CRC, tailer
+        QCOMPARE(t.fields().at(trbmon::kIdxTrm0).name, QStringLiteral("TRM1.I_SEN1"));
+        QCOMPARE(t.fields().at(trbmon::kIdxTrm0 + trbmon::kTrmFields).offset, 6 + 50);     // TRM2 sau 50 byte
+        QCOMPARE(t.fields().at(trbmon::kIdxTrbV).offset, 6 + 4 * 50);
+        QCOMPARE(t.fields().at(trbmon::kIdxTrip0).offset, 6 + 4 * 50 + 6);
+        QCOMPARE(t.fields().at(trbmon::kIdxInitAdar).offset, 6 + 4 * 50 + 6 + 16 + 4);
+        QCOMPARE(t.fields().at(trbmon::kIdxHumidity).size, 2);
+    }
+
+    void configTableLayout()
+    {
+        const FieldTable &t = trbcfg::table();
+        int end = 6;
+        for (const Field &f : t.fields()) { QCOMPARE(f.offset, end); end += f.size; }
+        QCOMPARE(end, trbcfg::kLength - 4 - 37);
+        QCOMPARE(t.fields().at(t.indexOf("CAL", "dy")).offset, 6);
+        QCOMPARE(t.fields().at(t.indexOf("ADAR 1", "CONFIG_RESET")).offset, 6 + 9);
+        QCOMPARE(t.fields().at(t.indexOf("ADAR 2", "CONFIG_RESET")).offset, 6 + 9 + 25);
+        QCOMPARE(t.fields().at(t.indexOf("LUT", "TEMP_MAX_LUT")).offset, 6 + 9 + 8 * 25);
+        QCOMPARE(t.fields().at(t.indexOf("TRM 1", "I_SEN_1_MAX")).offset, 6 + 9 + 8 * 25 + 28);
+        QCOMPARE(t.fields().at(t.indexOf("TRM 2", "I_SEN_1_MAX")).offset, 6 + 9 + 8 * 25 + 28 + 48);
+        QCOMPARE(t.fields().at(t.indexOf("GENERAL", "TEMP_TRB_MAX")).offset, 6 + 9 + 8 * 25 + 28 + 4 * 48);
+        QCOMPARE(t.fields().at(t.indexOf("DEBUG", "PERIOD_TR_DEBUG")).size, 4);
+    }
+
+    void thresholdMapPointsAtRealFields()
+    {
+        const auto &map = trbcfg::thresholdMap();
+        QCOMPARE(map.size(), 4 * (8 + 4) + 4);   // 4 TRM x (I_SEN + I_SEN_PA) + V, I, nhiệt power, nhiệt MCU
+        QSet<int> seen;
+        for (const auto &m : map) {
+            QVERIFY(m.monitorField >= 0 && m.monitorField < trbmon::kNumFields);
+            QVERIFY(!seen.contains(m.monitorField));
+            seen.insert(m.monitorField);
+            QVERIFY(trbcfg::table().fields().at(m.cfgMax).name.endsWith("_MAX"));
+            QVERIFY(trbcfg::table().fields().at(m.cfgMin).name.endsWith("_MIN"));
+        }
+        QVERIFY(seen.contains(trbmon::kIdxTrbV) && seen.contains(trbmon::kIdxMcuTemp));
+        QVERIFY(!seen.contains(trbmon::kIdxTrip0));
+    }
+
+    void encodeDecodeRoundTripIsBigEndian()
+    {
+        QList<double> v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxTrbV] = 0x1234;
+        v[trbmon::kIdxPa] = 0x0A;
+        v[trbmon::kIdxTrip0 + 15] = 0xFF;
+        const QByteArray f = monitorFrame(3, 5, v);
+        QCOMPARE(quint8(f.at(206)), quint8(0x12));
+        QCOMPARE(quint8(f.at(207)), quint8(0x34));
+        QCOMPARE(trbmon::table().decode(f), v);
+    }
+
+    // ---------- Khung điều khiển ----------
+    void controlFrame()
+    {
+        trbctl::ControlCmd c;
+        c.paMask = 0x15;       // bit cao hơn 4 bị loại
+        c.clearTrip = true;
+        c.start = true;
+        c.debugMode = true;
+        const QByteArray f = trbctl::buildControl(7, 3, c);
+        QCOMPARE(f.size(), 14);
+        QCOMPARE(f.left(8).toHex(), QByteArray("abcda2a2" "0703" "05" "13"));   // PA=5, clear|start|debug
+        QCOMPARE(f.right(2).toHex(), QByteArray("e1e2"));
+        QVERIFY(crcOk(f, 4));
+
+        trbctl::ControlCmd stop;                                   // mặc định: Stop, Normal, không xóa trip
+        QCOMPARE(quint8(trbctl::buildControl(0, 0, stop).at(7)), quint8(0));
+        trbctl::ControlCmd sync;
+        sync.beamSync = true;
+        QCOMPARE(quint8(trbctl::buildControl(0, 0, sync).at(7)), quint8(0x04));
+    }
+
+    void beamFrameAndBroadcast()
+    {
+        trbctl::BeamCmd b;
+        b.phaseTx = 1; b.phaseRx = 2; b.ampTx = 3; b.ampRx = 4; b.chMask = 0xFA; b.adarMask = 0x81;
+        const QByteArray f = trbctl::buildBeam(trbctl::kBroadcast, trbctl::kBroadcast, b);
+        QCOMPARE(f.size(), 17);
+        QCOMPARE(f.left(12).toHex(), QByteArray("abcd1414" "ffff" "01020304" "0a" "81"));  // CH chỉ 4 bit thấp
+        QVERIFY(crcOk(f, 4));
+    }
+
+    void controlServiceSendsAndReports()
+    {
+        Rig rig("monitor");
+        rig.link.start();
+        services::TrbControl control(&rig.link);
+        QSignalSpy done(&control, &services::TrbControl::commandFinished);
+
+        trbctl::ControlCmd c;
+        c.paMask = 0x03;
+        c.start = true;
+        control.sendControl(2, 4, c);
+        QVERIFY(done.wait(1000));
+        QCOMPARE(done.last().at(1).toBool(), true);
+        QVERIFY(done.last().at(0).toString().contains("MB2 / TRB4"));
+        QVERIFY(done.last().at(0).toString().contains("Start"));
+        QCOMPARE(rig.transport->written.size(), 1);
+        QCOMPARE(rig.transport->written.first(), trbctl::buildControl(2, 4, c));
+
+        control.sendControl(trbctl::kBroadcast, trbctl::kBroadcast, {});
+        QVERIFY(done.wait(1000));
+        QVERIFY(done.last().at(0).toString().contains("tất cả TRB"));
+
+        rig.transport->close();                                 // chưa kết nối Gateway: báo không gửi được
+        control.sendControl(0, 0, c);
+        QVERIFY(done.wait(1000));
+        QCOMPARE(done.last().at(1).toBool(), false);
+    }
+
+    // ---------- Tách khung ----------
+    void parserResyncsAfterGarbageAndSplitChunks()
+    {
+        core::FrameRegistry registry;
+        services::TrbMonitor::registerFrames(registry, true);
+        core::FrameParser parser(&registry);
+        QList<core::Frame> got;
+        auto sink = [&](const core::Frame &f) { got << f; };
+
+        const QByteArray a = monitorFrame(1, 2, zeros(trbmon::kNumFields));
+        const QByteArray b = monitorFrame(3, 4, zeros(trbmon::kNumFields));
+        QByteArray stream = QByteArray::fromHex("00ffab") + a + QByteArray::fromHex("abcd") + b;   // rác và đầu khung cụt
+        for (int i = 0; i < stream.size(); i += 50) parser.feed(stream.mid(i, 50), sink);          // chia nhỏ ngẫu nhiên
+        QCOMPARE(got.size(), 2);
+        QCOMPARE(got.at(0).raw, a);
+        QCOMPARE(got.at(1).raw, b);
+        QVERIFY(parser.stats().droppedBytes > 0);
+    }
+
+    void parserDropsBadCrcAndBadTailer()
+    {
+        core::FrameRegistry registry;
+        services::TrbMonitor::registerFrames(registry, true);
+        core::FrameParser parser(&registry);
+        int frames = 0;
+        auto sink = [&](const core::Frame &) { ++frames; };
+
+        QByteArray bad = monitorFrame(1, 1, zeros(trbmon::kNumFields));
+        bad[100] = char(bad.at(100) ^ 0x01);
+        parser.feed(bad, sink);
+        QCOMPARE(frames, 0);
+        QVERIFY(parser.stats().crcErrors >= 1);
+
+        QByteArray tail = monitorFrame(1, 1, zeros(trbmon::kNumFields));
+        tail[tail.size() - 1] = char(0x00);
+        parser.feed(tail, sink);
+        QCOMPARE(frames, 0);
+
+        parser.feed(monitorFrame(1, 1, zeros(trbmon::kNumFields)), sink);   // vẫn nhận được khung tốt sau đó
+        QCOMPARE(frames, 1);
+    }
+
+    void registryRejectsConflicts()
+    {
+        core::FrameRegistry r;
+        QVERIFY(r.add(trbmon::spec(true)));
+        QVERIFY(!r.add(trbmon::spec(true)));                                       // trùng CMD
+        QVERIFY(!r.add({QByteArray(1, char(0x11)), 20, 2, true, "trùng byte đầu"})); // CMD 1 byte trùng byte đầu CMD 2 byte
+        QVERIFY(r.add({QByteArray(1, char(0x7E)), 20, 2, true, "khác"}));
+    }
+
+    // ---------- Giám sát ----------
+    void monitorUpdatesStoreAndStatus()
+    {
+        Rig rig("monitor");
+        services::TrbMonitor::registerFrames(rig.registry, true);
+        rig.link.start();
+        model::DeviceStore store(20, 8);
+        model::Thresholds thr(&trbmon::table());
+        services::AlarmEngine alarms(&thr, &trbmon::table());
+        services::TrbMonitor mon(&rig.link, &store, &alarms);
+        QSignalSpy updated(&mon, &services::TrbMonitor::trbUpdated);
+        QSignalSpy changed(&store, &model::DeviceStore::trbStatusChanged);
+
+        thr.set(3, 5, trbmon::kIdxTrbV, {100, 200});
+        QList<double> v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxTrbV] = 150;
+        v[trbmon::kIdxTrm0] = 77;
+        rig.transport->inject(monitorFrame(3, 5, v));
+        QCOMPARE(store.trb(3, 5).status, model::Status::Ok);
+        QCOMPARE(store.trb(3, 5).values.at(trbmon::kIdxTrm0), 77.0);
+        QCOMPARE(store.trb(3, 5).frames, quint64(1));
+        QCOMPARE(store.trb(3, 4).status, model::Status::NoData);
+        QCOMPARE(store.count(model::Status::Ok), 1);
+        QCOMPARE(store.count(model::Status::NoData), 20 * 8 - 1);
+        QCOMPARE(updated.last().at(2).toBool(), true);          // lần đầu: đổi trạng thái
+
+        v[trbmon::kIdxTrbV] = 250;                              // vượt ngưỡng
+        rig.transport->inject(monitorFrame(3, 5, v));
+        QCOMPARE(store.trb(3, 5).status, model::Status::Warning);
+        QCOMPARE(store.trb(3, 5).alarms, QList<int>{trbmon::kIdxTrbV});
+
+        v[trbmon::kIdxTrip0 + 9] = 4;                           // trip code khác 0: Trip, ưu tiên hơn Quá ngưỡng
+        rig.transport->inject(monitorFrame(3, 5, v));
+        QCOMPARE(store.trb(3, 5).status, model::Status::Trip);
+
+        v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxTrbV] = 150;
+        rig.transport->inject(monitorFrame(3, 5, v));
+        QCOMPARE(store.trb(3, 5).status, model::Status::Ok);
+        QCOMPARE(updated.last().at(2).toBool(), true);
+        QCOMPARE(changed.size(), 4);                            // NoData>Ok>Warning>Trip>Ok
+        rig.transport->inject(monitorFrame(3, 5, v));
+        QCOMPARE(updated.last().at(2).toBool(), false);         // cùng trạng thái: không báo đổi
+    }
+
+    void monitorIgnoresBadAddressAndBadCrc()
+    {
+        Rig rig("monitor");
+        services::TrbMonitor::registerFrames(rig.registry, true);
+        rig.link.start();
+        model::DeviceStore store(20, 8);
+        services::TrbMonitor mon(&rig.link, &store);
+
+        rig.transport->inject(monitorFrame(20, 0, zeros(trbmon::kNumFields)));   // MB ngoài dải
+        rig.transport->inject(monitorFrame(0, 8, zeros(trbmon::kNumFields)));    // TRB ngoài dải
+        QCOMPARE(mon.badAddressFrames(), quint64(2));
+        QCOMPARE(store.count(model::Status::NoData), 20 * 8);
+
+        QByteArray bad = monitorFrame(1, 1, zeros(trbmon::kNumFields));
+        bad[50] = char(bad.at(50) ^ 0x40);
+        rig.transport->inject(bad);
+        QCOMPARE(store.trb(1, 1).status, model::Status::NoData);
+    }
+
+    void storeMarksStaleAsLost()
+    {
+        model::DeviceStore store(2, 2);
+        QSignalSpy changed(&store, &model::DeviceStore::trbStatusChanged);
+        store.updateTrb(1, 1, zeros(trbmon::kNumFields), {}, 1000, model::Status::Ok);
+        store.markStale(2500, 3000);
+        QCOMPARE(store.trb(1, 1).status, model::Status::Ok);
+        store.markStale(5000, 3000);
+        QCOMPARE(store.trb(1, 1).status, model::Status::Lost);
+        QCOMPARE(store.count(model::Status::Lost), 1);
+        QCOMPARE(changed.size(), 2);
+        store.markStale(9000, 3000);                              // đã Lost thì không báo lại
+        QCOMPARE(changed.size(), 2);
+        store.updateTrb(1, 1, zeros(trbmon::kNumFields), {}, 9500, model::Status::Ok);   // có lại tin: hồi phục
+        QCOMPARE(store.trb(1, 1).status, model::Status::Ok);
+        QVERIFY(!store.contains(2, 0) && !store.contains(0, 2) && !store.contains(-1, 0));
+    }
+
+    // ---------- Ngưỡng và cảnh báo ----------
+    void thresholdsPerDeviceFallBackToDefault()
+    {
+        model::Thresholds thr(&trbmon::table());
+        const int f = trbmon::kIdxTrbV;
+        QVERIFY(!thr.get(1, 1, f).isSet());
+        thr.setDefault(f, {10, 20});
+        QCOMPARE(thr.get(1, 1, f).max, 20.0);
+        thr.set(1, 1, f, {30, 40});
+        QCOMPARE(thr.get(1, 1, f).min, 30.0);
+        QCOMPARE(thr.get(2, 2, f).min, 10.0);                    // thiết bị khác vẫn dùng mặc định
+        thr.set(1, 1, f, {0, 0});                                // 0/0 = chưa đặt: quay về mặc định
+        QCOMPARE(thr.get(1, 1, f).min, 10.0);
+        QVERIFY(model::Limit({5, 6}).violatedBy(4));
+        QVERIFY(model::Limit({5, 6}).violatedBy(7));
+        QVERIFY(!model::Limit({5, 6}).violatedBy(5));
+        QVERIFY(!model::Limit({0, 0}).violatedBy(1000));
+    }
+
+    void thresholdsSaveLoadRoundTrip()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath("thresholds.json");
+        model::Thresholds a(&trbmon::table());
+        a.setDefault(trbmon::kIdxMcuTemp, {1, 99});
+        a.set(19, 7, trbmon::kIdxTrbI, {11, 22});
+        QVERIFY(a.save(path));
+
+        model::Thresholds b(&trbmon::table());
+        QString err;
+        QVERIFY2(b.load(path, &err), qPrintable(err));
+        QCOMPARE(b.get(5, 5, trbmon::kIdxMcuTemp).max, 99.0);
+        QCOMPARE(b.get(19, 7, trbmon::kIdxTrbI).min, 11.0);
+        QVERIFY(!b.get(19, 6, trbmon::kIdxTrbI).isSet());
+
+        QFile bad(dir.filePath("bad.json"));
+        QVERIFY(bad.open(QIODevice::WriteOnly));
+        bad.write("{ not json");
+        bad.close();
+        QVERIFY(!b.load(dir.filePath("bad.json"), &err));
+        QVERIFY(!b.load(dir.filePath("missing.json"), &err));
+    }
+
+    void alarmEngineReportsOnlyTransitions()
+    {
+        model::Thresholds thr(&trbmon::table());
+        thr.set(0, 0, trbmon::kIdxTrbV, {100, 200});
+        services::AlarmEngine engine(&thr, &trbmon::table());
+        QSignalSpy events(&engine, &services::AlarmEngine::alarmEvent);
+
+        QList<double> v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxTrbV] = 150;
+        QVERIFY(engine.check(0, 0, v).isEmpty());
+        QCOMPARE(events.size(), 0);
+
+        v[trbmon::kIdxTrbV] = 300;
+        QCOMPARE(engine.check(0, 0, v), QList<int>{trbmon::kIdxTrbV});
+        QCOMPARE(events.size(), 1);
+        QCOMPARE(events.last().at(3).toBool(), true);
+        QVERIFY(events.last().at(2).toString().contains("TRB.V"));
+        engine.check(0, 0, v);                                    // còn vượt: không lặp sự kiện
+        QCOMPARE(events.size(), 1);
+
+        v[trbmon::kIdxTrbV] = 50;                                 // dưới min vẫn là vượt, không phát lại
+        QCOMPARE(engine.check(0, 0, v).size(), 1);
+        QCOMPARE(events.size(), 1);
+
+        v[trbmon::kIdxTrbV] = 150;
+        QVERIFY(engine.check(0, 0, v).isEmpty());
+        QCOMPARE(events.size(), 2);
+        QCOMPARE(events.last().at(3).toBool(), false);
+
+        QVERIFY(engine.check(1, 1, v).isEmpty());                 // thiết bị khác không có ngưỡng
+    }
+
+    // ---------- Cấu hình ----------
+    void configJsonRoundTripAndRangeCheck()
+    {
+        QList<double> v = zeros(trbcfg::table().size());
+        v[trbcfg::table().indexOf("GENERAL", "TEMP_MCU_MAX")] = 1234;
+        v[trbcfg::table().indexOf("ADAR 3", "LDO")] = 200;
+        v[trbcfg::table().indexOf("DEBUG", "PERIOD_TR_DEBUG")] = 4000000000.0;
+        const QJsonObject json = trbcfg::toJson(v);
+        QCOMPARE(json.value("GENERAL").toObject().value("TEMP_MCU_MAX").toInt(), 1234);
+
+        QList<double> back = zeros(v.size());
+        trbcfg::fromJson(json, back);
+        QCOMPARE(back, v);
+
+        QList<double> keep = v;                                   // ngoài dải độ rộng hoặc kiểu sai thì giữ nguyên
+        QJsonObject odd;
+        odd["ADAR 3"] = QJsonObject{{"LDO", 256}, {"CONFIG_RESET", -1}, {"CONFIG_LDO", "x"}};
+        odd["GENERAL"] = QJsonObject{{"TEMP_MCU_MAX", 65536}};
+        trbcfg::fromJson(odd, keep);
+        QCOMPARE(keep, v);
+    }
+
+    void configFramesAreWellFormed()
+    {
+        const QByteArray r = trbcfg::buildReadRequest(6, 2);
+        QCOMPARE(r.toHex(), QByteArray("abcda3a3" "0602") + r.mid(6).toHex());
+        QCOMPARE(r.size(), 10);
+        QVERIFY(crcOk(r, 4));
+
+        QList<double> v = zeros(trbcfg::table().size());
+        v[0] = 0x010203;
+        const QByteArray w = trbcfg::buildWrite(6, 2, v);
+        QCOMPARE(w.size(), 520);
+        QCOMPARE(w.left(6).toHex(), QByteArray("abcda1a10602"));
+        QCOMPARE(w.mid(6, 3).toHex(), QByteArray("010203"));
+        QVERIFY(crcOk(w, 4));
+    }
+
+    void configWriteVerifyAndThresholds()
+    {
+        Rig rig("service");
+        services::TrbConfig::registerFrames(rig.registry, true);
+        rig.link.start();
+        FakeTrb trb;
+        trb.attach(rig.transport);
+        model::Thresholds thr(&trbmon::table());
+        services::TrbConfig cfg(&rig.link, &thr, QString(), 500, 0);
+        QSignalSpy finished(&cfg, &services::TrbConfig::finished);
+        QSignalSpy device(&cfg, &services::TrbConfig::deviceFinished);
+        QSignalSpy read(&cfg, &services::TrbConfig::configRead);
+
+        QList<double> v = zeros(trbcfg::table().size());
+        const FieldTable &t = trbcfg::table();
+        v[t.indexOf("GENERAL", "VOLTAGE_TRB_MAX")] = 3000;
+        v[t.indexOf("GENERAL", "VOLTAGE_TRB_MIN")] = 100;
+        v[t.indexOf("TRM 2", "I_SEN_3_MAX")] = 900;
+        v[t.indexOf("TRM 2", "I_SEN_3_MIN")] = 10;
+        cfg.writeFull({4, 6}, v);
+        QVERIFY(finished.wait(3000));
+        QCOMPARE(finished.last().at(0).toInt(), 1);
+        QCOMPARE(finished.last().at(1).toInt(), 0);
+        QVERIFY2(device.last().at(2).toBool(), qPrintable(device.last().at(3).toString()));
+        QCOMPARE(trb.config.value(FakeTrb::key(4, 6)), v);
+        QVERIFY(cfg.cached(4, 6) && *cfg.cached(4, 6) == v);
+        QVERIFY(cfg.cached(4, 7) == nullptr);
+        QVERIFY(read.size() >= 1);
+
+        QCOMPARE(thr.get(4, 6, trbmon::kIdxTrbV).max, 3000.0);                     // ngưỡng cập nhật từ cấu hình đọc về
+        QCOMPARE(thr.get(4, 6, trbmon::kIdxTrbV).min, 100.0);
+        QCOMPARE(thr.get(4, 6, trbmon::kIdxTrm0 + trbmon::kTrmFields + 2).max, 900.0);   // TRM2 I_SEN3
+        QVERIFY(!thr.get(4, 7, trbmon::kIdxTrbV).isSet());
+    }
+
+    void configVerifyDetectsMismatch()
+    {
+        Rig rig("service");
+        services::TrbConfig::registerFrames(rig.registry, true);
+        rig.link.start();
+        FakeTrb trb;
+        trb.corruptField = 10;
+        trb.attach(rig.transport);
+        model::Thresholds thr(&trbmon::table());
+        services::TrbConfig cfg(&rig.link, &thr, QString(), 500, 0);
+        QSignalSpy finished(&cfg, &services::TrbConfig::finished);
+        QSignalSpy device(&cfg, &services::TrbConfig::deviceFinished);
+
+        cfg.writeFull({0, 0}, zeros(trbcfg::table().size()));
+        QVERIFY(finished.wait(3000));
+        QCOMPARE(finished.last().at(1).toInt(), 1);
+        QVERIFY(device.last().at(3).toString().contains("KHÔNG khớp"));
+    }
+
+    void configBatchApplyKeepsOtherFieldsAndReportsTimeouts()
+    {
+        Rig rig("service");
+        services::TrbConfig::registerFrames(rig.registry, true);
+        rig.link.start();
+        FakeTrb trb;
+        trb.attach(rig.transport);
+
+        const FieldTable &t = trbcfg::table();
+        const int own = t.indexOf("CAL", "dx");
+        const int shared = t.indexOf("GENERAL", "TEMP_OFFSET_MCU");
+        QList<double> a = zeros(t.size()), b = zeros(t.size());
+        a[own] = 111;
+        b[own] = 222;
+        trb.config[FakeTrb::key(0, 1)] = a;
+        trb.config[FakeTrb::key(0, 2)] = b;                       // TRB 0/3 không có trong trb.config: không trả lời
+
+        model::Thresholds thr(&trbmon::table());
+        services::TrbConfig cfg(&rig.link, &thr, QString(), 150, 0);
+        QSignalSpy finished(&cfg, &services::TrbConfig::finished);
+        QSignalSpy progress(&cfg, &services::TrbConfig::progress);
+        QSignalSpy device(&cfg, &services::TrbConfig::deviceFinished);
+
+        cfg.applyChanges({{0, 1}, {0, 2}, {0, 3}}, {{shared, 42}});
+        QVERIFY(finished.wait(5000));
+        QCOMPARE(finished.last().at(0).toInt(), 2);
+        QCOMPARE(finished.last().at(1).toInt(), 1);
+        QCOMPARE(trb.config[FakeTrb::key(0, 1)].at(shared), 42.0);
+        QCOMPARE(trb.config[FakeTrb::key(0, 2)].at(shared), 42.0);
+        QCOMPARE(trb.config[FakeTrb::key(0, 1)].at(own), 111.0);  // trường không sửa giữ nguyên theo từng TRB
+        QCOMPARE(trb.config[FakeTrb::key(0, 2)].at(own), 222.0);
+        QVERIFY(!trb.config.contains(FakeTrb::key(0, 3)));
+        QCOMPARE(device.last().at(2).toBool(), false);
+        QVERIFY(device.last().at(3).toString().contains("không trả lời"));
+        QCOMPARE(progress.last().at(0).toInt(), 3);
+        QCOMPARE(progress.last().at(1).toInt(), 3);
+        QVERIFY(!cfg.busy());
+    }
+
+    void configWriteFullToSeveralTrbs()
+    {
+        Rig rig("service");
+        services::TrbConfig::registerFrames(rig.registry, true);
+        rig.link.start();
+        FakeTrb trb;
+        trb.attach(rig.transport);
+        trb.config[FakeTrb::key(1, 1)] = QList<double>(trbcfg::table().size(), 9.0);   // cấu hình cũ bị ghi đè hoàn toàn
+
+        model::Thresholds thr(&trbmon::table());
+        services::TrbConfig cfg(&rig.link, &thr, QString(), 500, 0);
+        QSignalSpy finished(&cfg, &services::TrbConfig::finished);
+
+        QList<double> v = zeros(trbcfg::table().size());
+        v[trbcfg::table().indexOf("GENERAL", "PULSE_TR_MAX")] = 5;
+        cfg.writeFullMany({{1, 1}, {1, 2}, {19, 7}}, v);
+        QVERIFY(finished.wait(5000));
+        QCOMPARE(finished.last().at(0).toInt(), 3);
+        QCOMPARE(finished.last().at(1).toInt(), 0);
+        for (auto k : {FakeTrb::key(1, 1), FakeTrb::key(1, 2), FakeTrb::key(19, 7)}) QCOMPARE(trb.config.value(k), v);
+        QCOMPARE(trb.writes, 3);
+    }
+
+    void configIgnoresNewJobWhileBusy()
+    {
+        Rig rig("service");
+        services::TrbConfig::registerFrames(rig.registry, true);
+        rig.link.start();
+        FakeTrb trb;
+        trb.attach(rig.transport);
+        model::Thresholds thr(&trbmon::table());
+        services::TrbConfig cfg(&rig.link, &thr, QString(), 500, 0);
+        QSignalSpy finished(&cfg, &services::TrbConfig::finished);
+
+        const QList<double> v = zeros(trbcfg::table().size());
+        cfg.writeFull({0, 0}, v);
+        QVERIFY(cfg.busy());
+        cfg.writeFull({0, 1}, v);                                 // bị bỏ qua vì đang bận
+        QVERIFY(finished.wait(3000));
+        QCOMPARE(finished.size(), 1);
+        QVERIFY(!trb.config.contains(FakeTrb::key(0, 1)));
+    }
+
+    // ---------- Log CSV ----------
+    void csvLoggerWritesHeaderRowsAndThrottles()
+    {
+        QTemporaryDir dir;
+        {
+            services::CsvLogger logger(dir.path(), 10000, 1024 * 1024, &trbmon::table(), &proto::trbmon::table());
+            model::TrbState s;
+            s.status = model::Status::Warning;
+            s.lastSeenMs = 1'700'000'000'000;
+            s.values = zeros(trbmon::kNumFields);
+            s.values[trbmon::kIdxTrbV] = 123;
+            logger.logTrb(2, 3, s, false);
+            s.lastSeenMs += 2000;                                 // chưa đủ chu kỳ 10 s: bỏ qua
+            logger.logTrb(2, 3, s, false);
+            s.lastSeenMs += 2000;
+            logger.logTrb(2, 3, s, true);                         // ép ghi (đổi trạng thái)
+            logger.logEvent(QStringLiteral("sự kiện \"thử\""));
+            logger.flush();
+        }
+
+        const QDir day(dir.path() + "/" + QDate::currentDate().toString(Qt::ISODate));
+        const QStringList trbFiles = day.entryList({"trb_*.csv"});
+        QCOMPARE(trbFiles.size(), 1);
+        QFile f(day.filePath(trbFiles.first()));
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QList<QByteArray> lines = f.readAll().split('\n');
+        QVERIFY(lines.at(0).startsWith("\xEF\xBB\xBF" "time,mb,trb,status,TRM1.I_SEN1"));   // UTF-8 BOM cho Excel
+        QVERIFY(lines.at(0).contains("TRB.V"));
+        QCOMPARE(lines.size(), 4);                                // header, 2 dòng dữ liệu, dòng rỗng cuối
+        QVERIFY(lines.at(1).contains(",2,3,"));
+        QVERIFY(lines.at(1).contains(",123,"));
+
+        const QStringList events = day.entryList({"events_*.csv"});
+        QCOMPARE(events.size(), 1);
+        QFile e(day.filePath(events.first()));
+        QVERIFY(e.open(QIODevice::ReadOnly));
+        QVERIFY(e.readAll().contains("\"sự kiện \"\"thử\"\"\""));  // dấu nháy kép được escape
+    }
+};
+
+QTEST_MAIN(TrbTest)
+#include "trb_test.moc"

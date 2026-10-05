@@ -10,24 +10,16 @@
 #include "../services/stm_ota.h"
 #include "../services/trb_config.h"
 #include "../services/trb_monitor.h"
+#include "test_support.h"
 #include <QSignalSpy>
 #include <QtTest>
 #include <functional>
 
 using namespace proto;
+using testsupport::FakeTransport;
+using testsupport::crcOk;
 
 namespace {
-
-class FakeTransport : public core::Transport {
-public:
-    std::function<void(const QByteArray &)> onWrite;
-    QList<QByteArray> written;
-    void open() override { setState(State::Connected); }
-    void close() override { setState(State::Closed); }
-    void write(const QByteArray &data) override { written << data; if (onWrite) onWrite(data); }
-    QString describe() const override { return QStringLiteral("fake"); }
-    void inject(const QByteArray &bytes) { emit bytesReceived(bytes); }
-};
 
 QByteArray monitorFrame(int addr, const QList<double> &values)
 {
@@ -71,11 +63,6 @@ struct FakePsu {
     }
 };
 
-bool crcOk(const QByteArray &f, int crcStart)
-{
-    const quint16 crc = core::crc16(reinterpret_cast<const quint8 *>(f.constData()) + crcStart, f.size() - 4 - crcStart);
-    return quint8(f.at(f.size() - 4)) == (crc >> 8) && quint8(f.at(f.size() - 3)) == (crc & 0xFF);
-}
 }
 
 class PsuTest : public QObject {

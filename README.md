@@ -42,7 +42,7 @@ cmake --build build
 ctest --test-dir build
 ```
 
-Test nằm trong `tests/` (cần Qt Test), hiện có test phần PSU.
+Test nằm trong `tests/` (cần Qt Test): `trb_test` (bản tin, tách khung, giám sát, cảnh báo, điều khiển, cấu hình với TRB giả lập, ngưỡng, log CSV) và `psu_test` (phần PSU). Dùng chung transport giả ở `tests/test_support.h`.
 
 File chạy là `build/actl_tool`.
 
