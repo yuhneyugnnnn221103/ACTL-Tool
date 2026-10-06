@@ -87,7 +87,7 @@ void PsuConfig::sendRead(Stage stage)
     r.data = psucfg::buildReadRequest(m_task.addr);
     r.replyCmd = psucfg::replyCmd();
     r.timeoutMs = m_readTimeoutMs;
-    r.retries = 1;
+    r.retries = 2; // hết thời gian chờ thì hỏi lại tối đa 2 lần nữa (tổng 3 lần)
     m_waitId = m_link->send(r);
 }
 

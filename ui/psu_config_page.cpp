@@ -198,23 +198,6 @@ QWidget *PsuConfigPage::buildContent()
         setBusy(true);
         m_ctx.psuConfig->writeFullMany(devs, newValues());
     }));
-    batch->addWidget(button(QStringLiteral("Áp ô đã sửa cho PSU đã đánh dấu"), [this] {
-        const QList<int> devs = checkedDevices();
-        const QHash<int, double> changes = editedFields();
-        if (!ready()) return;
-        if (devs.isEmpty() || changes.isEmpty()) {
-            QMessageBox::information(this, QStringLiteral("Cấu hình hàng loạt"),
-                QStringLiteral("Cần đánh dấu ít nhất một PSU, và có ít nhất một ô \"Giá trị mới\" khác cột \"Trên PSU\" "
-                               "(đọc PSU đang xem trước, rồi sửa các ô cần đổi)."));
-            return;
-        }
-        if (QMessageBox::question(this, QStringLiteral("Cấu hình hàng loạt"),
-                QStringLiteral("Ghi %1 trường đã sửa xuống %2 PSU? Các trường khác của từng PSU được giữ nguyên.")
-                    .arg(changes.size()).arg(devs.size())) != QMessageBox::Yes) return;
-        if (!m_ctx.auth->unlock(this)) return;
-        setBusy(true);
-        m_ctx.psuConfig->applyChanges(devs, changes);
-    }));
     batch->addStretch(1);
     auto *progressRow = new QHBoxLayout;
     progressRow->addWidget(m_progress, 1);
