@@ -136,7 +136,7 @@ QWidget *TrbDetailPage::buildMonitor()
 
     // Ba bảng theo thứ tự trường trong khối TRM: I_SEN 0..7, detector 8..15, còn lại 16..24.
     auto *tables = new QHBoxLayout;
-    tables->addWidget(titled(QStringLiteral("Dòng điện I_SEN"), makeTable(numbered(QStringLiteral("I_SEN%1"), 8), 0)));
+    tables->addWidget(titled(QStringLiteral("Dòng điện I SEN"), makeTable(numbered(QStringLiteral("I SEN%1"), 8), 0)));
     tables->addWidget(titled(QStringLiteral("ADC detector"), makeTable(numbered(QStringLiteral("Detector %1"), 8), 8)));
     tables->addWidget(titled(QStringLiteral("Nhiệt độ / PA / LNA"),
                              makeTable(numbered(QStringLiteral("Nhiệt độ %1"), 4) + numbered(QStringLiteral("Dòng PA %1"), 4)
@@ -167,8 +167,8 @@ QWidget *TrbDetailPage::buildMonitor()
     // Đèn trạng thái ADAR, PG, PA đặt trên cùng, to và có nhãn để nhìn là biết ngay.
     auto *leds = new QHBoxLayout;
     leds->setSpacing(theme::kSpace);
-    leds->addWidget(ledGroup(QStringLiteral("Init ADAR"), numbered(QStringLiteral("ADAR%1"), 8), m_ledAdar), 2);
-    leds->addWidget(ledGroup(QStringLiteral("PG (power good)"), numbered(QStringLiteral("TRM%1"), 4), m_ledPg), 1);
+    leds->addWidget(ledGroup(QStringLiteral("ADAR"), numbered(QStringLiteral("ADAR%1"), 8), m_ledAdar), 2);
+    leds->addWidget(ledGroup(QStringLiteral("PG"), numbered(QStringLiteral("TRM%1"), 4), m_ledPg), 1);
     leds->addWidget(ledGroup(QStringLiteral("PA"), numbered(QStringLiteral("TRM%1"), 4), m_ledPa), 1);
 
     // Hàng "Trạng thái" riêng: hiện chuỗi text (hiện là mã thô State của 4 TRM, sau này parse thành chữ).
@@ -186,7 +186,7 @@ QWidget *TrbDetailPage::buildMonitor()
     }
 
     // Mỗi trip code là một byte, hiện thành 8 ô bit (bit 7 ... bit 0), bit 1 tô đỏ.
-    auto *trip = new QGroupBox(QStringLiteral("Trip code (mỗi byte: bit 7 ... bit 0)"));
+    auto *trip = new QGroupBox(QStringLiteral("Trip code"));
     auto *tripLayout = new QVBoxLayout(trip);
     QStringList captions;
     for (int i = 0; i < trbmon::kNumTrip; ++i) captions << trbmon::tripName(i);   // chỉ tên, số trip nằm ở tooltip
@@ -213,17 +213,17 @@ QWidget *TrbDetailPage::buildMonitor()
 QWidget *TrbDetailPage::buildControl()
 {
     m_target = new QComboBox;
-    m_target->addItems({QStringLiteral("TRB đang xem"), QStringLiteral("Tất cả TRB (broadcast)")});
+    m_target->addItems({QStringLiteral("TRB hiện tại"), QStringLiteral("Tất cả TRB (broadcast)")});
 
     auto *ctl = new QGroupBox(QStringLiteral("Điều khiển"));
     auto *cf = new QFormLayout(ctl);
-    cf->addRow(QStringLiteral("PA (TRM)"), checkRow(numbered(QStringLiteral("%1"), 4), m_pa));
-    cf->addRow(QStringLiteral("Chạy"), m_start = new QCheckBox(QStringLiteral("Start (bỏ chọn = Stop)")));
+    cf->addRow(QStringLiteral("PA"), checkRow(numbered(QStringLiteral("%1"), 4), m_pa));
+    cf->addRow(QStringLiteral("Chạy"), m_start = new QCheckBox(QStringLiteral("Start")));
     m_mode = new QComboBox;
     m_mode->addItems({QStringLiteral("Normal"), QStringLiteral("Debug")});
     cf->addRow(QStringLiteral("Chế độ"), m_mode);
     QCheckBox *once[2];
-    cf->addRow(QStringLiteral("Một lần"), checkRow({QStringLiteral("Clear trip"), QStringLiteral("Beamsync")}, once));
+    cf->addRow(QStringLiteral(""), checkRow({QStringLiteral("Clear trip"), QStringLiteral("Beamsync")}, once));
     m_clearTrip = once[0];
     m_beamSync = once[1];
     auto *sendCtl = new QPushButton(QStringLiteral("Gửi lệnh điều khiển"));
@@ -236,8 +236,8 @@ QWidget *TrbDetailPage::buildControl()
     bf->addRow(QStringLiteral("Phase RX"), m_phaseRx = spin());
     bf->addRow(QStringLiteral("Amp TX"), m_ampTx = spin());
     bf->addRow(QStringLiteral("Amp RX"), m_ampRx = spin());
-    bf->addRow(QStringLiteral("ADAR 1–4"), checkRow(numbered(QStringLiteral("%1"), 4), m_adar));
-    bf->addRow(QStringLiteral("ADAR 5–8"), checkRow({"5", "6", "7", "8"}, m_adar + 4));
+    bf->addRow(QStringLiteral("ADAR"), checkRow(numbered(QStringLiteral("%1"), 4), m_adar));
+    bf->addRow(QStringLiteral("ADAR"), checkRow({"5", "6", "7", "8"}, m_adar + 4));
     bf->addRow(QStringLiteral("Kênh"), checkRow({"CH0", "CH1", "CH2", "CH3"}, m_ch));
     auto *sendBeamBtn = new QPushButton(QStringLiteral("Gửi lệnh beam"));
     bf->addRow(sendBeamBtn);
