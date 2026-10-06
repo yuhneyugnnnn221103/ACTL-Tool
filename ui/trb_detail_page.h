@@ -24,6 +24,8 @@ public:
                   const model::Thresholds *thresholds, QWidget *parent = nullptr);
 
     void setDevice(int mb, int trb);
+    int mb() const { return m_mb; }
+    int trb() const { return m_trb; }
     void refresh();
 
 signals:

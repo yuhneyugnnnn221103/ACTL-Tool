@@ -12,6 +12,11 @@
 #include "../services/trb_config.h"
 #include "../services/trb_control.h"
 #include "../services/trb_monitor.h"
+#include "../proto/psu_config_proto.h"
+#include "../proto/psu_control_proto.h"
+#include "../proto/psu_monitor_proto.h"
+#include "../proto/stm_ota_proto.h"
+#include "../ui/log_filter.h"
 #include "test_support.h"
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -310,6 +315,51 @@ private slots:
         QVERIFY(done.wait(1000));
         QCOMPARE(done.last().at(1).toBool(), false);
         QVERIFY(!control.debugTrb().has_value());
+    }
+
+    void logFramesAreGroupedByCmd()
+    {
+        using namespace ui;
+        auto cls = [](const QByteArray &f) { return classifyFrame(f); };
+
+        // TRB: giám sát, điều khiển, beam có địa chỉ MB/TRB để trang chi tiết lọc theo TRB đang xem.
+        FrameClass c = cls(monitorFrame(7, 3, zeros(trbmon::kNumFields)));
+        QCOMPARE(c.group, int(LogTrbMonitor));
+        QCOMPARE(c.mb, 7);
+        QCOMPARE(c.trb, 3);
+        c = cls(trbctl::buildControl(4, 5, {}));
+        QCOMPARE(c.group, int(LogTrbMonitor));
+        QCOMPARE(c.mb, 4);
+        c = cls(trbctl::buildBeam(2, 6, {}));
+        QCOMPARE(c.group, int(LogTrbMonitor));
+        QCOMPARE(c.trb, 6);
+        QCOMPARE(cls(trbcfg::buildReadRequest(1, 1)).group, int(LogTrbConfig));
+        QCOMPARE(cls(trbcfg::buildWrite(1, 1, zeros(trbcfg::table().size()))).group, int(LogTrbConfig));
+        QCOMPARE(cls(configReply(1, 1, zeros(trbcfg::table().size()))).group, int(LogTrbConfig));
+
+        // PSU
+        QCOMPARE(cls(psuctl::buildControl(2, {})).group, int(LogPsuMonitor));
+        QCOMPARE(cls(psuctl::buildControl(2, {})).mb, -1);
+        QByteArray psuMon(psumon::kLength, 0);
+        psuMon.replace(2, 2, psumon::cmd());
+        QCOMPARE(cls(psuMon).group, int(LogPsuMonitor));
+        QCOMPARE(cls(psucfg::buildReadRequest(2)).group, int(LogPsuConfig));
+        QCOMPARE(cls(psucfg::buildWrite(2, psucfg::defaultValues())).group, int(LogPsuConfig));
+        QByteArray psuReply(psucfg::kLength, 0);
+        psuReply.replace(2, 2, psucfg::replyCmd());
+        QCOMPARE(cls(psuReply).group, int(LogPsuConfig));
+
+        // Nạp code: FPGA (5555 6666 8888 AAAA 9999) và STM32 (9090 ... 9595)
+        for (const char *hex : {"abcd5555", "abcd6666", "abcd8888", "abcdaaaa", "abcd9999"})
+            QCOMPARE(cls(QByteArray::fromHex(hex) + QByteArray(10, 0)).group, int(LogFirmware));
+        QCOMPARE(cls(stmota::buildBegin(1, 100, 0, 1)).group, int(LogFirmware));
+        QCOMPARE(cls(stmota::buildData(1, 0, QByteArray(4, 'x'))).group, int(LogFirmware));
+        QCOMPARE(cls(stmota::buildCtrl(1, stmota::kInfo)).group, int(LogFirmware));
+
+        // Không nhận ra hoặc quá ngắn: hiện ở mọi trang (nhóm hệ thống)
+        QCOMPARE(cls(QByteArray::fromHex("abcd7777") + QByteArray(10, 0)).group, int(LogSystem));
+        QCOMPARE(cls(QByteArray::fromHex("abcd")).group, int(LogSystem));
+        QCOMPARE(cls({}).group, int(LogSystem));
     }
 
     // ---------- Tách khung ----------

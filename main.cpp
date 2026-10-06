@@ -98,12 +98,12 @@ int main(int argc, char *argv[])
 
     ui::MainWindow window(ctx);
     QObject::connect(&alarms, &services::AlarmEngine::alarmEvent, &window, [&](int mb, int trb, const QString &t, bool) {
-        window.logEvent(QStringLiteral("MB%1 / TRB%2: %3").arg(mb).arg(trb).arg(t));
+        window.logEvent(QStringLiteral("MB%1 / TRB%2: %3").arg(mb).arg(trb).arg(t), ui::LogTrbMonitor, mb, trb);
     });
     QObject::connect(&psuAlarms, &services::AlarmEngine::alarmEvent, &window, [&](int addr, int, const QString &t, bool) {
-        window.logEvent(QStringLiteral("PSU %1: %2").arg(addr).arg(t));
+        window.logEvent(QStringLiteral("PSU %1: %2").arg(addr).arg(t), ui::LogPsuMonitor);
     });
-    QObject::connect(&logger, &services::CsvLogger::errorOccurred, &window, &ui::MainWindow::logEvent);
+    QObject::connect(&logger, &services::CsvLogger::errorOccurred, &window, [&](const QString &m) { window.logEvent(m); });
     if (!thresholdError.isEmpty()) window.logEvent(thresholdError);
     if (!psuThresholdError.isEmpty()) window.logEvent(psuThresholdError);
     window.showMaximized();

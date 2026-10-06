@@ -42,6 +42,8 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     : QMainWindow(parent), m_ctx(ctx), m_store(ctx.store)
 {
     setWindowTitle(QStringLiteral("ACTL Tool"));
+    // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
+    m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware};
 
     // Điều hướng trái + các trang.
     m_nav = new QListWidget;
@@ -61,33 +63,37 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     m_nav->addItem(QStringLiteral("Nạp code"));
     m_pages->addWidget(new FirmwarePage(ctx));
     connect(m_nav, &QListWidget::currentRowChanged, m_pages, &QStackedWidget::setCurrentIndex);
+    connect(m_nav, &QListWidget::currentRowChanged, this, [this] { refilterLogs(); });
     m_nav->setCurrentRow(0);
     connect(m_detail, &TrbDetailPage::deviceChanged, m_grid, &OverviewGrid::select);
+    connect(m_detail, &TrbDetailPage::deviceChanged, this, [this] { refilterLogs(); });   // trang chi tiết chỉ hiện log của TRB đang xem
     connect(ctx.trbControl, &services::TrbControl::commandFinished, this, [this](const QString &d, bool sent) {
-        logEvent((sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d);
+        logEvent((sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d,
+                 LogTrbMonitor);
     });
     connect(ctx.trbConfig, &services::TrbConfig::deviceFinished, this, [this](int mb, int trb, bool ok, const QString &m) {
-        logEvent(QStringLiteral("Cấu hình %1: %2%3").arg(trbName(mb, trb), ok ? QString() : QStringLiteral("LỖI, "), m));
+        logEvent(QStringLiteral("Cấu hình %1: %2%3").arg(trbName(mb, trb), ok ? QString() : QStringLiteral("LỖI, "), m), LogTrbConfig);
     });
     connect(ctx.trbControl, &services::TrbControl::debugTrbChanged, this, [this] {
         const auto d = m_ctx.trbControl->debugTrb();
         logEvent(d ? QStringLiteral("Chế độ Debug: %1 (chỉ một TRB được Debug)").arg(trbName(d->first, d->second))
-                   : QStringLiteral("Không còn TRB nào ở chế độ Debug"));
+                   : QStringLiteral("Không còn TRB nào ở chế độ Debug"), LogTrbMonitor);
     });
     connect(ctx.psuControl, &services::PsuControl::commandFinished, this, [this](const QString &d, bool sent) {
-        logEvent((sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d);
+        logEvent((sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d,
+                 LogPsuMonitor);
     });
     connect(ctx.psuConfig, &services::PsuConfig::deviceFinished, this, [this](int addr, bool ok, const QString &m) {
-        logEvent(QStringLiteral("Cấu hình PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m));
+        logEvent(QStringLiteral("Cấu hình PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m), LogPsuConfig);
     });
     connect(ctx.psuStore, &model::PsuStore::psuStatusChanged, this, [this](int addr, Status from, Status to) {
         m_listDirty = true;
         if (from == Status::NoData && to == Status::Ok) return; // lần đầu thấy PSU: không cần báo
-        logEvent(QStringLiteral("PSU %1: %2 → %3").arg(addr).arg(statusText(from), statusText(to)));
+        logEvent(QStringLiteral("PSU %1: %2 → %3").arg(addr).arg(statusText(from), statusText(to)), LogPsuMonitor);
     });
-    connect(ctx.fpgaOta, &services::FpgaOta::finished, this, [this](const QString &s) { logEvent(QStringLiteral("Nạp FPGA: ") + s); });
+    connect(ctx.fpgaOta, &services::FpgaOta::finished, this, [this](const QString &s) { logEvent(QStringLiteral("Nạp FPGA: ") + s, LogFirmware); });
     connect(ctx.stmOta, &services::StmOta::deviceFinished, this, [this](int addr, bool ok, const QString &m) {
-        logEvent(QStringLiteral("Nạp STM32 PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m));
+        logEvent(QStringLiteral("Nạp STM32 PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m), LogFirmware);
     });
     connect(ctx.auth, &Auth::lockedChanged, this, [this](bool locked) {
         logEvent(locked ? QStringLiteral("Đã khóa chế độ kỹ sư") : QStringLiteral("Đã mở khóa chế độ kỹ sư"));
@@ -118,7 +124,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
             [this](int mb, int trb, Status from, Status to) {
         m_listDirty = true;
         if (from == Status::NoData && to == Status::Ok) return; // lần đầu thấy thiết bị: không cần báo
-        logEvent(QStringLiteral("%1: %2 → %3").arg(trbName(mb, trb), statusText(from), statusText(to)));
+        logEvent(QStringLiteral("%1: %2 → %3").arg(trbName(mb, trb), statusText(from), statusText(to)), LogTrbMonitor, mb, trb);
     });
 
     watchLink(ctx.monitorLink, QStringLiteral("Giám sát (TCP)"), m_tcpPill, m_tcpButton);
@@ -215,12 +221,7 @@ void MainWindow::watchLink(core::Link *link, const QString &title, StatusPill *p
     connect(link, &core::Link::errorOccurred, this,
             [=](const QString &m) { logEvent(QStringLiteral("Lỗi %1: %2").arg(title, m)); });
 
-    auto hex = [=](const char *dir, const QByteArray &d) {
-        if (m_hexEnable->isChecked())
-            m_hexLog->appendPlainText(QDateTime::currentDateTime().toString("HH:mm:ss.zzz ")
-                                      + QStringLiteral("[%1] %2 ").arg(link->name(), QLatin1String(dir))
-                                      + QString::fromLatin1(d.toHex(' ').toUpper()));
-    };
+    auto hex = [=](const char *dir, const QByteArray &d) { logHex(link->name(), dir, d); };
     connect(link, &core::Link::frameReceived, this, [=](const core::Frame &f) { hex("RX", f.raw); });
     connect(link, &core::Link::rawSent, this, [=](const QByteArray &d) { hex("TX", d); });
 }
@@ -325,16 +326,65 @@ QWidget *MainWindow::buildLogPanel()
     cl->addWidget(clear);
     tabs->setCornerWidget(corner);
     connect(clear, &QPushButton::clicked, this, [this, tabs] {
-        static_cast<QPlainTextEdit *>(tabs->currentWidget())->clear();
+        auto *edit = static_cast<QPlainTextEdit *>(tabs->currentWidget());
+        (edit == m_eventLog ? m_eventBuffer : m_hexBuffer).clear();
+        edit->clear();
     });
     return tabs;
 }
 
-void MainWindow::logEvent(const QString &text)
+void MainWindow::logEvent(const QString &text, int group, int mb, int trb)
 {
-    m_eventLog->appendPlainText(QDateTime::currentDateTime().toString("HH:mm:ss.zzz ") + text);
-    if (m_ctx.logger) m_ctx.logger->logEvent(text);
+    appendLog(m_eventLog, m_eventBuffer,
+              {QDateTime::currentDateTime().toString("HH:mm:ss.zzz ") + text, group, mb, trb});
+    if (m_ctx.logger) m_ctx.logger->logEvent(text);   // file CSV luôn ghi đủ, không lọc theo trang
     m_listDirty = true; // sự kiện cảnh báo có thể đổi lý do hiển thị trong danh sách bất thường
+}
+
+void MainWindow::logHex(const QString &link, const char *dir, const QByteArray &raw)
+{
+    if (!m_hexEnable->isChecked()) return;
+    const FrameClass fc = classifyFrame(raw);
+    appendLog(m_hexLog, m_hexBuffer,
+              {QDateTime::currentDateTime().toString("HH:mm:ss.zzz ") + QStringLiteral("[%1] %2 ").arg(link, QLatin1String(dir))
+                   + QString::fromLatin1(raw.toHex(' ').toUpper()),
+               fc.group, fc.mb, fc.trb});
+}
+
+// Dòng có nhóm LogSystem hiện ở mọi trang; còn lại chỉ hiện ở trang có nhóm đó. Trang chi tiết TRB
+// còn lọc theo TRB đang xem (dòng không có địa chỉ vẫn hiện).
+bool MainWindow::logVisible(const LogEntry &e) const
+{
+    const int page = m_pages->currentIndex();
+    const int mask = page >= 0 && page < m_pageGroups.size() ? m_pageGroups.at(page) : LogAll;
+    if (e.group == LogSystem) return true;
+    if (!(mask & e.group)) return false;
+    if (m_pages->currentWidget() == m_detail && e.group == LogTrbMonitor && e.mb >= 0)
+        return e.mb == m_detail->mb() && e.trb == m_detail->trb();
+    return true;
+}
+
+void MainWindow::appendLog(QPlainTextEdit *edit, QList<LogEntry> &buffer, const LogEntry &e)
+{
+    buffer.append(e);
+    if (buffer.size() > 5000) buffer.removeFirst();
+    if (logVisible(e)) edit->appendPlainText(e.text);
+}
+
+void MainWindow::rebuildLog(QPlainTextEdit *edit, const QList<LogEntry> &buffer)
+{
+    QStringList lines;
+    for (const LogEntry &e : buffer)
+        if (logVisible(e)) lines << e.text;
+    edit->setPlainText(lines.join(QLatin1Char('\n')));
+    edit->moveCursor(QTextCursor::End);
+}
+
+void MainWindow::refilterLogs()
+{
+    if (!m_eventLog || !m_hexLog) return;
+    rebuildLog(m_eventLog, m_eventBuffer);
+    rebuildLog(m_hexLog, m_hexBuffer);
 }
 
 void MainWindow::showDetail(int mb, int trb)

@@ -22,6 +22,7 @@ set(PROJECT_SOURCES
         ui/trb_detail_page.h ui/trb_detail_page.cpp
         ui/psu_page.h ui/psu_page.cpp
         ui/theme.h ui/theme.cpp
+        ui/log_filter.h ui/log_filter.cpp
         ui/status_pill.h ui/status_pill.cpp
         ui/led_indicator.h ui/led_indicator.cpp
         ui/bit_cells.h ui/bit_cells.cpp
@@ -130,6 +131,7 @@ if(Qt${QT_VERSION_MAJOR}Test_FOUND)
         services/trb_monitor.cpp services/trb_control.cpp services/trb_config.cpp
         services/fpga_ota.cpp services/stm_ota.cpp
         services/psu_monitor.cpp services/psu_control.cpp services/psu_config.cpp
+        ui/log_filter.cpp
     )
     foreach(name psu_test trb_test)
         add_executable(${name} tests/${name}.cpp ${TEST_CORE_SOURCES})
