@@ -89,7 +89,7 @@ private slots:
         int end = 6;
         for (const Field &f : t.fields()) { QCOMPARE(f.offset, end); end += f.size; }
         QCOMPARE(end, trbmon::kLength - 4 - 37);              // 37 byte dự phòng rồi CRC, tailer
-        QCOMPARE(t.fields().at(trbmon::kIdxTrm0).name, QStringLiteral("TRM1.I_SEN1"));
+        QCOMPARE(t.fields().at(trbmon::kIdxTrm0).name, QStringLiteral("TRM1.I SEN1"));
         QCOMPARE(t.fields().at(trbmon::kIdxTrm0 + trbmon::kTrmFields).offset, 6 + 50);     // TRM2 sau 50 byte
         QCOMPARE(t.fields().at(trbmon::kIdxTrbV).offset, 6 + 4 * 50);
         QCOMPARE(t.fields().at(trbmon::kIdxTrip0).offset, 6 + 4 * 50 + 6);
@@ -143,11 +143,11 @@ private slots:
 
     void tripCodeNames()
     {
-        // Trip 1-4: vượt max I_SEN của TRM1..4; bit 0 = I_SEN1, bit 7 = I_SEN8
-        QCOMPARE(trbmon::tripName(0), QStringLiteral("Max I_SEN TRM1"));
-        QCOMPARE(trbmon::tripName(3), QStringLiteral("Max I_SEN TRM4"));
-        QCOMPARE(trbmon::tripBitName(1, 0), QStringLiteral("TRM2 I_SEN1"));
-        QCOMPARE(trbmon::tripBitName(2, 7), QStringLiteral("TRM3 I_SEN8"));
+        // Trip 1-4: vượt max I SEN của TRM1..4; bit 0 = I SEN1, bit 7 = I SEN8
+        QCOMPARE(trbmon::tripName(0), QStringLiteral("Max I SEN TRM1"));
+        QCOMPARE(trbmon::tripName(3), QStringLiteral("Max I SEN TRM4"));
+        QCOMPARE(trbmon::tripBitName(1, 0), QStringLiteral("TRM2 I SEN1"));
+        QCOMPARE(trbmon::tripBitName(2, 7), QStringLiteral("TRM3 I SEN8"));
         // Trip 5: PA của TRM1 (bit 0-3) và TRM2 (bit 4-7); Trip 6: TRM3 và TRM4
         QCOMPARE(trbmon::tripName(4), QStringLiteral("Max PA TRM1-2"));
         QCOMPARE(trbmon::tripBitName(4, 0), QStringLiteral("TRM1 PA1"));
@@ -166,9 +166,9 @@ private slots:
         QCOMPARE(trbmon::tripBitName(6, 5), QStringLiteral("I TRB trip min"));
         QVERIFY(trbmon::tripBitName(6, 6).isEmpty() && trbmon::tripBitName(6, 7).isEmpty());
         // Trip 10-15: như 1-6 nhưng dưới min
-        QCOMPARE(trbmon::tripName(9), QStringLiteral("Min I_SEN TRM1"));
-        QCOMPARE(trbmon::tripName(12), QStringLiteral("Min I_SEN TRM4"));
-        QCOMPARE(trbmon::tripBitName(12, 7), QStringLiteral("TRM4 I_SEN8"));
+        QCOMPARE(trbmon::tripName(9), QStringLiteral("Min I SEN TRM1"));
+        QCOMPARE(trbmon::tripName(12), QStringLiteral("Min I SEN TRM4"));
+        QCOMPARE(trbmon::tripBitName(12, 7), QStringLiteral("TRM4 I SEN8"));
         QCOMPARE(trbmon::tripName(13), QStringLiteral("Min PA TRM1-2"));
         QCOMPARE(trbmon::tripName(14), QStringLiteral("Min PA TRM3-4"));
         QCOMPARE(trbmon::tripBitName(14, 6), QStringLiteral("TRM4 PA3"));
@@ -650,7 +650,7 @@ private slots:
         QFile f(day.filePath(trbFiles.first()));
         QVERIFY(f.open(QIODevice::ReadOnly));
         const QList<QByteArray> lines = f.readAll().split('\n');
-        QVERIFY(lines.at(0).startsWith("\xEF\xBB\xBF" "time,mb,trb,status,TRM1.I_SEN1"));   // UTF-8 BOM cho Excel
+        QVERIFY(lines.at(0).startsWith("\xEF\xBB\xBF" "time,mb,trb,status,TRM1.I SEN1"));   // UTF-8 BOM cho Excel
         QVERIFY(lines.at(0).contains("TRB.V"));
         QCOMPARE(lines.size(), 4);                                // header, 2 dòng dữ liệu, dòng rỗng cuối
         QVERIFY(lines.at(1).contains(",2,3,"));

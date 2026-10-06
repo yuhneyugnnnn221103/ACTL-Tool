@@ -395,10 +395,10 @@ def cmd_hex(args):
 
 def cmd_thresholds(args):
     os.makedirs(args.dir, exist_ok=True)
-    trb = {"TRB.V": [100, 200], "TRB.TEMP_POWER": [10, 80], "TEMP_MCU": [10, 90]}
+    trb = {"TRB.V": [100, 200], "TRB.TEMP POWER": [10, 80], "TEMP MCU": [10, 90]}
     for trm in range(1, 5):
         for ch in range(1, 9):
-            trb[f"TRM{trm}.I_SEN{ch}"] = [20, 200]
+            trb[f"TRM{trm}.I SEN{ch}"] = [20, 200]
     psu = {}
     for c in range(1, 5):
         for k in (1, 2, 3):
