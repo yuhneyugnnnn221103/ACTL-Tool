@@ -1,6 +1,6 @@
 /* Style toàn app, nạp một lần bằng qApp->setStyleSheet (xem ui/theme.cpp).
    Màu viết dạng @token@, bảng màu khai báo ở ui/theme.h. Bo góc: 6px nút/ô nhập, 8px thẻ.
-   Chỉ có hai cỡ chữ: 13px (chung) và 20px (QLabel[role="metric"]). Khoảng cách theo bội số của 4px. */
+   Chỉ dùng một cỡ chữ 13px (đậm cho tiêu đề). Khoảng cách theo bội số của 4px. */
 
 * {
     font-family: "Segoe UI", "Roboto", "Noto Sans", sans-serif;
@@ -28,10 +28,6 @@ QLabel[role="muted"] {
     color: @textMuted@;
 }
 QLabel[role="title"] {
-    font-weight: 700;
-}
-QLabel[role="metric"] {
-    font-size: 20px;
     font-weight: 700;
 }
 

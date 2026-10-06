@@ -151,11 +151,10 @@ QWidget *TrbDetailPage::buildMonitor()
         auto *card = new QFrame;
         card->setProperty("card", true);
         auto *row = new QHBoxLayout(card);
-        row->setContentsMargins(12, 4, 12, 4);
+        row->setContentsMargins(12, 2, 12, 2);
         auto *title = new QLabel(name);
-        theme::setRole(title, "muted");
+        theme::setRole(title, "title");        // tên in đậm, giá trị in thường, cùng cỡ chữ
         auto *v = new QLabel(kDash);
-        theme::setRole(v, "metric");
         v->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         m_metrics << v;
         row->addWidget(title);
@@ -195,7 +194,7 @@ QWidget *TrbDetailPage::buildMonitor()
         QStringList bits;
         for (int b = 0; b < 8; ++b) bits << trbmon::tripBitName(i, b);
         m_trip[i]->setBitNames(bits);
-        m_trip[i]->setTooltipTitle(QStringLiteral("Trip %1 · %2").arg(i + 1).arg(trbmon::tripName(i)));
+        m_trip[i]->setTooltipTitle(QStringLiteral("Trip %1").arg(i + 1));
     }
 
     auto *w = new QWidget;
