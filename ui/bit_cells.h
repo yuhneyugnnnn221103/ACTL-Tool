@@ -12,6 +12,7 @@ public:
 
     void setValue(int byte, bool known = true);   // known = false: chưa có dữ liệu, mọi ô nhạt
     void setBitNames(const QStringList &names);   // names[bit] (8 phần tử): ý nghĩa từng bit, hiện ở tooltip
+    void setTooltipTitle(const QString &title);   // thay caption trong tooltip (mặc định dùng caption)
     void setCaptionWidth(int px);                 // để các hàng trong cùng cột thẳng hàng
     int captionTextWidth() const;
 
@@ -30,6 +31,7 @@ private:
 
     QString m_caption;
     QStringList m_bitNames;
+    QString m_tipTitle;
     int m_captionWidth = -1;
     int m_value = 0;
     bool m_known = false;

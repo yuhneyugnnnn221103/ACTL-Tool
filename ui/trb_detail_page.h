@@ -49,7 +49,7 @@ private:
     struct Table { QTableWidget *w; int firstField; };
     QList<Table> m_tables;
     QList<QLabel *> m_metrics;
-    QLabel *m_stateText;
+    QList<QLabel *> m_stateLabels;   // 4 nhãn trạng thái TRM1..4
     QList<BitCells *> m_trip;
     QList<LedIndicator *> m_ledAdar, m_ledPg, m_ledPa;
     QCheckBox *m_pa[4], *m_start, *m_clearTrip, *m_beamSync, *m_adar[8], *m_ch[4];

@@ -175,21 +175,27 @@ QWidget *TrbDetailPage::buildMonitor()
     auto *state = new QGroupBox(QStringLiteral("Trạng thái"));
     state->setProperty("compact", true);
     auto *stateLayout = new QHBoxLayout(state);
-    m_stateText = new QLabel(kDash);
-    m_stateText->setWordWrap(true);
-    m_stateText->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    stateLayout->addWidget(m_stateText, 1);
+    // Khoảng giãn bằng nhau ở hai lề và giữa 4 nhãn TRM: nhãn cách đều, cân hai bên.
+    stateLayout->addStretch(1);
+    for (int i = 0; i < trbmon::kNumTrm; ++i) {
+        auto *label = new QLabel(kDash);
+        label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        m_stateLabels << label;
+        stateLayout->addWidget(label);
+        stateLayout->addStretch(1);
+    }
 
     // Mỗi trip code là một byte, hiện thành 8 ô bit (bit 7 ... bit 0), bit 1 tô đỏ.
     auto *trip = new QGroupBox(QStringLiteral("Trip code (mỗi byte: bit 7 ... bit 0)"));
     auto *tripLayout = new QVBoxLayout(trip);
     QStringList captions;
-    for (int i = 0; i < trbmon::kNumTrip; ++i) captions << QStringLiteral("%1  %2").arg(i + 1).arg(trbmon::tripName(i));
+    for (int i = 0; i < trbmon::kNumTrip; ++i) captions << trbmon::tripName(i);   // chỉ tên, số trip nằm ở tooltip
     tripLayout->addWidget(BitCells::makeGrid(captions, 4, m_trip));
     for (int i = 0; i < m_trip.size(); ++i) {                  // tooltip từng bit: bit 0 ... bit 7
         QStringList bits;
         for (int b = 0; b < 8; ++b) bits << trbmon::tripBitName(i, b);
         m_trip[i]->setBitNames(bits);
+        m_trip[i]->setTooltipTitle(QStringLiteral("Trip %1 · %2").arg(i + 1).arg(trbmon::tripName(i)));
     }
 
     auto *w = new QWidget;
@@ -340,9 +346,8 @@ void TrbDetailPage::refresh()
     setLeds(m_ledAdar, trbmon::kIdxInitAdar, Led::Fault, QStringLiteral("ADAR"));
     setLeds(m_ledPg, trbmon::kIdxPg, Led::Fault, QStringLiteral("PG TRM"));
     setLeds(m_ledPa, trbmon::kIdxPa, Led::Idle, QStringLiteral("PA TRM")); // PA tắt là trạng thái Stop bình thường
-    QStringList stateParts;
-    for (int i = 0; i < trbmon::kNumTrm; ++i) stateParts << QStringLiteral("TRM%1: %2").arg(i + 1).arg(val(trbmon::kIdxState0 + i));
-    m_stateText->setText(stateParts.join(QStringLiteral("   ·   ")));
+    for (int i = 0; i < m_stateLabels.size(); ++i)
+        m_stateLabels[i]->setText(QStringLiteral("TRM%1: %2").arg(i + 1).arg(val(trbmon::kIdxState0 + i)));
     for (int i = 0; i < m_trip.size(); ++i) m_trip[i]->setValue(bits(trbmon::kIdxTrip0 + i), has);
 }
 
