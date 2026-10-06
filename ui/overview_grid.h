@@ -14,6 +14,7 @@ public:
     static QColor statusColor(model::Status s);
     void setTooltipProvider(std::function<QString(int mb, int trb)> f) { m_tooltip = std::move(f); }
     void select(int mb, int trb);
+    void setDebugTrb(int mb, int trb);   // TRB đang ở chế độ Debug (vẽ viền xanh); -1 = không có
 
 signals:
     void trbClicked(int mb, int trb);
@@ -30,7 +31,7 @@ private:
 
     const model::DeviceStore *m_store;
     std::function<QString(int, int)> m_tooltip;
-    int m_selMb = -1, m_selTrb = -1;
+    int m_selMb = -1, m_selTrb = -1, m_dbgMb = -1, m_dbgTrb = -1;
 };
 
 } // namespace ui

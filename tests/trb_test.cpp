@@ -242,6 +242,76 @@ private slots:
         QCOMPARE(done.last().at(1).toBool(), false);
     }
 
+    void onlyOneTrbMayBeInDebug()
+    {
+        using Check = services::TrbControl::Check;
+        Rig rig("monitor");
+        rig.link.start();
+        services::TrbControl control(&rig.link);
+        QSignalSpy done(&control, &services::TrbControl::commandFinished);
+        QSignalSpy changed(&control, &services::TrbControl::debugTrbChanged);
+        auto settle = [&](int n) { while (done.size() < n) QVERIFY(done.wait(1000)); };
+
+        trbctl::ControlCmd debug;
+        debug.debugMode = true;
+        debug.paMask = 0x03;
+        debug.start = true;
+        trbctl::ControlCmd normal;
+        QVERIFY(!control.debugTrb().has_value());
+
+        QCOMPARE(control.sendControl(1, 1, debug), Check::Ok);          // TRB đầu tiên được Debug
+        settle(1);
+        QCOMPARE(control.debugTrb().value(), services::TrbControl::Device(1, 1));
+        QCOMPARE(changed.size(), 1);
+
+        const int sent = rig.transport->written.size();
+        QCOMPARE(control.sendControl(2, 2, debug), Check::OtherInDebug); // TRB thứ hai bị từ chối, không gửi gì
+        QCOMPARE(control.check(2, 2, debug), Check::OtherInDebug);
+        QCOMPARE(control.check(2, 2, normal), Check::Ok);               // Normal cho TRB khác vẫn được
+        QCOMPARE(control.sendControl(trbctl::kBroadcast, trbctl::kBroadcast, debug), Check::BroadcastDebug);
+        QCOMPARE(control.sendControl(0, trbctl::kBroadcast, debug), Check::BroadcastDebug);   // broadcast theo từng MB cũng vậy
+        QCOMPARE(rig.transport->written.size(), sent);
+        QCOMPARE(control.debugTrb().value(), services::TrbControl::Device(1, 1));
+
+        QCOMPARE(control.sendControl(1, 1, debug), Check::Ok);          // gửi lại cho chính TRB đang Debug thì được
+        settle(2);
+
+        // Chuyển Debug sang TRB khác: TRB cũ về Normal (giữ PA, Start), rồi TRB mới sang Debug.
+        QCOMPARE(control.sendControlSwitchDebug(2, 2, debug), Check::Ok);
+        settle(4);
+        QCOMPARE(control.debugTrb().value(), services::TrbControl::Device(2, 2));
+        const QList<QByteArray> w = rig.transport->written;
+        trbctl::ControlCmd released = debug;
+        released.debugMode = false;
+        QCOMPARE(w.at(w.size() - 2), trbctl::buildControl(1, 1, released));
+        QCOMPARE(w.at(w.size() - 1), trbctl::buildControl(2, 2, debug));
+        QCOMPARE(quint8(w.at(w.size() - 2).at(6)), quint8(0x03));       // PA không bị tắt khi thoát Debug
+        QCOMPARE(quint8(w.at(w.size() - 2).at(7)), quint8(0x02));       // Start giữ nguyên, không còn bit debug
+
+        QCOMPARE(control.sendControl(2, 2, normal), Check::Ok);         // Normal cho TRB Debug: hết Debug
+        settle(5);
+        QVERIFY(!control.debugTrb().has_value());
+        QCOMPARE(control.sendControl(3, 3, debug), Check::Ok);          // giờ TRB khác được Debug
+        settle(6);
+        QCOMPARE(control.debugTrb().value(), services::TrbControl::Device(3, 3));
+        QCOMPARE(control.sendControl(trbctl::kBroadcast, trbctl::kBroadcast, normal), Check::Ok);   // broadcast Normal: hết Debug
+        settle(7);
+        QVERIFY(!control.debugTrb().has_value());
+    }
+
+    void debugStateIgnoresCommandThatWasNotSent()
+    {
+        Rig rig("monitor");                    // chưa mở link: lệnh không ra đường truyền
+        services::TrbControl control(&rig.link);
+        QSignalSpy done(&control, &services::TrbControl::commandFinished);
+        trbctl::ControlCmd debug;
+        debug.debugMode = true;
+        control.sendControl(1, 1, debug);
+        QVERIFY(done.wait(1000));
+        QCOMPARE(done.last().at(1).toBool(), false);
+        QVERIFY(!control.debugTrb().has_value());
+    }
+
     // ---------- Tách khung ----------
     void parserResyncsAfterGarbageAndSplitChunks()
     {

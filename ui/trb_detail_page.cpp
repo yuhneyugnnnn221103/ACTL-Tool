@@ -15,6 +15,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QStandardItemModel>
 #include <QTableWidget>
 
 namespace ui {
@@ -74,6 +75,8 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     theme::setRole(prev, "secondary");
     theme::setRole(next, "secondary");
     m_pill = new StatusPill;
+    m_debugPill = new StatusPill;
+    m_debugPill->hide();
     m_status = new QLabel;
     theme::setRole(m_status, "muted");
 
@@ -85,6 +88,7 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     head->addSpacing(12);
     head->addWidget(m_pill);
     head->addWidget(m_status, 1);
+    head->addWidget(m_debugPill);
 
     auto *body = new QHBoxLayout;
     body->addWidget(buildMonitor(), 1);
@@ -221,6 +225,13 @@ QWidget *TrbDetailPage::buildControl()
     m_mode = new QComboBox;
     m_mode->addItems({QStringLiteral("Normal"), QStringLiteral("Debug")});
     cf->addRow(QStringLiteral("Chế độ"), m_mode);
+    m_mode->setToolTip(QStringLiteral("Chỉ một TRB được ở Debug: TRB Debug tự phát bản tin giám sát nên hai TRB Debug sẽ tranh bus."));
+    // Debug không áp dụng cho "Tất cả TRB": không có mục Debug khi gửi broadcast.
+    connect(m_target, &QComboBox::currentIndexChanged, this, [this](int index) {
+        auto *model = qobject_cast<QStandardItemModel *>(m_mode->model());
+        if (model) model->item(1)->setEnabled(index == 0);
+        if (index != 0) m_mode->setCurrentIndex(0);
+    });
     QCheckBox *once[2];
     cf->addRow(QStringLiteral(""), checkRow({QStringLiteral("Clear trip"), QStringLiteral("Beamsync")}, once));
     m_clearTrip = once[0];
@@ -301,6 +312,12 @@ void TrbDetailPage::refresh()
     if (s.status == Status::Lost) text += QStringLiteral(" · SỐ LIỆU BÊN DƯỚI LÀ SỐ LIỆU CŨ");
     m_status->setText(text);
 
+    const auto debug = m_control->debugTrb();
+    m_debugPill->setVisible(debug.has_value());
+    if (debug)
+        m_debugPill->setPill(QStringLiteral("Debug: MB%1 / TRB%2").arg(debug->first).arg(debug->second),
+                             OverviewGrid::statusColor(Status::Updating), Qt::white);
+
     auto val = [&](int idx) { return has ? QString::number(s.values.at(idx)) : kDash; };
     auto bits = [&](int idx) { return has ? int(s.values.at(idx)) : 0; };
     auto limitText = [&](int field) {
@@ -371,7 +388,23 @@ void TrbDetailPage::sendControl()
     c.debugMode = m_mode->currentIndex() == 1;
     c.clearTrip = m_clearTrip->isChecked();
     c.beamSync = m_beamSync->isChecked();
-    m_control->sendControl(mb, trb, c);
+    using Check = services::TrbControl::Check;
+    const Check chk = m_control->check(mb, trb, c);
+    if (chk == Check::BroadcastDebug) {
+        QMessageBox::warning(this, QStringLiteral("Chế độ Debug"),
+                             QStringLiteral("Không đặt Debug cho tất cả TRB: chỉ một TRB được chạy Debug."));
+        return;
+    }
+    if (chk == Check::OtherInDebug) {
+        const auto other = *m_control->debugTrb();
+        if (QMessageBox::question(this, QStringLiteral("Chế độ Debug"),
+                QStringLiteral("MB%1 / TRB%2 đang ở chế độ Debug. Chỉ một TRB được chạy Debug vì TRB Debug tự phát bản tin giám sát, "
+                               "hai TRB sẽ tranh bus.\n\nĐưa MB%1 / TRB%2 về Normal (giữ nguyên PA và Start) rồi đặt MB%3 / TRB%4 sang Debug?")
+                    .arg(other.first).arg(other.second).arg(mb).arg(trb)) != QMessageBox::Yes) return;
+        m_control->sendControlSwitchDebug(mb, trb, c);
+    } else {
+        m_control->sendControl(mb, trb, c);
+    }
     m_clearTrip->setChecked(false); // lệnh một lần, như tool cũ
     m_beamSync->setChecked(false);
 }

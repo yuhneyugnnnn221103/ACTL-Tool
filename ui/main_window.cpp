@@ -69,6 +69,11 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     connect(ctx.trbConfig, &services::TrbConfig::deviceFinished, this, [this](int mb, int trb, bool ok, const QString &m) {
         logEvent(QStringLiteral("Cấu hình %1: %2%3").arg(trbName(mb, trb), ok ? QString() : QStringLiteral("LỖI, "), m));
     });
+    connect(ctx.trbControl, &services::TrbControl::debugTrbChanged, this, [this] {
+        const auto d = m_ctx.trbControl->debugTrb();
+        logEvent(d ? QStringLiteral("Chế độ Debug: %1 (chỉ một TRB được Debug)").arg(trbName(d->first, d->second))
+                   : QStringLiteral("Không còn TRB nào ở chế độ Debug"));
+    });
     connect(ctx.psuControl, &services::PsuControl::commandFinished, this, [this](const QString &d, bool sent) {
         logEvent((sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d);
     });
@@ -347,6 +352,8 @@ void MainWindow::showPsu(int addr)
 void MainWindow::refresh()
 {
     m_store->markStale(QDateTime::currentMSecsSinceEpoch(), m_ctx.settings.staleMs);
+    const auto debug = m_ctx.trbControl->debugTrb();
+    m_grid->setDebugTrb(debug ? debug->first : -1, debug ? debug->second : -1);
     m_grid->update();
     m_psuGrid->update();
     m_ctx.psuStore->markStale(QDateTime::currentMSecsSinceEpoch(), m_ctx.settings.staleMs);
@@ -434,6 +441,8 @@ QString MainWindow::trbTooltip(int mb, int trb) const
     using namespace proto::trbmon;
     const model::TrbState &s = m_store->trb(mb, trb);
     QString t = QStringLiteral("%1\nTrạng thái: %2").arg(trbName(mb, trb), statusText(s.status));
+    if (const auto d = m_ctx.trbControl->debugTrb(); d && d->first == mb && d->second == trb)
+        t += QStringLiteral("\nĐang ở chế độ Debug");
     if (s.frames == 0) return t;
 
     QStringList trips;

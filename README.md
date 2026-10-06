@@ -61,6 +61,7 @@ Mọi trang đều xem được không cần mật khẩu, kể cả đọc cấ
 
 Lưu ý khi vận hành:
 
+- Chỉ một TRB được ở chế độ Debug (TRB Debug tự phát bản tin giám sát, hai TRB sẽ tranh bus). App từ chối Debug cho "Tất cả TRB"; đặt Debug cho TRB thứ hai thì hỏi có chuyển không (TRB cũ về Normal, giữ nguyên PA và Start). TRB đang Debug có viền xanh trên lưới tổng quan và nhãn "Debug: MBx / TRBy" ở trang chi tiết. App chỉ biết các lệnh nó đã gửi trong phiên này: TRB đã ở Debug từ trước (hoặc do tool khác đặt) thì không biết được, nên sau khi mở app nên gửi Normal cho "Tất cả TRB" nếu không chắc.
 - Lệnh điều khiển TRB luôn ghi đè cả PA, Start/Stop và chế độ. Gửi "Clear trip" khi ô Start bỏ trống cũng là ra lệnh Stop.
 - Nạp FPGA ở chế độ broadcast tác động tới mọi TRB, và không phát hiện được gói bị mất cho tới bước boot. TRB lỗi cần nạp lại bằng chế độ gửi riêng.
 - Nạp STM32 cần hai file ảnh, link cho slot A và slot B. App tự chọn ảnh của slot không đang chạy.

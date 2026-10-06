@@ -29,6 +29,14 @@ void OverviewGrid::select(int mb, int trb)
     update();
 }
 
+void OverviewGrid::setDebugTrb(int mb, int trb)
+{
+    if (mb == m_dbgMb && trb == m_dbgTrb) return;
+    m_dbgMb = mb;
+    m_dbgTrb = trb;
+    update();
+}
+
 QRectF OverviewGrid::cellRect(int mb, int trb) const
 {
     const qreal w = qreal(width() - kLeft) / m_store->mbCount();
@@ -69,6 +77,11 @@ void OverviewGrid::paintEvent(QPaintEvent *)
             p.setPen(Qt::NoPen);
             p.setBrush(statusColor(s));
             p.drawRoundedRect(c, 6, 6);
+            if (mb == m_dbgMb && trb == m_dbgTrb) {   // viền xanh dương: TRB đang Debug
+                p.setPen(QPen(theme::statusColor(Status::Updating).darker(130), 3));
+                p.setBrush(Qt::NoBrush);
+                p.drawRoundedRect(c.adjusted(1.5, 1.5, -1.5, -1.5), 6, 6);
+            }
             if (mb == m_selMb && trb == m_selTrb) {
                 p.setPen(QPen(palette().color(QPalette::WindowText), 2));
                 p.setBrush(Qt::NoBrush);
