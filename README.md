@@ -151,15 +151,15 @@ Mọi bản tin có dạng `AB CD | CMD | địa chỉ | dữ liệu | CRC16 | E
 | Hỏi / trả lời cấu hình TRB | `A3 A3` / `A4 A4` | 10 / 520 | 4 |
 | Nạp FPGA: nạp, xóa, hỏi, boot | `55`, `66`, `88`, `AA` (lặp 2 byte) | 269 | 4 |
 | Trạng thái nạp FPGA | `99 99` | 25 | 4 |
-| Nạp STM32: BEGIN, DATA, END, COMMIT, INFO | `90`, `91`, `92`, `93`, `95` | 20, 268, 8, 8, 8 | 2 |
-| Điều khiển PSU | `01` | 12 | 2 |
-| Hỏi cấu hình PSU | `03` | 12 | 2 |
-| Ghi cấu hình PSU | `04` | 914 | 2 |
-| Giám sát PSU | `81` | 265 | 2 |
-| Trả lời cấu hình PSU | `82` | 914 | 2 |
-| ACK nạp STM32 | `94` | 16 | 2 |
+| Nạp STM32: BEGIN, DATA, END, COMMIT, INFO | `90 90`, `91 91`, `92 92`, `93 93`, `95 95` | 21, 269, 9, 9, 9 | 2 |
+| Điều khiển PSU | `01 01` | 13 | 2 |
+| Hỏi cấu hình PSU | `03 03` | 13 | 2 |
+| Ghi cấu hình PSU | `04 04` | 915 | 2 |
+| Giám sát PSU | `81 81` | 266 | 2 |
+| Trả lời cấu hình PSU | `82 82` | 915 | 2 |
+| ACK nạp STM32 | `94 94` | 17 | 2 |
 
-Bản tin TRB dùng CMD 2 byte và địa chỉ 2 byte; bản tin STM32/PSU dùng CMD 1 byte và địa chỉ 1 byte. `FrameRegistry` từ chối đăng ký nếu một CMD 1 byte trùng byte đầu của một CMD 2 byte.
+Mọi CMD đều 2 byte, mã lặp hai lần (`11 11`, `A1 A1`, `81 81`...). Bản tin TRB dùng địa chỉ 2 byte (MB, TRB) và CRC từ byte địa chỉ; bản tin PSU và nạp STM32 dùng địa chỉ 1 byte và CRC từ byte CMD. Trong ACK nạp STM32, trường `ack_cmd` vẫn là mã 1 byte (ví dụ `92`). `FrameRegistry` vẫn hỗ trợ CMD 1 byte nhưng từ chối đăng ký nếu một CMD 1 byte trùng byte đầu của một CMD 2 byte.
 
 ## Việc còn lại
 

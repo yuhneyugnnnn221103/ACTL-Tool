@@ -18,7 +18,7 @@ PsuMonitor::PsuMonitor(core::Link *link, model::PsuStore *store, AlarmEngine *al
 
 void PsuMonitor::onFrame(const core::Frame &frame)
 {
-    if (frame.cmd != QByteArray(1, char(psumon::kCmd))) return;
+    if (frame.cmd != psumon::cmd()) return;
     const int addr = frame.at(psumon::kOffAddr);
     if (!m_store->contains(addr)) { ++m_badAddress; return; }
 

@@ -1,6 +1,6 @@
 #pragma once
-// Bản tin giám sát PSU, CMD 0x81, 265 byte (theo "Định nghĩa bản tin"), CRC phủ từ byte CMD:
-// [AB CD][81][Addr][CỤM 1..4: 4x48B][SUPPLY 24B][RTC 7B][Trip 10B][Dự phòng 24B][CRC 2B][E1 E2]
+// Bản tin giám sát PSU, CMD 2 byte 81 81, 266 byte (theo "Định nghĩa bản tin"), CRC phủ từ byte CMD:
+// [AB CD][81 81][Addr][CỤM 1..4: 4x48B][SUPPLY 24B][RTC 7B][Trip 10B][Dự phòng 24B][CRC 2B][E1 E2]
 // Mỗi cụm: 6 giá trị ADC + 2 giá trị AMC (3 byte) rồi 12 giá trị XDP (2 byte).
 // Mọi giá trị đang là số thô không dấu (chưa có công thức quy đổi và chưa rõ dấu).
 #include "../core/frame.h"
@@ -9,8 +9,7 @@
 
 namespace proto::psumon {
 
-constexpr quint8 kCmd = 0x81;
-constexpr int kLength = 265, kCrcStart = 2, kOffAddr = 3;
+constexpr int kLength = 266, kCrcStart = 2, kOffAddr = 4;
 constexpr int kNumCluster = 4, kClusterFields = 20, kNumSupply = 8, kNumRtc = 7, kNumTrip = 10;
 
 // Thứ tự trường trong một cụm (cũng là thứ tự trong bảng trường).
@@ -26,6 +25,7 @@ constexpr int kIdxRtc0 = kIdxSupply0 + kNumSupply;
 constexpr int kIdxTrip0 = kIdxRtc0 + kNumRtc;
 constexpr int kNumFields = kIdxTrip0 + kNumTrip;
 
+QByteArray cmd();   // 81 81
 core::FrameSpec spec(bool checkCrc);
 const FieldTable &table();
 

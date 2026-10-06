@@ -9,7 +9,7 @@ namespace core {
 
 constexpr quint8 kHeader1 = 0xAB, kHeader2 = 0xCD;
 constexpr quint8 kTailer1 = 0xE1, kTailer2 = 0xE2;
-constexpr int kMinFrameLen = 8; // header2 + cmd1 + addr1 + crc2 + tailer2
+constexpr int kMinFrameLen = 8; // header2 + cmd (1-2) + addr + crc2 + tailer2, tối thiểu
 
 struct FrameSpec {
     QByteArray cmd;        // 1 hoặc 2 byte ngay sau header

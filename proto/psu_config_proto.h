@@ -1,8 +1,8 @@
 #pragma once
 // Cấu hình PSU qua RS485 (theo "Định nghĩa bản tin"), CRC phủ từ byte CMD:
-//   Hỏi      CMD 0x03, 12 byte:  [AB CD][03][Addr][Dự phòng 4B][CRC][E1 E2]
-//   Ghi      CMD 0x04, 914 byte: [AB CD][04][Addr][Mask 2B][CỤM 1..4: 4x192B][INA 72B][Ngưỡng Supply 48B][Dự phòng 16B][CRC][E1 E2]
-//   Trả lời  CMD 0x82, 914 byte: giống khung ghi (Mask không dùng)
+//   Hỏi      CMD 03 03, 13 byte:  [AB CD][03 03][Addr][Dự phòng 4B][CRC][E1 E2]
+//   Ghi      CMD 04 04, 915 byte: [AB CD][04 04][Addr][Mask 2B][CỤM 1..4: 4x192B][INA 72B][Ngưỡng Supply 48B][Dự phòng 16B][CRC][E1 E2]
+//   Trả lời  CMD 82 82, 915 byte: giống khung ghi (Mask không dùng)
 // Mỗi cụm 192 byte: ngưỡng ADC/AMC/XDP (60) + cấu hình XDP (38) + cấu hình ADS (94).
 // Trường Config Mask không có trong bảng: khi ghi luôn gửi 0xFFFF (ghi mọi nhóm).
 #include "../core/frame.h"
@@ -11,11 +11,13 @@
 
 namespace proto::psucfg {
 
-constexpr quint8 kWriteCmd = 0x04, kReadCmd = 0x03, kReplyCmd = 0x82;
-constexpr int kLength = 914, kCrcStart = 2, kOffAddr = 3, kRequestLength = 12;
+constexpr int kLength = 915, kCrcStart = 2, kOffAddr = 4, kOffMask = 5, kOffFirstField = 7, kRequestLength = 13;
 constexpr quint16 kConfigMaskAll = 0xFFFF;
 constexpr int kNumCluster = 4;
 
+QByteArray writeCmd();      // 04 04
+QByteArray readCmd();       // 03 03
+QByteArray replyCmd();      // 82 82
 core::FrameSpec readReplySpec(bool checkCrc);
 const FieldTable &table();          // mọi trường sửa được (không gồm địa chỉ, mask, dự phòng)
 

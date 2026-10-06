@@ -65,15 +65,19 @@ const QString kInaGroup = QStringLiteral("INA");
 const QString kSupplyGroup = QStringLiteral("Supply - Ngưỡng");
 }
 
+QByteArray writeCmd() { return QByteArray::fromHex("0404"); }
+QByteArray readCmd() { return QByteArray::fromHex("0303"); }
+QByteArray replyCmd() { return QByteArray::fromHex("8282"); }
+
 core::FrameSpec readReplySpec(bool checkCrc)
 {
-    return {QByteArray(1, char(kReplyCmd)), kLength, kCrcStart, checkCrc, QStringLiteral("PSU cấu hình")};
+    return {replyCmd(), kLength, kCrcStart, checkCrc, QStringLiteral("PSU cấu hình")};
 }
 
 static FieldTable build()
 {
     FieldTable t;
-    int off = 6;
+    int off = kOffFirstField;
     auto add = [&](const QString &group, const QString &name, int size, const char *note = nullptr, bool hex = false) {
         const int i = t.add(name, off, size, 1.0, {}, group);
         if (hex) t.setHex(i);
@@ -107,10 +111,10 @@ const FieldTable &table()
 QByteArray buildWrite(int addr, const QList<double> &values)
 {
     QByteArray f(kLength, 0);
-    f[2] = char(kWriteCmd);
+    f.replace(2, 2, writeCmd());
     f[kOffAddr] = char(addr);
-    f[4] = char(kConfigMaskAll >> 8);
-    f[5] = char(kConfigMaskAll & 0xFF);
+    f[kOffMask] = char(kConfigMaskAll >> 8);
+    f[kOffMask + 1] = char(kConfigMaskAll & 0xFF);
     table().encode(values, f);
     core::seal(f, kCrcStart);
     return f;
@@ -119,7 +123,7 @@ QByteArray buildWrite(int addr, const QList<double> &values)
 QByteArray buildReadRequest(int addr)
 {
     QByteArray f(kRequestLength, 0);
-    f[2] = char(kReadCmd);
+    f.replace(2, 2, readCmd());
     f[kOffAddr] = char(addr);
     core::seal(f, kCrcStart);
     return f;

@@ -86,7 +86,7 @@ void StmOta::confirmCommit(bool commit)
 
 void StmOta::onFrame(const core::Frame &frame)
 {
-    if (!busy() || frame.cmd.size() != 1 || quint8(frame.cmd.at(0)) != stmota::kAck) return;
+    if (!busy() || frame.cmd != stmota::cmdBytes(stmota::kAck)) return;
     const stmota::Ack a = stmota::parseAck(frame.raw);
     if (a.addr != m_addr) return;
     const QString why = stmota::statusText(a.status);

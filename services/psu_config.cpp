@@ -85,7 +85,7 @@ void PsuConfig::sendRead(Stage stage)
     m_stage = stage;
     core::Request r;
     r.data = psucfg::buildReadRequest(m_task.addr);
-    r.replyCmd = QByteArray(1, char(psucfg::kReplyCmd));
+    r.replyCmd = psucfg::replyCmd();
     r.timeoutMs = m_readTimeoutMs;
     r.retries = 1;
     m_waitId = m_link->send(r);

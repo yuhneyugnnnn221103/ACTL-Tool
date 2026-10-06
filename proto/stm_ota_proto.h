@@ -1,14 +1,15 @@
 #pragma once
-// Nạp code STM32 trên PSU (theo stm_ota_protocol.h). CMD 1 byte, địa chỉ 1 byte, CRC phủ từ byte CMD.
-//   0x90 BEGIN  20 byte: [AB CD][90][ADDR][size 4B][crc32 4B][version 4B][CRC][E1 E2]
-//   0x91 DATA  268 byte: [AB CD][91][ADDR][seq 2B][len 2B][data 256B][CRC][E1 E2]
-//   0x92 END / 0x93 COMMIT / 0x95 INFO, 8 byte: [AB CD][CMD][ADDR][CRC][E1 E2]
-//   0x94 ACK    16 byte: [AB CD][94][ADDR][ack_cmd][status][info 4B][slot][dự phòng][CRC][E1 E2]
+// Nạp code STM32 trên PSU. CMD 2 byte (mã lặp hai lần như TRB), địa chỉ 1 byte, CRC phủ từ byte CMD.
+//   90 90 BEGIN  21 byte: [AB CD][90 90][ADDR][size 4B][crc32 4B][version 4B][CRC][E1 E2]
+//   91 91 DATA  269 byte: [AB CD][91 91][ADDR][seq 2B][len 2B][data 256B][CRC][E1 E2]
+//   92 92 END / 93 93 COMMIT / 95 95 INFO, 9 byte: [AB CD][CMD 2B][ADDR][CRC][E1 E2]
+//   94 94 ACK    17 byte: [AB CD][94 94][ADDR][ack_cmd][status][info 4B][slot][dự phòng][CRC][E1 E2]
+// Các hằng kBegin... là mã 1 byte (ack_cmd trong ACK vẫn là mã 1 byte); cmdBytes() ra CMD 2 byte trên đường truyền.
 #include "../core/frame.h"
 
 namespace proto::stmota {
 
-constexpr int kChunk = 256;
+constexpr int kChunk = 256, kOffAddr = 4;
 constexpr quint8 kBegin = 0x90, kData = 0x91, kEnd = 0x92, kCommit = 0x93, kAck = 0x94, kInfo = 0x95;
 enum AckStatus : quint8 { Ok, Refused, BadSize, BadSeq, CrcFail, Busy, NoCommitPending, EraseFail, WrongSlot };
 
@@ -18,6 +19,7 @@ struct Ack {
     char slot = 0; // chỉ có nghĩa với trả lời INFO
 };
 
+QByteArray cmdBytes(quint8 code);   // {code, code}
 core::FrameSpec ackSpec();
 quint32 crc32(const QByteArray &data); // IEEE 802.3, khớp firmware
 

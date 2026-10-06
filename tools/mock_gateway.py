@@ -17,6 +17,7 @@ Ví dụ:
   python3 tools/mock_gateway.py tcp --scenario all --rate 2       # app tự lắng nghe khi khởi động; chạy lệnh này sau khi mở app
   python3 tools/mock_gateway.py serial --drop 0.2 --corrupt 0.1   # thử cấu hình khi RS485 mất gói / ghi sai
 
+Mọi CMD phía PSU là 2 byte lặp (01 01, 03 03, 04 04, 81 81, 82 82, 90 90 .. 95 95), CRC phủ từ byte CMD.
 Bố cục bản tin lấy theo proto/trb_monitor_proto.cpp, proto/psu_monitor_proto.cpp và các proto cấu hình;
 nếu sửa bản tin bên C++ thì sửa hằng số tương ứng ở đây (selftest sẽ báo nếu độ dài không khớp).
 """
@@ -107,9 +108,9 @@ def trb_frame(mb, trb, rng, *, isen=None, v=150, i=500, power_temp=40, mcu=50, h
 
 # ----------------------------------------------------------------------------- bản tin PSU
 
-PSU_LEN, PSU_CRC_START = 265, 2
-PSU_CLUSTER_OFF, PSU_CLUSTER_SIZE = 4, 48
-PSU_SUPPLY_OFF, PSU_RTC_OFF, PSU_TRIP_OFF, PSU_TRIP_COUNT = 196, 220, 227, 10
+PSU_LEN, PSU_CRC_START, PSU_ADDR = 266, 2, 4      # CMD 2 byte (81 81), địa chỉ ở byte 4
+PSU_CLUSTER_OFF, PSU_CLUSTER_SIZE = 5, 48
+PSU_SUPPLY_OFF, PSU_RTC_OFF, PSU_TRIP_OFF, PSU_TRIP_COUNT = 197, 221, 228, 10
 
 # Thứ tự trường trong một cụm: (tên, số byte), trùng psumon::ClusterField.
 PSU_CLUSTER_FIELDS = [
@@ -129,7 +130,8 @@ PSU_SUPPLY_NORMAL = {"V_5V": 5000, "V_3V3_1": 3300, "V_3V3_2": 3300}
 def psu_frame(addr, rng, *, over=None, supply_over=None, trips=None, now=None):
     """over: {(cụm 0..3, tên trường): giá trị}; supply_over: {tên: giá trị}; trips: list 10 byte."""
     f = bytearray(PSU_LEN)
-    f[2], f[3] = 0x81, addr
+    f[2] = f[3] = 0x81
+    f[PSU_ADDR] = addr
     for c in range(4):
         off = PSU_CLUSTER_OFF + c * PSU_CLUSTER_SIZE
         for name, size in PSU_CLUSTER_FIELDS:
@@ -304,11 +306,11 @@ def decode_control(buf):
             f = buf[:17]
             out.append(f"beam MB{f[4]}/TRB{f[5]}: phaseTX={f[6]} phaseRX={f[7]} ampTX={f[8]} ampRX={f[9]} CH={f[10]:04b} ADAR={f[11]:08b}")
             buf = buf[17:]
-        elif buf[2] == 0x01 and len(buf) >= 12:
-            f = buf[:12]
-            out.append(f"điều khiển PSU {f[3]}: bật cụm={f[4]:04b} clearTrip={f[5]}")
-            buf = buf[12:]
-        elif cmd2 in (b"\xA2\xA2", b"\x14\x14") or buf[2] == 0x01:
+        elif cmd2 == b"\x01\x01" and len(buf) >= 13:
+            f = buf[:13]
+            out.append(f"điều khiển PSU {f[4]}: bật cụm={f[5]:04b} clearTrip={f[6]}")
+            buf = buf[13:]
+        elif cmd2 in (b"\xA2\xA2", b"\x14\x14", b"\x01\x01"):
             break                                      # chưa đủ byte
         else:
             buf = buf[1:]
@@ -416,7 +418,7 @@ def cmd_thresholds(args):
 # ----------------------------------------------------------------------------- RS485 giả (pty)
 
 TRB_CFG_LEN, TRB_CFG_READ_LEN = 520, 10
-PSU_CFG_LEN, PSU_CFG_READ_LEN = 914, 12
+PSU_CFG_LEN, PSU_CFG_READ_LEN = 915, 13
 
 
 class SerialResponder:
@@ -447,9 +449,9 @@ class SerialResponder:
                 n, kind = TRB_CFG_LEN, "ghi TRB"
             elif cmd2 == b"\xA3\xA3":
                 n, kind = TRB_CFG_READ_LEN, "đọc TRB"
-            elif b[2] == 0x04:
+            elif cmd2 == b"\x04\x04":
                 n, kind = PSU_CFG_LEN, "ghi PSU"
-            elif b[2] == 0x03:
+            elif cmd2 == b"\x03\x03":
                 n, kind = PSU_CFG_READ_LEN, "đọc PSU"
             else:
                 del b[0]
@@ -468,7 +470,7 @@ class SerialResponder:
 
     def _handle(self, kind, f):
         is_trb = kind.endswith("TRB")
-        key = (f[4], f[5]) if is_trb else f[3]
+        key = (f[4], f[5]) if is_trb else f[PSU_ADDR]
         name = f"MB{key[0]}/TRB{key[1]}" if is_trb else f"PSU {key}"
         store = self.trb if is_trb else self.psu
         if kind.startswith("ghi"):
@@ -490,8 +492,9 @@ class SerialResponder:
             crc_start, = (4,)
         else:
             reply = bytearray(store.get(key, bytes(PSU_CFG_LEN)))
-            reply[2], reply[3] = 0x82, key
-            reply[4] = reply[5] = 0                      # Config Mask: không dùng khi trả lời
+            reply[2] = reply[3] = 0x82
+            reply[PSU_ADDR] = key
+            reply[5] = reply[6] = 0                      # Config Mask: không dùng khi trả lời
             crc_start = 2
         self.log(f"  {kind} {name}: trả lời {len(reply)} byte")
         if self.delay:
@@ -537,8 +540,8 @@ def cmd_selftest(_args):
     check(crc16(t[4:276]) == (t[276] << 8 | t[277]) and t[278:] == bytes([T1, T2]), "TRB CRC từ byte 4, tailer E1 E2")
     check(t[4] == 3 and t[5] == 5 and t[TRB_TRIP0:TRB_TRIP0 + 16] == bytes([1] * 16), "địa chỉ và trip code đúng vị trí")
     p = psu_frame(2, rng, trips=[0xAA] * 10)
-    check(len(p) == PSU_LEN and p[2] == 0x81 and p[3] == 2, "PSU 265 byte, CMD 81, địa chỉ")
-    check(crc16(p[2:261]) == (p[261] << 8 | p[262]), "PSU CRC từ byte 2")
+    check(len(p) == PSU_LEN and p[2:4] == b"\x81\x81" and p[PSU_ADDR] == 2, "PSU 266 byte, CMD 81 81, địa chỉ ở byte 4")
+    check(crc16(p[2:262]) == (p[262] << 8 | p[263]), "PSU CRC từ byte 2 (CMD)")
     check(p[PSU_TRIP_OFF:PSU_TRIP_OFF + 10] == bytes([0xAA] * 10), "PSU trip code đúng vị trí")
     check(PSU_CLUSTER_OFF + 4 * PSU_CLUSTER_SIZE == PSU_SUPPLY_OFF and sum(s for _, s in PSU_CLUSTER_FIELDS) == PSU_CLUSTER_SIZE,
           "cụm PSU 48 byte, Supply ngay sau 4 cụm")
@@ -556,7 +559,7 @@ def cmd_selftest(_args):
     ctl = bytearray(14); ctl[2] = ctl[3] = 0xA2; ctl[4], ctl[5], ctl[6], ctl[7] = 7, 3, 5, 0x03
     lines, rest = decode_control(seal(ctl, 4))
     check(len(lines) == 1 and "MB7/TRB3" in lines[0] and rest == b"", "điều khiển TRB")
-    pc = bytearray(12); pc[2], pc[3], pc[4], pc[5] = 0x01, 4, 0b1010, 1
+    pc = bytearray(13); pc[2] = pc[3] = 0x01; pc[4], pc[5], pc[6] = 4, 0b1010, 1
     lines, _ = decode_control(seal(pc, 2))
     check(len(lines) == 1 and "PSU 4" in lines[0] and "1010" in lines[0], "điều khiển PSU")
 
@@ -568,12 +571,12 @@ def cmd_selftest(_args):
     out = r.feed(seal(rd, 4))
     check(len(out) == 1 and len(out[0]) == TRB_CFG_LEN and out[0][2:4] == b"\xA4\xA4" and out[0][10:14] == b"\x01\x02\x03\x04"
           and crc16(out[0][4:516]) == (out[0][516] << 8 | out[0][517]), "đọc TRB trả đúng cấu hình đã ghi (A4A4)")
-    w = bytearray(PSU_CFG_LEN); w[2], w[3] = 0x04, 3; w[4] = w[5] = 0xFF; w[500:504] = b"\xDE\xAD\xBE\xEF"
+    w = bytearray(PSU_CFG_LEN); w[2] = w[3] = 0x04; w[PSU_ADDR] = 3; w[5] = w[6] = 0xFF; w[500:504] = b"\xDE\xAD\xBE\xEF"
     r.feed(seal(w, 2))
-    rd = bytearray(PSU_CFG_READ_LEN); rd[2], rd[3] = 0x03, 3
+    rd = bytearray(PSU_CFG_READ_LEN); rd[2] = rd[3] = 0x03; rd[PSU_ADDR] = 3
     out = r.feed(seal(rd, 2))
-    check(len(out) == 1 and len(out[0]) == PSU_CFG_LEN and out[0][2] == 0x82 and out[0][500:504] == b"\xDE\xAD\xBE\xEF"
-          and crc16(out[0][2:910]) == (out[0][910] << 8 | out[0][911]), "đọc PSU trả đúng cấu hình đã ghi (82)")
+    check(len(out) == 1 and len(out[0]) == PSU_CFG_LEN and out[0][2:4] == b"\x82\x82" and out[0][500:504] == b"\xDE\xAD\xBE\xEF"
+          and crc16(out[0][2:911]) == (out[0][911] << 8 | out[0][912]), "đọc PSU trả đúng cấu hình đã ghi (82 82)")
     noisy = SerialResponder(drop=1.0, rng=random.Random(3), log=lambda *_: None)
     check(noisy.feed(seal(bytearray(rd), 2)) == [], "--drop 1.0: không trả lời")
     chunks = seal(bytearray(rd), 2)

@@ -28,15 +28,17 @@ const char *const kRtc[kNumRtc] = {"YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SE
 const char *const kRtcLabel[kNumRtc] = {"Năm", "Tháng", "Ngày", "Giờ", "Phút", "Giây", "Mili giây"};
 }
 
+QByteArray cmd() { return QByteArray::fromHex("8181"); }
+
 core::FrameSpec spec(bool checkCrc)
 {
-    return {QByteArray(1, char(kCmd)), kLength, kCrcStart, checkCrc, QStringLiteral("PSU giám sát")};
+    return {cmd(), kLength, kCrcStart, checkCrc, QStringLiteral("PSU giám sát")};
 }
 
 static FieldTable build()
 {
     FieldTable t;
-    int off = 4;
+    int off = kOffAddr + 1;
     auto add = [&](const QString &name, int size, const QString &group) { t.add(name, off, size, 1.0, {}, group); off += size; };
 
     for (int c = 0; c < kNumCluster; ++c) {

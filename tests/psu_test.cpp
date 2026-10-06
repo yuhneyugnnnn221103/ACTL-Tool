@@ -4,6 +4,8 @@
 #include "../proto/psu_config_proto.h"
 #include "../proto/psu_control_proto.h"
 #include "../proto/psu_monitor_proto.h"
+#include "../proto/stm_ota_proto.h"
+#include "../core/frame_parser.h"
 #include "../services/fpga_ota.h"
 #include "../services/psu_config.h"
 #include "../services/psu_monitor.h"
@@ -24,8 +26,8 @@ namespace {
 QByteArray monitorFrame(int addr, const QList<double> &values)
 {
     QByteArray f(psumon::kLength, 0);
-    f[2] = char(psumon::kCmd);
-    f[3] = char(addr);
+    f.replace(2, 2, psumon::cmd());
+    f[psumon::kOffAddr] = char(addr);
     psumon::table().encode(values, f);
     core::seal(f, psumon::kCrcStart);
     return f;
@@ -34,8 +36,8 @@ QByteArray monitorFrame(int addr, const QList<double> &values)
 QByteArray configReply(int addr, const QList<double> &values)
 {
     QByteArray f(psucfg::kLength, 0);
-    f[2] = char(psucfg::kReplyCmd);
-    f[3] = char(addr);
+    f.replace(2, 2, psucfg::replyCmd());
+    f[psucfg::kOffAddr] = char(addr);
     psucfg::table().encode(values, f);
     core::seal(f, psucfg::kCrcStart);
     return f;
@@ -51,11 +53,11 @@ struct FakePsu {
     {
         t->onWrite = [this, t](const QByteArray &d) {
             const int addr = quint8(d.at(psucfg::kOffAddr));
-            if (quint8(d.at(2)) == psucfg::kWriteCmd) {
+            if (d.mid(2, 2) == psucfg::writeCmd()) {
                 lastWrite = d;
                 config[addr] = psucfg::table().decode(d);
                 if (corruptField >= 0) config[addr][corruptField] += 1;
-            } else if (quint8(d.at(2)) == psucfg::kReadCmd && config.contains(addr)) {
+            } else if (d.mid(2, 2) == psucfg::readCmd() && config.contains(addr)) {
                 const QByteArray reply = configReply(addr, config.value(addr));
                 QTimer::singleShot(0, t, [t, reply] { t->inject(reply); });
             }
@@ -72,28 +74,28 @@ private slots:
     {
         const FieldTable &t = psumon::table();
         QCOMPARE(t.size(), psumon::kNumFields);
-        int end = 4;
+        int end = psumon::kOffAddr + 1;
         for (const Field &f : t.fields()) { QCOMPARE(f.offset, end); end += f.size; }
         QCOMPARE(end, psumon::kLength - 4 - 24);
-        QCOMPARE(t.fields().at(psumon::clusterField(1, psumon::TempFet)).offset, 4 + 48 + 18 + 6 + 20); // cụm 2, dưới 3 ADC + AMC + 10 XDP
-        QCOMPARE(t.fields().at(psumon::kIdxSupply0).offset, 4 + 4 * 48);
-        QCOMPARE(t.fields().at(psumon::kIdxTrip0).offset, 4 + 4 * 48 + 24 + 7);
+        QCOMPARE(t.fields().at(psumon::clusterField(1, psumon::TempFet)).offset, 5 + 48 + 18 + 6 + 20); // cụm 2, dưới 3 ADC + AMC + 10 XDP
+        QCOMPARE(t.fields().at(psumon::kIdxSupply0).offset, 5 + 4 * 48);
+        QCOMPARE(t.fields().at(psumon::kIdxTrip0).offset, 5 + 4 * 48 + 24 + 7);
         QCOMPARE(psumon::clusterFieldLabel(psumon::TempFet), QStringLiteral("Nhiệt độ FET"));
     }
 
     void configTableLayout()
     {
         const FieldTable &t = psucfg::table();
-        int end = 6;
+        int end = psucfg::kOffFirstField;
         for (const Field &f : t.fields()) { QCOMPARE(f.offset, end); end += f.size; }
         QCOMPARE(end, psucfg::kLength - 4 - 16);
         // Cụm 2 bắt đầu sau 6 byte tiêu đề + 192 byte của cụm 1; INA1 ở byte 774 (STT 775).
-        QCOMPARE(t.fields().at(t.indexOf("Cụm 2 - Ngưỡng", "I_OUT_ADC1_MAX")).offset, 6 + 192);
-        QCOMPARE(t.fields().at(t.indexOf("INA", "INA1_CONFIG")).offset, 6 + 4 * 192);
-        QCOMPARE(t.fields().at(t.indexOf("Supply - Ngưỡng", "I_DCM_MAX")).offset, 6 + 4 * 192 + 72);
-        QCOMPARE(t.fields().at(t.indexOf("Cụm 1 - XDP", "OPERATION")).offset, 6 + 60);
-        QCOMPARE(t.fields().at(t.indexOf("Cụm 1 - ADS", "MODE")).offset, 6 + 60 + 38);
-        QCOMPARE(t.fields().at(t.indexOf("Cụm 4 - ADS", "CH7_GCAL_LSB")).offset, 6 + 3 * 192 + 190);
+        QCOMPARE(t.fields().at(t.indexOf("Cụm 2 - Ngưỡng", "I_OUT_ADC1_MAX")).offset, 7 + 192);
+        QCOMPARE(t.fields().at(t.indexOf("INA", "INA1_CONFIG")).offset, 7 + 4 * 192);
+        QCOMPARE(t.fields().at(t.indexOf("Supply - Ngưỡng", "I_DCM_MAX")).offset, 7 + 4 * 192 + 72);
+        QCOMPARE(t.fields().at(t.indexOf("Cụm 1 - XDP", "OPERATION")).offset, 7 + 60);
+        QCOMPARE(t.fields().at(t.indexOf("Cụm 1 - ADS", "MODE")).offset, 7 + 60 + 38);
+        QCOMPARE(t.fields().at(t.indexOf("Cụm 4 - ADS", "CH7_GCAL_LSB")).offset, 7 + 3 * 192 + 190);
         QVERIFY(t.fields().at(t.indexOf("Cụm 1 - XDP", "RETRY")).hex);
         QVERIFY(!t.fields().at(t.indexOf("Cụm 1 - Ngưỡng", "I_OUT_ADC1_MAX")).hex);
     }
@@ -133,28 +135,95 @@ private slots:
     void controlFrame()
     {
         const QByteArray f = psuctl::buildControl(3, {0b0101, true});
-        QCOMPARE(f.size(), 12);
-        QCOMPARE(f.left(8).toHex(), QByteArray("abcd01030501" "0000"));
+        QCOMPARE(f.size(), 13);
+        QCOMPARE(f.left(9).toHex(), QByteArray("abcd0101" "03" "05" "01" "0000"));
         QCOMPARE(f.right(2).toHex(), QByteArray("e1e2"));
         QVERIFY(crcOk(f, 2));
         const QByteArray g = psuctl::buildControl(1, {0xFF, false});
-        QCOMPARE(quint8(g.at(4)), quint8(0x0F)); // chỉ 4 bit thấp
-        QCOMPARE(quint8(g.at(5)), quint8(0));
+        QCOMPARE(quint8(g.at(psuctl::kOffMask)), quint8(0x0F)); // chỉ 4 bit thấp
+        QCOMPARE(quint8(g.at(psuctl::kOffClearTrip)), quint8(0));
     }
 
     void readRequestAndWriteFrames()
     {
         const QByteArray r = psucfg::buildReadRequest(2);
-        QCOMPARE(r.size(), 12);
-        QCOMPARE(r.left(4).toHex(), QByteArray("abcd0302"));
+        QCOMPARE(r.size(), 13);
+        QCOMPARE(r.left(8).toHex(), QByteArray("abcd0303" "02" "000000"));
         QVERIFY(crcOk(r, 2));
 
         QList<double> v = psucfg::defaultValues();
         const QByteArray w = psucfg::buildWrite(2, v);
-        QCOMPARE(w.size(), 914);
-        QCOMPARE(w.left(6).toHex(), QByteArray("abcd0402ffff"));
+        QCOMPARE(w.size(), 915);
+        QCOMPARE(w.left(7).toHex(), QByteArray("abcd0404" "02" "ffff"));
         QVERIFY(crcOk(w, 2));
         QCOMPARE(psucfg::table().decode(w), v);
+    }
+
+    void everyPsuCommandIsTwoBytes()
+    {
+        // Mọi CMD phía PSU (giám sát, điều khiển, cấu hình, nạp STM32) là 2 byte, mã lặp hai lần như TRB.
+        const QList<QByteArray> cmds = {psumon::cmd(), psuctl::cmd(), psucfg::readCmd(), psucfg::writeCmd(), psucfg::replyCmd(),
+                                        stmota::cmdBytes(stmota::kBegin), stmota::cmdBytes(stmota::kData), stmota::cmdBytes(stmota::kEnd),
+                                        stmota::cmdBytes(stmota::kCommit), stmota::cmdBytes(stmota::kAck), stmota::cmdBytes(stmota::kInfo)};
+        QSet<QByteArray> seen;
+        for (const QByteArray &c : cmds) {
+            QCOMPARE(c.size(), 2);
+            QCOMPARE(c.at(0), c.at(1));
+            seen.insert(c);
+        }
+        QCOMPARE(seen.size(), cmds.size());
+        QCOMPARE(psumon::cmd().toHex(), QByteArray("8181"));
+        QCOMPARE(psucfg::replyCmd().toHex(), QByteArray("8282"));
+        QCOMPARE(psumon::spec(true).cmd.size(), 2);
+        QCOMPARE(psucfg::readReplySpec(true).cmd.size(), 2);
+        QCOMPARE(stmota::ackSpec().cmd.size(), 2);
+    }
+
+    void stmOtaFramesLayout()
+    {
+        const QByteArray b = stmota::buildBegin(3, 0x01020304, 0xAABBCCDD, 7);
+        QCOMPARE(b.size(), 21);
+        QCOMPARE(b.left(17).toHex(), QByteArray("abcd9090" "03" "01020304" "aabbccdd" "00000007"));
+        QVERIFY(crcOk(b, 2));
+
+        const QByteArray d = stmota::buildData(2, 0x0102, QByteArray(10, 'x'));
+        QCOMPARE(d.size(), 269);
+        QCOMPARE(d.left(9).toHex(), QByteArray("abcd9191" "02" "0102" "000a"));
+        QCOMPARE(d.mid(9, 10), QByteArray(10, 'x'));
+        QCOMPARE(quint8(d.at(19)), quint8(0xFF));                 // chunk cuối đệm 0xFF
+        QVERIFY(crcOk(d, 2));
+
+        for (quint8 code : {stmota::kEnd, stmota::kCommit, stmota::kInfo}) {
+            const QByteArray c = stmota::buildCtrl(5, code);
+            QCOMPARE(c.size(), 9);
+            QCOMPARE(c.left(5), stmota::cmdBytes(code).prepend(QByteArray::fromHex("abcd")).append(char(5)));
+            QVERIFY(crcOk(c, 2));
+        }
+    }
+
+    void stmOtaAckParses()
+    {
+        core::FrameRegistry registry;
+        QVERIFY(registry.add(stmota::ackSpec()));
+        QByteArray ack(17, 0);
+        ack.replace(2, 2, stmota::cmdBytes(stmota::kAck));
+        ack[4] = char(3);                       // địa chỉ PSU
+        ack[5] = char(stmota::kInfo);           // ack_cmd vẫn là mã 1 byte
+        ack[6] = char(stmota::Ok);
+        ack.replace(7, 4, QByteArray::fromHex("0000002A"));
+        ack[11] = 'B';
+        core::seal(ack, 2);
+
+        core::FrameParser parser(&registry);
+        QList<core::Frame> got;
+        parser.feed(ack, [&](const core::Frame &f) { got << f; });
+        QCOMPARE(got.size(), 1);
+        const stmota::Ack a = stmota::parseAck(got.first().raw);
+        QCOMPARE(a.addr, quint8(3));
+        QCOMPARE(a.ackCmd, stmota::kInfo);
+        QCOMPARE(a.status, quint8(stmota::Ok));
+        QCOMPARE(a.info, quint32(42));
+        QCOMPARE(a.slot, 'B');
     }
 
     void allFramesCanBeRegistered()
