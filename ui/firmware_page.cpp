@@ -138,18 +138,30 @@ QWidget *FirmwarePage::buildFpgaTab()
         fpgaSetBusy(true);
         m_ctx.fpgaOta->checkOnline();
     });
-    auto *load = button(QStringLiteral("2. Xóa flash và nạp"), [=] {
+    auto who = [this] {
+        return m_fpgaBroadcast->isChecked() ? QStringLiteral("MỌI TRB trong hệ thống (broadcast)")
+                                            : QStringLiteral("%1 TRB đã kiểm tra ở bước 1").arg(m_ctx.fpgaOta->nodes().size());
+    };
+    auto *erase = button(QStringLiteral("2. Xóa flash"), [=] {
+        if (!ready()) return;
+        if (m_ctx.fpgaOta->nodes().isEmpty()) { QMessageBox::information(this, QStringLiteral("Nạp FPGA"), QStringLiteral("Hãy chạy bước 1 trước.")); return; }
+        if (!yes(this, QStringLiteral("Xóa flash"), QStringLiteral("Xóa vùng flash cập nhật của %1?").arg(who()))) return;
+        if (!m_ctx.auth->unlock(this)) return; // chỉ hỏi mật khẩu khi thật sự xóa flash / nạp / boot / nạp STM32
+        fpgaSetBusy(true);
+        m_ctx.fpgaOta->erase(fpgaOptions());
+    });
+    auto *load = button(QStringLiteral("3. Nạp code"), [=] {
         if (!ready()) return;
         if (m_fpgaImage.isEmpty()) { QMessageBox::information(this, QStringLiteral("Nạp FPGA"), QStringLiteral("Chưa chọn file .bin.")); return; }
         if (m_ctx.fpgaOta->nodes().isEmpty()) { QMessageBox::information(this, QStringLiteral("Nạp FPGA"), QStringLiteral("Hãy chạy bước 1 trước.")); return; }
-        const QString who = m_fpgaBroadcast->isChecked() ? QStringLiteral("MỌI TRB trong hệ thống (broadcast)")
-                                                         : QStringLiteral("%1 TRB đã kiểm tra ở bước 1").arg(m_ctx.fpgaOta->nodes().size());
-        if (!yes(this, QStringLiteral("Xóa flash và nạp"), QStringLiteral("Xóa vùng flash cập nhật và nạp %1 byte cho %2?").arg(m_fpgaImage.size()).arg(who))) return;
-        if (!m_ctx.auth->unlock(this)) return; // chỉ hỏi mật khẩu khi thật sự xóa flash / nạp / boot / nạp STM32
+        QString text = QStringLiteral("Nạp %1 byte cho %2?").arg(m_fpgaImage.size()).arg(who());
+        if (!m_ctx.fpgaOta->erased()) text += QStringLiteral("\n\nChưa xóa flash ở bước 2 (hoặc đã nạp xong lần trước). Nạp lên vùng chưa xóa có thể ghi sai.");
+        if (!yes(this, QStringLiteral("Nạp code"), text)) return;
+        if (!m_ctx.auth->unlock(this)) return;
         fpgaSetBusy(true);
-        m_ctx.fpgaOta->eraseAndLoad(m_fpgaImage, fpgaOptions());
+        m_ctx.fpgaOta->load(m_fpgaImage, fpgaOptions());
     });
-    auto *boot = button(QStringLiteral("3. Boot và xác nhận"), [=] {
+    auto *boot = button(QStringLiteral("4. Boot và xác nhận"), [=] {
         if (!ready() || m_ctx.fpgaOta->nodes().isEmpty()) return;
         int failed = 0;
         for (const FpgaOta::Node &n : m_ctx.fpgaOta->nodes()) failed += n.failed;
@@ -182,7 +194,8 @@ QWidget *FirmwarePage::buildFpgaTab()
     form->addRow(QStringLiteral("Chờ sau khi xóa flash"), m_fpgaEraseMin);
     form->addRow(QStringLiteral("Nghỉ giữa các gói"), m_fpgaGap);
     auto *buttons = new QHBoxLayout;
-    for (QPushButton *b : {check, load, boot, m_fpgaSkip, m_fpgaCancel}) buttons->addWidget(b);
+    for (QPushButton *b : {check, erase, load, boot, m_fpgaSkip, m_fpgaCancel}) buttons->addWidget(b);
+    theme::setRole(erase, "danger");
     theme::setRole(load, "danger");   // xóa flash / nạp / boot: màu riêng để không bấm nhầm
     theme::setRole(boot, "danger");
     theme::setRole(m_fpgaSkip, "secondary");

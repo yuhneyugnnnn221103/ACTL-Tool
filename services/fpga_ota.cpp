@@ -16,9 +16,8 @@ FpgaOta::FpgaOta(core::Link *link, QObject *parent) : QObject(parent), m_link(li
                 emit phaseChanged(QStringLiteral("Chờ xóa flash: còn %1 s").arg(m_countdown));
                 return;
             }
-            m_timer.stop();
-            m_packet = 0;
-            loadPacket();
+            m_erased = true;
+            finish(QStringLiteral("Đã xóa flash, có thể nạp code"));
         } else if (m_phase == Phase::BootWait) {
             m_timer.stop();
             m_phase = Phase::Verify;
@@ -98,6 +97,7 @@ void FpgaOta::checkOnline()
 {
     if (busy() || m_nodes.isEmpty()) return;
     m_phase = Phase::Online;
+    m_erased = false;
     emit phaseChanged(QStringLiteral("Kiểm tra kết nối"));
     for (Node &n : m_nodes) n = {n.dev, true, false, {}, {}}; // tạm coi là online để nextNode() duyệt hết
     m_node = -1;
@@ -105,14 +105,13 @@ void FpgaOta::checkOnline()
     query();
 }
 
-// ---- Bước 2 ----
-void FpgaOta::eraseAndLoad(const QByteArray &firmware, const Options &options)
+// ---- Bước 2: xóa flash ----
+void FpgaOta::erase(const Options &options)
 {
-    if (busy() || firmware.isEmpty()) return;
+    if (busy()) return;
     if (countUsable() == 0) { emit finished(QStringLiteral("Không có TRB nào trực tuyến, hãy kiểm tra kết nối trước")); return; }
-    m_firmware = firmware;
     m_opt = options;
-    m_totalPackets = (firmware.size() + fpgaota::kChunk - 1) / fpgaota::kChunk;
+    m_erased = false;
 
     if (m_opt.broadcast) {
         send(fpgaota::buildErase(kBroadcast, kBroadcast), 20, false);
@@ -123,13 +122,26 @@ void FpgaOta::eraseAndLoad(const QByteArray &firmware, const Options &options)
     m_phase = Phase::EraseWait;
     m_countdown = m_opt.eraseWaitSec;
     emit phaseChanged(QStringLiteral("Chờ xóa flash: còn %1 s").arg(m_countdown));
-    emit progress(0, m_totalPackets);
+    emit progress(0, 1);
     m_timer.start(1000);
 }
 
 void FpgaOta::skipEraseWait()
 {
     if (m_phase == Phase::EraseWait) m_countdown = 1;
+}
+
+// ---- Bước 3: nạp các gói ----
+void FpgaOta::load(const QByteArray &firmware, const Options &options)
+{
+    if (busy() || firmware.isEmpty()) return;
+    if (countUsable() == 0) { emit finished(QStringLiteral("Không có TRB nào trực tuyến, hãy kiểm tra kết nối trước")); return; }
+    m_firmware = firmware;
+    m_opt = options;
+    m_erased = false; // mỗi lần nạp cần một lần xóa mới
+    m_totalPackets = (firmware.size() + fpgaota::kChunk - 1) / fpgaota::kChunk;
+    m_packet = 0;
+    loadPacket();
 }
 
 void FpgaOta::loadPacket()
@@ -175,7 +187,7 @@ void FpgaOta::loadNextNode()
     query();
 }
 
-// ---- Bước 3 ----
+// ---- Bước 4: boot ----
 void FpgaOta::bootAndVerify(const Options &options)
 {
     if (busy() || m_nodes.isEmpty()) return;

@@ -5,10 +5,11 @@
 
 namespace services {
 
-// Nạp bitstream cho FPGA trên TRB. Ba bước do người dùng bấm lần lượt:
+// Nạp bitstream cho FPGA trên TRB. Bốn bước do người dùng bấm lần lượt:
 //   1. checkOnline()   hỏi trạng thái từng TRB
-//   2. eraseAndLoad()  xóa flash, chờ, gửi các gói
-//   3. bootAndVerify() yêu cầu boot rồi hỏi lại từng TRB
+//   2. erase()         xóa flash rồi chờ
+//   3. load()          gửi các gói, cuối cùng hỏi lại từng TRB
+//   4. bootAndVerify() yêu cầu boot rồi hỏi lại từng TRB
 class FpgaOta : public QObject {
     Q_OBJECT
 public:
@@ -36,7 +37,9 @@ public:
     void setNodes(const QList<Device> &devices);
 
     void checkOnline();
-    void eraseAndLoad(const QByteArray &firmware, const Options &options);
+    void erase(const Options &options);
+    void load(const QByteArray &firmware, const Options &options);
+    bool erased() const { return m_erased; } // đã xóa và chờ xong, chưa nạp
     void skipEraseWait();
     void bootAndVerify(const Options &options);
     void cancel();
@@ -70,7 +73,7 @@ private:
     Phase m_phase = Phase::Idle;
     quint64 m_waitId = 0;
     int m_node = -1, m_packet = 0, m_totalPackets = 0, m_tries = 0, m_countdown = 0;
-    bool m_cancel = false;
+    bool m_cancel = false, m_erased = false;
     QTimer m_timer;
 };
 
