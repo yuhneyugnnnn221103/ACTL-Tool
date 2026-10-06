@@ -94,6 +94,21 @@ Các khóa hay dùng trong `actl_tool.ini`:
 | `psu/checkCrc` | `true` | Kiểm tra CRC bản tin giám sát và cấu hình PSU |
 | `auth/lockMinutes` | `10` | Tự khóa chế độ kỹ sư sau thời gian không thao tác |
 
+## Giả lập bản tin để thử giao diện
+
+`tools/mock_gateway.py` (chỉ cần Python 3) bơm bản tin giả vào app, không cần phần cứng:
+
+```
+python3 tools/mock_gateway.py thresholds --dir build          # ghi ngưỡng mẫu cạnh file chạy (làm trước khi mở app)
+python3 tools/mock_gateway.py tcp --scenario all --rate 2      # nối vào app (app tự lắng nghe cổng 5000)
+python3 tools/mock_gateway.py serial --drop 0.2                # RS485 giả (pty) để thử đọc/ghi cấu hình
+python3 tools/mock_gateway.py hex replay.hex --scenario trip   # file hex cho monitor/replayFile
+python3 tools/mock_gateway.py list                             # các kịch bản
+python3 tools/mock_gateway.py selftest
+```
+
+Kịch bản: `normal`, `warning` (vượt ngưỡng), `trip` (các trip code TRB và PSU), `leds` (ADAR/PG/PA lỗi), `lost` (thiết bị im lặng rồi hồi phục), `flap`, `noise` (rác, sai CRC, khung cụt hoặc chia mảnh, địa chỉ ngoài dải), `stress`, `all`. Lệnh điều khiển và beam mà app gửi xuống được in ra ở cửa sổ chạy lệnh `tcp`.
+
 ## Giao diện
 
 Style Fusion cộng một file QSS duy nhất (`resources/style.qss`, nạp từ resource khi khởi động). Bảng màu khai báo một chỗ ở `ui/theme.h`; QSS dùng token `@tên@` và được thay màu khi nạp. Nút phụ và nút nguy hiểm đặt bằng thuộc tính `role` (`theme::setRole(widget, "secondary" | "danger")`). Đèn LED, ô trạng thái và lưới tổng quan tự vẽ bằng QPainter (`ui/led_indicator`, `ui/status_pill`, `ui/overview_grid`, `ui/psu_grid`). Màu trạng thái cố định ở `theme::statusColor`. Ô lưới tổng quan và đèn LED chỉ dùng màu (không ký hiệu trong ô); các nhãn trạng thái dạng chữ ở thanh trên cùng có kèm ký hiệu. Trip code hiện thành 8 ô bit mỗi byte (`ui/bit_cells`).
