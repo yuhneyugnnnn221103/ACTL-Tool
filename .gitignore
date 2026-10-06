@@ -37,3 +37,9 @@ qrc_*
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# Build thử cục bộ và bytecode Python
+b/
+b[0-9]/
+__pycache__/
+*.pyc
