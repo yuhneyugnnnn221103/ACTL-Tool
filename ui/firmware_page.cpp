@@ -224,7 +224,6 @@ QWidget *FirmwarePage::buildFpgaTab()
     auto *selectNone = button(QStringLiteral("Bỏ chọn tất cả"), [=] { setRows(0, total - 1, 0); });
     auto *invert = button(QStringLiteral("Đảo chọn"), [=] { setRows(0, total - 1, -1); });
     pick->addWidget(new QLabel(QStringLiteral("Chọn nhanh:")));
-    QList<QWidget *> pickWidgets{selectAll, selectNone, invert};
     for (QPushButton *b : {selectAll, selectNone, invert}) {
         theme::setRole(b, "secondary");
         pick->addWidget(b);
@@ -234,7 +233,6 @@ QWidget *FirmwarePage::buildFpgaTab()
     auto *mbRow = new QHBoxLayout;
     auto *mbLabel = new QLabel(QStringLiteral("Theo MB:"));
     mbRow->addWidget(mbLabel);
-    pickWidgets << mbLabel;
     for (int mb = 0; mb < m_ctx.store->mbCount(); ++mb) {
         auto *b = button(QStringLiteral("MB%1").arg(mb), [=] {
             bool all = true;
@@ -244,21 +242,29 @@ QWidget *FirmwarePage::buildFpgaTab()
         b->setToolTip(QStringLiteral("Chọn / bỏ chọn cả %1 TRB của MB%2").arg(perMb).arg(mb));
         theme::setRole(b, "chip");
         mbRow->addWidget(b);
-        pickWidgets << b;
     }
     mbRow->addStretch(1);
     connect(m_fpgaTable, &QTableWidget::itemChanged, this, [=] { updateCount(); });
-    // Broadcast gửi tới mọi TRB nên danh sách chọn không có tác dụng.
-    connect(m_fpgaBroadcast, &QRadioButton::toggled, this, [=](bool on) { for (QWidget *w : pickWidgets) w->setVisible(!on); });
     updateCount();
-    for (QWidget *w : pickWidgets) w->setVisible(!m_fpgaBroadcast->isChecked());
+
+    // Broadcast gửi tới mọi TRB nên danh sách chọn không có tác dụng: ẩn cả khối chọn, thay bằng một dòng gợi ý.
+    auto *pickBox = new QWidget;
+    auto *pickBoxLayout = new QVBoxLayout(pickBox);
+    pickBoxLayout->setContentsMargins(0, 0, 0, 0);
+    pickBoxLayout->addLayout(pick);
+    pickBoxLayout->addLayout(mbRow);
+    auto *pickHint = new QLabel(QStringLiteral("Đang ở chế độ Broadcast: nạp cho MỌI TRB. Chọn \"Gửi riêng\" để chọn từng TRB hoặc từng MB."));
+    theme::setRole(pickHint, "muted");
+    auto syncMode = [=](bool broadcast) { pickBox->setVisible(!broadcast); pickHint->setVisible(broadcast); };
+    connect(m_fpgaBroadcast, &QRadioButton::toggled, this, syncMode);
+    syncMode(m_fpgaBroadcast->isChecked());
 
     auto *w = new QWidget;
     auto *l = new QVBoxLayout(w);
     l->addLayout(form);
     l->addLayout(buttons);
-    l->addLayout(pick);
-    l->addLayout(mbRow);
+    l->addWidget(pickBox);
+    l->addWidget(pickHint);
     l->addWidget(m_fpgaPhase);
     l->addWidget(m_fpgaTable, 1);
     fpgaSetBusy(false);
