@@ -14,6 +14,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStackedWidget>
 #include <QTabWidget>
@@ -202,10 +203,62 @@ QWidget *FirmwarePage::buildFpgaTab()
     theme::setRole(m_fpgaCancel, "secondary");
     buttons->addWidget(m_fpgaProgress, 1);
 
+    // Chọn nhanh: tất cả / bỏ hết / đảo, và nút theo từng MB (bấm để chọn cả MB, bấm lại để bỏ cả MB).
+    auto *pick = new QHBoxLayout;
+    auto *count = new QLabel;
+    auto updateCount = [=] {
+        int n = 0;
+        for (int r = 0; r < total; ++r) n += m_fpgaTable->item(r, 0)->checkState() == Qt::Checked;
+        count->setText(QStringLiteral("Đã chọn %1 / %2 TRB").arg(n).arg(total));
+    };
+    auto setRows = [=](int first, int last, int mode) { // mode: 1 chọn, 0 bỏ, -1 đảo
+        QSignalBlocker block(m_fpgaTable);
+        for (int r = first; r <= last; ++r) {
+            QTableWidgetItem *it = m_fpgaTable->item(r, 0);
+            const bool on = mode < 0 ? it->checkState() != Qt::Checked : mode == 1;
+            it->setCheckState(on ? Qt::Checked : Qt::Unchecked);
+        }
+        updateCount();
+    };
+    auto *selectAll = button(QStringLiteral("Chọn tất cả"), [=] { setRows(0, total - 1, 1); });
+    auto *selectNone = button(QStringLiteral("Bỏ chọn tất cả"), [=] { setRows(0, total - 1, 0); });
+    auto *invert = button(QStringLiteral("Đảo chọn"), [=] { setRows(0, total - 1, -1); });
+    pick->addWidget(new QLabel(QStringLiteral("Chọn nhanh:")));
+    QList<QWidget *> pickWidgets{selectAll, selectNone, invert};
+    for (QPushButton *b : {selectAll, selectNone, invert}) {
+        theme::setRole(b, "secondary");
+        pick->addWidget(b);
+    }
+    pick->addStretch(1);
+    pick->addWidget(count);
+    auto *mbRow = new QHBoxLayout;
+    auto *mbLabel = new QLabel(QStringLiteral("Theo MB:"));
+    mbRow->addWidget(mbLabel);
+    pickWidgets << mbLabel;
+    for (int mb = 0; mb < m_ctx.store->mbCount(); ++mb) {
+        auto *b = button(QStringLiteral("MB%1").arg(mb), [=] {
+            bool all = true;
+            for (int t = 0; t < perMb; ++t) all = all && m_fpgaTable->item(mb * perMb + t, 0)->checkState() == Qt::Checked;
+            setRows(mb * perMb, mb * perMb + perMb - 1, all ? 0 : 1);
+        });
+        b->setToolTip(QStringLiteral("Chọn / bỏ chọn cả %1 TRB của MB%2").arg(perMb).arg(mb));
+        theme::setRole(b, "chip");
+        mbRow->addWidget(b);
+        pickWidgets << b;
+    }
+    mbRow->addStretch(1);
+    connect(m_fpgaTable, &QTableWidget::itemChanged, this, [=] { updateCount(); });
+    // Broadcast gửi tới mọi TRB nên danh sách chọn không có tác dụng.
+    connect(m_fpgaBroadcast, &QRadioButton::toggled, this, [=](bool on) { for (QWidget *w : pickWidgets) w->setVisible(!on); });
+    updateCount();
+    for (QWidget *w : pickWidgets) w->setVisible(!m_fpgaBroadcast->isChecked());
+
     auto *w = new QWidget;
     auto *l = new QVBoxLayout(w);
     l->addLayout(form);
     l->addLayout(buttons);
+    l->addLayout(pick);
+    l->addLayout(mbRow);
     l->addWidget(m_fpgaPhase);
     l->addWidget(m_fpgaTable, 1);
     fpgaSetBusy(false);

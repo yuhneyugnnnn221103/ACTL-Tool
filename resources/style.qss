@@ -55,6 +55,18 @@ QPushButton[role="secondary"]:hover { background: @accentSoft@; border-color: @a
 QPushButton[role="secondary"]:pressed { background: @border@; }
 QPushButton[role="secondary"]:disabled { background: transparent; color: @disabledText@; border-color: @border@; }
 
+/* Nút nhỏ gọn cho dãy chọn nhanh (MB0..MB19) */
+QPushButton[role="chip"] {
+    background: transparent;
+    color: @text@;
+    border: 1px solid @border@;
+    padding: 4px 4px;
+    min-width: 0;
+}
+QPushButton[role="chip"]:hover { background: @accentSoft@; border-color: @accent@; color: @accent@; }
+QPushButton[role="chip"]:pressed { background: @border@; }
+QPushButton[role="chip"]:disabled { color: @disabledText@; }
+
 QPushButton[role="danger"] { background: @danger@; color: white; }
 QPushButton[role="danger"]:hover { background: @dangerHover@; }
 QPushButton[role="danger"]:pressed { background: @dangerPressed@; }
