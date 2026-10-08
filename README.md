@@ -164,8 +164,9 @@ Mọi CMD đều 2 byte, mã lặp hai lần (`11 11`, `A1 A1`, `81 81`...). B�
 
 ## Việc còn lại
 
+- Module giả lập tích hợp trong app: xem `docs/simulator_design.md` (đã có thiết kế, chưa code).
+
 - PSU: ACK cho lệnh điều khiển, bảng trip code, công thức quy đổi và dấu của giá trị 3 byte, định dạng RTC (mili giây 1 byte), tách bit các thanh ghi XDP/ADS/INA.
 - ACK cho lệnh điều khiển TRB.
 - Công thức quy đổi giá trị thô sang đơn vị vật lý cho TRB; hiện hiển thị số thô.
-- Module mô phỏng TRB/PSU tích hợp trong app.
 - Trạng thái "Đang nạp" trên lưới tổng quan khi nạp FPGA.
