@@ -1,105 +1,106 @@
-# Thiết kế module giả lập TRB/PSU tích hợp trong app
+# Thiết kế module giả lập TRB/PSU
 
-Trạng thái: **bản thiết kế, chưa code**. Các điểm cần chốt nằm ở mục 9.
+Trạng thái: **bản thiết kế, chưa code**. Điểm còn thiếu thông tin nằm ở mục 9.
 
-## 1. Mục tiêu
+## 1. Mục tiêu và vị trí
 
-- Chạy app mà không cần Gateway hay phần cứng: có đủ 20 MB × 8 TRB và 5 PSU phản hồi như thiết bị thật.
-- Thay `tools/mock_gateway.py` cho các việc hằng ngày (xem giao diện, demo, test tự động), vì giả lập dùng chính bộ mã hóa/giải mã của app nên giao thức đổi là giả lập tự theo.
-- Bơm được lỗi theo yêu cầu để test: vượt ngưỡng, trip, mất kết nối, nhấp nháy, nhiễu, rớt/hỏng/chậm bản tin RS485.
-- Chạy được trong `ctest` (không cần cổng COM, không cần socket) để test luồng cấu hình, debug, nạp code từ đầu đến cuối.
-
-Không làm: mô phỏng vật lý (nhiệt, dòng thật), mô phỏng thời gian xóa flash thật (7 phút) trừ khi chọn "thời gian thật".
-
-## 2. Vị trí trong kiến trúc
-
-App hiện có hai đường truyền, mỗi đường một `Link` (thread I/O riêng):
-
-| Link | Thật | Chiều dữ liệu |
-|---|---|---|
-| `monitor` | TCP, PC là server, Gateway kết nối vào | Gateway đẩy `11 11` / `81 81`; PC gửi điều khiển `A2 A2`, `14 14`, `01 01` |
-| `service` | RS485 (cổng COM) | PC hỏi - thiết bị đáp: cấu hình `A1/A3/A4`, `03/04/82`, nạp FPGA `55..99`, nạp STM32 `90..95` |
-
-Giả lập chèn ở tầng **`core::Transport`**, tức dưới `Link`, nên toàn bộ phần còn lại của app (parser, services, store, UI) chạy y như với thiết bị thật:
+Module giả lập là **một chương trình riêng chạy trên PC** (`actl_sim`), cắm vào phía thiết bị của Gateway qua cổng COM RS485 hoặc Ethernet và đóng vai 160 TRB + 5 PSU. App ACTL Tool **không đổi**: nó vẫn nói chuyện với Gateway như với hệ thống thật.
 
 ```
-UI → services → Link ──► SimTransport ──► SimWorld ──► TrbModel ×160 / PsuModel ×5
-                  ▲            │
-                  └── bytes ◄──┘   (khung hợp lệ, CRC đúng, qua FrameParser như thật)
+ACTL Tool  <──TCP (monitor) + RS485 (service)──>  Gateway  <──COM RS485 / Ethernet──>  actl_sim
+ (hiển thị, điều khiển,                          (tự hỏi vòng,                         (160 TRB + 5 PSU giả,
+  cấu hình, nạp code)                             chuyển tiếp)                          kịch bản, bơm lỗi)
 ```
 
-Tương tự `ReplayTransport` đã có, nhưng hai chiều và có trạng thái.
+- Gateway tự hỏi vòng giám sát; `actl_sim` trả lời bằng khung giám sát (`11 11`, `81 81`) của từng thiết bị, Gateway chuyển lên app.
+- Điều khiển, cấu hình, nạp code đi từ app qua Gateway xuống `actl_sim`; `actl_sim` xử lý và trả lời; Gateway chuyển lên app.
+- Khung hỏi/đáp giữa Gateway và thiết bị giống khung app thấy (xác nhận của bạn), nên dùng lại nguyên bộ mã hóa/giải mã trong `proto/`.
 
-## 3. Thành phần (thư mục `sim/`)
+Mục đích: kiểm tra cả chuỗi **app + Gateway** khi chưa đủ phần cứng, tái hiện lỗi hiện trường, test tải (160 TRB + 5 PSU), test nạp code. Khác với `tools/mock_gateway.py`: mock Python đóng vai **Gateway** nói với app; `actl_sim` đóng vai **thiết bị** nói với Gateway thật.
+
+Không làm: mô phỏng vật lý (nhiệt, dòng thật); đóng vai Gateway (đã có mock Python).
+
+## 2. Tái sử dụng mã hiện có
+
+`actl_sim` là chương trình Qt console (không Widgets) trong cùng repo, dùng chung với app:
+
+| Dùng lại | Dùng làm gì |
+|---|---|
+| `core/` (`Transport`, `SerialTransport`, `TcpServerTransport`, `FrameParser`, `Link`) | Nhận byte, tách khung, kiểm CRC; thêm `TcpClientTransport` |
+| `proto/*` (bảng trường, `FieldTable::encode`, `build*`) | Dựng khung giám sát/cấu hình/trả lời, đọc yêu cầu từ Gateway. Chỗ thiếu: hàm dựng `11 11`, `81 81`, `A4 A4`, `82 82`, `99 99`, ACK STM32 (thêm vào `proto/`, cũng dùng cho test) |
+
+Giao thức đổi trong `proto/` thì app và giả lập đổi theo, không có bảng offset thứ hai để lệch.
+
+## 3. Cấu trúc
 
 | Lớp | Việc |
 |---|---|
-| `SimWorld` | Sở hữu toàn bộ thiết bị giả, đồng hồ mô phỏng, nguồn ngẫu nhiên (seed cố định để lặp lại được). Sống trên thread I/O. |
-| `TrbModel` | Trạng thái 1 TRB: giá trị giám sát (vector theo `trbmon::table()`), cấu hình 520 B (theo `trbcfg::table()`), cờ debug, trip code, trạng thái nạp FPGA. Hàm `handle(frame) → trả lời hoặc rỗng`. |
-| `PsuModel` | Tương tự cho PSU: 4 cụm DCM, supply, RTC, trip, cấu hình 915 B, trạng thái nạp STM32 (BEGIN/DATA/END/COMMIT/INFO, 4 slot). |
-| `Scenario` | Hành vi theo thời gian của từng thiết bị: bình thường, cảnh báo, trip, mất kết nối, nhấp nháy, nhiễu. Ghi dưới dạng danh sách `(thiết bị, điều kiện, hiệu ứng)`, nạp từ JSON; có bộ dựng sẵn tương ứng các kịch bản của mock Python (`normal, warning, trip, leds, lost, flap, noise, stress`). |
-| `FaultInjector` | Lớp bọc quanh đường trả lời: rớt, hỏng CRC, trễ, cắt khung, chèn byte rác. Áp cho từng link. |
-| `SimTransport` | Lớp con của `core::Transport`, có hai vai: `Monitor` (tự đẩy khung giám sát theo chu kỳ, nhận lệnh điều khiển) và `Service` (nhận yêu cầu, trả lời sau một độ trễ có thể chỉnh). Hai vai dùng chung một `SimWorld`. |
+| `SimWorld` | Sở hữu 160 `TrbModel` + 5 `PsuModel`, đồng hồ mô phỏng, nguồn ngẫu nhiên (seed cố định để lặp lại). |
+| `TrbModel` | Giá trị giám sát (theo `trbmon::table()`), cấu hình 520 B (theo `trbcfg::table()`), cờ debug, trip code, trạng thái nạp FPGA. Hàm `handle(khung) → trả lời hoặc rỗng`. |
+| `PsuModel` | 4 cụm DCM, supply, RTC, trip, cấu hình 915 B, trạng thái nạp STM32 (BEGIN/DATA/END/COMMIT/INFO). |
+| `BusPort` | Một cổng nối với Gateway: transport (COM hoặc TCP) + `FrameParser`. Nhận khung hỏi/điều khiển/cấu hình, chuyển cho `SimWorld`, gửi trả lời. Có thể mở một hoặc hai cổng (mục 9). |
+| `Scenario` | Hành vi theo thời gian: bình thường, cảnh báo, trip, mất kết nối, nhấp nháy, nhiễu, stress. Dựng sẵn các kịch bản của mock Python; tùy chỉnh bằng JSON. |
+| `FaultInjector` | Trên đường trả lời: rớt, hỏng CRC, trễ, cắt khung, byte rác. Cấu hình theo cổng và theo thiết bị. |
 
-Tất cả dùng lại `proto/*`: giá trị giám sát đưa qua `FieldTable::encode`, khung dựng bằng `FrameRegistry`/hàm `build*` có sẵn, nên không có bảng offset thứ hai để lệch với app. Chỗ thiếu: các hàm dựng khung giám sát (`11 11`, `81 81`), khung trả lời (`A4 A4`, `82 82`, `99 99`, ACK STM32); các hàm này cần thêm vào `proto/` (cũng dùng được cho test).
+`actl_sim` chạy trên một thread sự kiện duy nhất (timer + I/O), nên không cần khóa giữa `SimWorld` và các cổng.
 
-## 4. Hành vi theo từng chức năng
+## 4. Hành vi theo chức năng
 
-**Giám sát.** Vai `Monitor` đẩy khung `11 11` cho từng TRB và `81 81` cho từng PSU như Gateway: chu kỳ chu trình (mặc định 1 s cho cả hệ thống, tùy chỉnh), rải đều thay vì bơm cả 160 khung cùng lúc. Giá trị lấy từ `TrbModel`/`PsuModel` cộng nhiễu nhỏ. TRB mất kết nối thì ngừng đẩy khung của nó (app tự chuyển "mất kết nối" theo timeout).
+**Giám sát.** Gateway hỏi từng TRB/PSU; `actl_sim` trả khung giám sát từ `TrbModel`/`PsuModel` cộng nhiễu nhỏ. TRB đặt "mất kết nối" thì không trả lời nên Gateway báo timeout và app chuyển sang "mất kết nối" theo cơ chế sẵn có.
 
-**Điều khiển.** `A2 A2` đổi trạng thái `TrbModel` (mask PA, start/stop, debug, clear trip); `01 01` đổi mask cụm DCM và xóa trip của `PsuModel` (đúng quy ước: clear trip thì xóa hết trip code). Lệnh sai địa chỉ thì bỏ qua.
+**Điều khiển.** `A2 A2` đổi trạng thái `TrbModel` (mask PA, start/stop, debug, clear trip); `01 01` đổi mask cụm DCM và xóa trip của `PsuModel` (clear trip xóa hết trip code). Địa chỉ không tồn tại thì bỏ qua.
 
-**Luật Debug.** Giả lập cố ý **không tự chặn** hai TRB cùng debug: nó phát hiện và ghi cờ "xung đột bus" (trong ngữ cảnh thật hai TRB cùng tự đẩy khung sẽ trùng nhau). Nhờ đó test được rằng app (`TrbControl::check`) không bao giờ để chuyện đó xảy ra. Việc TRB đang debug tự đẩy khung giám sát lên đường nào cần xác nhận với phần cứng (mục 9, điểm 6).
+**Luật Debug.** TRB đang debug tự gửi khung giám sát không cần Gateway hỏi. `actl_sim` bắt chước điều này (chu kỳ cấu hình được) và **đếm xung đột** nếu có từ hai TRB trở lên cùng debug, để test rằng app (`TrbControl::check`) không bao giờ để chuyện đó xảy ra.
 
-**Cấu hình.** `A3 A3`/`03 03` trả `A4 A4`/`82 82` từ cấu hình đang giữ; `A1 A1`/`04 04` ghi vào `Model`, không có ACK (đúng giao thức). Có tùy chọn "ghi lỗi" để test luồng đọc lại và so sánh (xem mục 6).
+**Cấu hình.** `A3 A3`/`03 03` trả `A4 A4`/`82 82` từ cấu hình đang giữ; `A1 A1`/`04 04` ghi vào model, không có ACK (đúng giao thức). Có tùy chọn "ghi sai" để test luồng đọc lại và so sánh, và "bỏ trả lời" để test thử lại 3 lần.
 
-**Nạp FPGA.** Máy trạng thái theo `99 99`: nhận erase → bận trong `T` giây (thời gian giả lập, có chế độ nhanh) → nhận gói theo thứ tự, ghi `CODE/STAT/BOOTSTS/WBSTAR`; có thể bơm lỗi ghi flash ở gói N, gói mất, UART frame error; boot đổi `BOOTSTS`.
+**Nạp FPGA.** Máy trạng thái theo `99 99`: erase → bận `T` giây (có hệ số tăng tốc) → nhận gói theo thứ tự, cập nhật `CODE/STAT/BOOTSTS/WBSTAR`; có thể bơm lỗi ghi flash ở gói N, mất gói, UART frame error; boot đổi `BOOTSTS`. Hỗ trợ cả broadcast (`FF/FF`: nhận mà không trả lời) và gửi riêng.
 
-**Nạp STM32.** BEGIN → DATA (kiểm seq, CRC khối) → END → COMMIT → INFO, ACK 17 B theo `stm_ota_proto`; có thể bơm NAK/timeout/CRC lỗi.
+**Nạp STM32.** BEGIN → DATA (kiểm seq, CRC) → END → COMMIT → INFO, ACK 17 B theo `stm_ota_proto`; có thể bơm NAK, timeout, CRC lỗi.
 
-## 5. Luồng và thread
+## 5. Điều khiển giả lập
 
-- `SimWorld` và hai `SimTransport` sống trên **thread I/O** cùng `Link`, nên không cần khóa khi `Link` gọi `write()` / nhận `bytesReceived`.
-- UI không chạm trực tiếp mô hình; gọi qua `QMetaObject::invokeMethod(world, ..., Qt::QueuedConnection)` (đặt TRB vào trạng thái nào đó, đổi kịch bản, bật lỗi) và nhận tín hiệu thống kê về qua signal.
-- Khung phản hồi luôn phát qua `QTimer::singleShot(0 hoặc độ trễ)`, không phát ngay trong `write()` (lỗi đã gặp ở `FakeTransport`: trả lời ngay trong `write` lẫn với việc `Link` đang gửi).
+Ở GĐ đầu chỉ dùng dòng lệnh và file kịch bản, không có giao diện đồ họa:
 
-## 6. Bơm lỗi và kiểm thử
+```
+actl_sim --port COM5 --baud 1000000              # RS485
+actl_sim --tcp 192.168.1.10:5000                 # Ethernet, kết nối tới Gateway (hoặc --listen 5000)
+         --scenario normal|warning|trip|lost|flap|noise|stress|file.json
+         --drop 2 --corrupt 1 --delay 5..30       # bơm lỗi đường truyền (% và ms)
+         --seed 42 --fast-erase 5                 # lặp lại được; rút thời gian chờ xóa flash
+```
 
-Danh sách lỗi cấu hình được qua UI, JSON hoặc API test:
-- đường truyền: rớt N%, hỏng CRC N%, trễ `a..b` ms, cắt khung giữa chừng, byte rác chen giữa;
-- thiết bị: không trả lời, trả lời sai địa chỉ, trả lời cấu hình khác với giá trị vừa ghi (test "đọc lại KHÔNG khớp"), TRB trip/vượt ngưỡng/mất/nhấp nháy, PSU cụm DCM lỗi;
-- nạp code: lỗi ghi flash, mất gói, NAK.
+Trong lúc chạy có một dòng lệnh tương tác (stdin): `trip 1 3`, `lost 2 5`, `over 1 3 TRM1.I SEN2`, `fault drop 10`, `status`, `scenario trip`. Giao diện đồ họa nhỏ là việc sau nếu cần.
 
-Test mới (`tests/sim_test.cpp`, chạy trong `ctest`, không cần mạng): dựng `Link + services + SimTransport`, kiểm
-1. giám sát: 160 TRB + 5 PSU lên `DeviceStore`/`PsuStore` đúng giá trị;
-2. điều khiển, luật debug một TRB, clear trip;
-3. đọc - ghi - đọc lại cấu hình, retry 3 lần khi trả lời rớt, báo lệch khi giả lập ghi sai;
-4. nạp FPGA 4 bước (có và không có bước xóa), nạp STM32;
-5. bơm lỗi rồi kiểm app báo đúng (mất kết nối, quá ngưỡng, trip).
+## 6. Kiểm thử
 
-## 7. Giao diện
+- `tests/sim_test.cpp` (chạy trong `ctest`): nối `Link + services` của app trực tiếp vào `SimWorld` qua một transport trong bộ nhớ, không cần Gateway, COM hay mạng. Kiểm giám sát 160 TRB + 5 PSU, điều khiển, luật debug, đọc-ghi-đọc lại cấu hình (kể cả retry và lệch), nạp FPGA/STM32, bơm lỗi và xem app báo đúng.
+- Kiểm tay với Gateway thật: chạy `actl_sim` phía thiết bị, mở app phía người dùng, xem toàn chuỗi.
 
-- Khung cấu hình ở dòng trạng thái trên cùng: nút "Nguồn dữ liệu": **Thiết bị thật** (hiện tại) / **Giả lập**. Khi giả lập: pill "Giả lập" màu riêng ở thanh trên để không nhầm với thiết bị thật, nhất là trước khi ghi cấu hình hoặc nạp code.
-- Trang **Giả lập** (chỉ hiện khi bật): bảng chọn kịch bản, danh sách TRB/PSU với nút "ép trạng thái" (tốt, vượt ngưỡng, trip, mất), thanh trượt tỉ lệ rớt/hỏng/trễ của từng link, bộ đếm khung đã gửi/nhận.
-- Ghi chú nạp code: ở chế độ giả lập, thời gian chờ xóa mặc định rút còn vài giây.
-
-## 8. Kế hoạch theo giai đoạn
+## 7. Kế hoạch
 
 | GĐ | Nội dung | Kết quả |
 |---|---|---|
-| 1 | `SimWorld`, `TrbModel`, `PsuModel`, vai `Monitor`, hàm dựng khung giám sát, bật bằng `--sim` hoặc `sim/enabled` trong ini | App có đủ 160 TRB + 5 PSU giám sát được; điều khiển, debug chạy |
-| 2 | Vai `Service` cho cấu hình TRB/PSU, hai chiều | Đọc/ghi/xác minh cấu hình hàng loạt |
-| 3 | Nạp FPGA, nạp STM32 | Chạy thử 4 bước nạp, lỗi nạp |
-| 4 | `Scenario` từ JSON + trang Giả lập + `FaultInjector` | Tái hiện các kịch bản của mock Python, bơm lỗi từ UI |
-| 5 | `tests/sim_test.cpp` hoàn chỉnh; quyết định giữ hay bỏ mock Python | Test đầu-cuối trong `ctest` |
+| 1 | Thư viện `SimWorld`/model, `BusPort` (COM + TCP), trả lời giám sát, điều khiển, debug; hàm dựng khung giám sát trong `proto/`; dòng lệnh cơ bản | Gateway thật hỏi vòng, app thấy 160 TRB + 5 PSU |
+| 2 | Cấu hình TRB/PSU đọc/ghi/xác minh | Cấu hình hàng loạt qua chuỗi thật |
+| 3 | Nạp FPGA, nạp STM32 | Chạy thử 4 bước nạp và các lỗi nạp |
+| 4 | Kịch bản JSON, `FaultInjector`, dòng lệnh tương tác | Tái hiện kịch bản hiện trường |
+| 5 | `tests/sim_test.cpp` đầy đủ trong `ctest` | Test đầu-cuối tự động |
 
-Mỗi giai đoạn đều chạy được và có test riêng, có thể dừng giữa chừng.
+Mỗi giai đoạn chạy được và có test riêng; GĐ 5 có thể làm song song từ GĐ 1 để test mỗi khi thêm chức năng.
 
-## 9. Điểm cần chốt
+## 8. Quyết định đã chốt
 
-1. **Chọn nguồn dữ liệu.** Đề xuất: cả hai cách. Tham số `--sim` / khóa ini để chạy tự động và test; ở UI có nút đổi (đổi thì đóng và dựng lại hai link, vì `Link` sở hữu transport). Nếu chỉ chọn lúc khởi động thì đơn giản hơn, nhưng phải khởi động lại app mỗi lần đổi.
-2. **Giữ `tools/mock_gateway.py` hay bỏ.** Đề xuất: giữ ở GĐ 1-4 (nó còn kiểm được TCP/COM thật và là đối chiếu độc lập với mã C++), quyết định bỏ ở GĐ 5.
-3. **Thời gian giả lập.** Đề xuất: đồng hồ mô phỏng chạy theo thời gian thật, có hệ số tăng tốc cho riêng thời gian chờ xóa flash.
-4. **Phạm vi tối thiểu cho lần đầu.** Đề xuất làm GĐ 1 và GĐ 2 trước (giám sát, điều khiển, cấu hình), nạp code để sau.
-5. **Số liệu giả lập.** Đề xuất giữ phân bố giá trị y như mock Python hiện nay (đã quen khi xem giao diện); khi có công thức quy đổi vật lý sẽ cập nhật ở một chỗ.
-6. **TRB ở chế độ Debug tự gửi khung giám sát** trên đường nào (RS485 hay qua Gateway) và theo chu kỳ bao nhiêu? Cần để giả lập đúng và để app nhận ra TRB nào đang debug từ khung giám sát thay vì chỉ theo lệnh đã gửi.
+- Module là chương trình PC riêng, nối phía thiết bị của Gateway qua COM RS485 hoặc Ethernet.
+- Khung hỏi giám sát giống khung app thấy.
+- Gateway tự hỏi vòng đều.
+- App không đổi; không làm module giả lập trong app.
+
+## 9. Cần xác nhận trước khi code
+
+1. **Khung Gateway hỏi giám sát**: app chỉ thấy khung trả lời (`11 11`, `81 81`), chưa thấy khung hỏi. Khung hỏi dài bao nhiêu, CMD gì, mang địa chỉ nào? Nếu khung hỏi chính là khung giám sát rỗng cùng CMD thì `actl_sim` chỉ cần nhận khung cùng CMD rồi trả lời, nhưng cần xác nhận.
+2. **Số cổng phía thiết bị của Gateway**: một cổng chung cho giám sát lẫn cấu hình/nạp code, hay hai cổng như phía app (monitor + service)? `actl_sim` sẽ mở một hoặc hai `BusPort` tương ứng.
+3. **Ethernet**: `actl_sim` là client (tự nối tới Gateway) hay server (Gateway nối tới)? Cổng và địa chỉ?
+4. **Gateway gửi gì xuống thiết bị với lệnh điều khiển**: chuyển nguyên khung `A2 A2` / `01 01` của app, hay đổi dạng? Gateway có chờ trả lời (ACK) từ thiết bị khi điều khiển không? (App hiện chưa có ACK cho điều khiển.)
+5. **Địa chỉ trên bus**: 20 MB × 8 TRB đánh địa chỉ (MB, TRB) trong khung như app thấy, và 5 PSU địa chỉ 1 byte 1..5 (hay dải khác)? `actl_sim` mặc định theo cấu hình `mbCount/trbPerMb/psuFirstAddr/psuCount` của app.
+6. **TRB debug** tự gửi khung giám sát lên cổng nào của Gateway và chu kỳ bao nhiêu (cần cho mục luật Debug ở trên).
