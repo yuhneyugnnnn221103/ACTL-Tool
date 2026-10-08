@@ -32,4 +32,12 @@ QByteArray cmd();
 core::FrameSpec spec(bool checkCrc);
 const FieldTable &table();
 
+// Khung Gateway hỏi giám sát, 12 byte: [AB CD][11 11][MB][TRB][00 00][CRC][E1 E2], CRC phủ từ byte địa chỉ.
+// Cùng CMD với khung trả lời nhưng ngắn hơn, nên mỗi bên dùng một FrameRegistry riêng.
+constexpr int kPollLength = 12;
+core::FrameSpec pollSpec(bool checkCrc);
+QByteArray buildPoll(int mb, int trb);
+// Khung trả lời 280 byte từ giá trị theo bảng trường (dùng cho giả lập và test).
+QByteArray buildFrame(int mb, int trb, const QList<double> &values);
+
 } // namespace proto::trbmon

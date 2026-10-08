@@ -162,9 +162,22 @@ Mọi bản tin có dạng `AB CD | CMD | địa chỉ | dữ liệu | CRC16 | E
 
 Mọi CMD đều 2 byte, mã lặp hai lần (`11 11`, `A1 A1`, `81 81`...). Bản tin TRB dùng địa chỉ 2 byte (MB, TRB) và CRC từ byte địa chỉ; bản tin PSU và nạp STM32 dùng địa chỉ 1 byte và CRC từ byte CMD. Trong ACK nạp STM32, trường `ack_cmd` vẫn là mã 1 byte (ví dụ `92`). `FrameRegistry` vẫn hỗ trợ CMD 1 byte nhưng từ chối đăng ký nếu một CMD 1 byte trùng byte đầu của một CMD 2 byte.
 
+## Giả lập TRB (`actl_sim`)
+
+Chương trình riêng, cắm vào phía thiết bị của Gateway và đóng vai 20 MB × 8 TRB (xem `docs/simulator_design.md`). App không đổi.
+
+```
+actl_sim --serial COM5 --baud 1000000          # RS485
+actl_sim --connect 192.168.1.10:5000           # nối tới Gateway qua TCP
+actl_sim --listen 5000                         # hoặc cho Gateway nối vào
+         [--mb 20 --trb-per-mb 8 --seed 1 --debug-period 1000 --drop 2 --corrupt 1 --delay 5..30 --hex]
+```
+
+Gateway hỏi `AB CD 11 11 MB TRB 00 00 CRC E1 E2`, `actl_sim` trả khung giám sát 280 byte của TRB đó. Điều khiển `A2 A2`, beam `14 14`, ghi `A1 A1` và hỏi `A3 A3` cấu hình được xử lý (không có ACK); TRB bật Debug tự gửi khung giám sát mỗi giây. Trong lúc chạy gõ `help` để ép trạng thái: `lost 0 2`, `over 0 1 "TRM1.I SEN2" 2500`, `trip 0 1 1 0x04`, `faults drop 10`, `status`. Chưa có PSU, nạp FPGA/STM32 và kịch bản JSON. Test: `sim_test`.
+
 ## Việc còn lại
 
-- Module giả lập `actl_sim` (chương trình riêng cắm vào phía thiết bị của Gateway): xem `docs/simulator_design.md` (đã có thiết kế, chưa code).
+- `actl_sim`: PSU, nạp FPGA/STM32, kịch bản JSON, cấu hình Ethernet (xem `docs/simulator_design.md`).
 
 - PSU: ACK cho lệnh điều khiển, bảng trip code, công thức quy đổi và dấu của giá trị 3 byte, định dạng RTC (mili giây 1 byte), tách bit các thanh ghi XDP/ADS/INA.
 - ACK cho lệnh điều khiển TRB.

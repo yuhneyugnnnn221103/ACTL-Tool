@@ -17,6 +17,7 @@ const FieldTable &table();                    // mọi trường sửa được 
 
 QByteArray buildWrite(int mb, int trb, const QList<double> &values);
 QByteArray buildReadRequest(int mb, int trb);
+QByteArray buildReadReply(int mb, int trb, const QList<double> &values); // A4 A4, dùng cho giả lập và test
 
 // File JSON cùng định dạng tool cấu hình cũ: { "GENERAL": { "TEMP_MCU_MAX": 123, ... }, ... }
 QJsonObject toJson(const QList<double> &values);

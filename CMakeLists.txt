@@ -113,6 +113,21 @@ if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(ACTL_Tool)
 endif()
 
+# Chương trình giả lập TRB cắm vào phía thiết bị của Gateway (xem docs/simulator_design.md).
+set(SIM_SOURCES
+    sim/trb_model.h sim/trb_model.cpp
+    sim/sim_world.h sim/sim_world.cpp
+    sim/bus_port.h sim/bus_port.cpp
+)
+add_executable(actl_sim sim/main_sim.cpp ${SIM_SOURCES}
+    core/transport.h core/serial_transport.h core/tcp_server_transport.h core/tcp_client_transport.h
+    core/frame.cpp core/frame_parser.cpp
+    core/serial_transport.cpp core/tcp_server_transport.cpp core/tcp_client_transport.cpp
+    proto/field_table.cpp proto/trb_monitor_proto.cpp proto/trb_control_proto.cpp proto/trb_config_proto.cpp
+)
+target_link_libraries(actl_sim PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::SerialPort
+    Qt${QT_VERSION_MAJOR}::Network)
+
 # Test (cần Qt Test): ctest --test-dir build
 find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Test)
 if(Qt${QT_VERSION_MAJOR}Test_FOUND)
@@ -133,8 +148,8 @@ if(Qt${QT_VERSION_MAJOR}Test_FOUND)
         services/psu_monitor.cpp services/psu_control.cpp services/psu_config.cpp
         ui/log_filter.cpp
     )
-    foreach(name psu_test trb_test)
-        add_executable(${name} tests/${name}.cpp ${TEST_CORE_SOURCES})
+    foreach(name psu_test trb_test sim_test)
+        add_executable(${name} tests/${name}.cpp ${TEST_CORE_SOURCES} ${SIM_SOURCES})
         target_link_libraries(${name} PRIVATE Qt${QT_VERSION_MAJOR}::Test Qt${QT_VERSION_MAJOR}::Core)
         add_test(NAME ${name} COMMAND ${name})
     endforeach()

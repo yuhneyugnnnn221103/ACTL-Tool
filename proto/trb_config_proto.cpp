@@ -78,6 +78,14 @@ QByteArray buildWrite(int mb, int trb, const QList<double> &values)
     return f;
 }
 
+QByteArray buildReadReply(int mb, int trb, const QList<double> &values)
+{
+    QByteArray f = buildWrite(mb, trb, values);
+    f[2] = f[3] = char(0xA4);
+    core::seal(f, 4);
+    return f;
+}
+
 QByteArray buildReadRequest(int mb, int trb)
 {
     QByteArray f(10, 0);

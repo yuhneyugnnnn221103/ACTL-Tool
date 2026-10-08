@@ -1,6 +1,6 @@
 # Thiết kế module giả lập TRB/PSU
 
-Trạng thái: **bản thiết kế, chưa code**. Điểm còn thiếu thông tin nằm ở mục 9.
+Trạng thái: **giai đoạn 1 (TRB) đã làm xong**: `actl_sim` giám sát, điều khiển, beam, cấu hình TRB, debug tự gửi, bơm lỗi đường truyền. PSU, nạp FPGA/STM32 và kịch bản JSON chưa làm. Điểm còn thiếu thông tin nằm ở mục 9.
 
 ## 1. Mục tiêu và vị trí
 
@@ -96,11 +96,16 @@ Mỗi giai đoạn chạy được và có test riêng; GĐ 5 có thể làm son
 - Gateway tự hỏi vòng đều.
 - App không đổi; không làm module giả lập trong app.
 
-## 9. Cần xác nhận trước khi code
+## 9. Đã xác nhận và điểm còn mở
 
-1. **Khung Gateway hỏi giám sát**: app chỉ thấy khung trả lời (`11 11`, `81 81`), chưa thấy khung hỏi. Khung hỏi dài bao nhiêu, CMD gì, mang địa chỉ nào? Nếu khung hỏi chính là khung giám sát rỗng cùng CMD thì `actl_sim` chỉ cần nhận khung cùng CMD rồi trả lời, nhưng cần xác nhận.
-2. **Số cổng phía thiết bị của Gateway**: một cổng chung cho giám sát lẫn cấu hình/nạp code, hay hai cổng như phía app (monitor + service)? `actl_sim` sẽ mở một hoặc hai `BusPort` tương ứng.
-3. **Ethernet**: `actl_sim` là client (tự nối tới Gateway) hay server (Gateway nối tới)? Cổng và địa chỉ?
-4. **Gateway gửi gì xuống thiết bị với lệnh điều khiển**: chuyển nguyên khung `A2 A2` / `01 01` của app, hay đổi dạng? Gateway có chờ trả lời (ACK) từ thiết bị khi điều khiển không? (App hiện chưa có ACK cho điều khiển.)
-5. **Địa chỉ trên bus**: 20 MB × 8 TRB đánh địa chỉ (MB, TRB) trong khung như app thấy, và 5 PSU địa chỉ 1 byte 1..5 (hay dải khác)? `actl_sim` mặc định theo cấu hình `mbCount/trbPerMb/psuFirstAddr/psuCount` của app.
-6. **TRB debug** tự gửi khung giám sát lên cổng nào của Gateway và chu kỳ bao nhiêu (cần cho mục luật Debug ở trên).
+Đã xác nhận:
+1. **Khung hỏi giám sát** (12 byte): `AB CD | 11 11 | MB TRB | 00 00 | CRC CRC | E1 E2`, CRC phủ từ byte địa chỉ. Cùng CMD với khung trả lời 280 byte nhưng ngắn hơn, nên `actl_sim` dùng registry riêng (`registerRequestFrames`) cho khung nhận từ Gateway.
+2. **Cổng phía Gateway** chia theo loại thiết bị (TRB / PSU); làm TRB trước, PSU sau khi phần PSU chỉnh xong.
+4. **Chưa có ACK** từ thiết bị cho điều khiển.
+5. **Địa chỉ** đúng như app thấy.
+6. **TRB debug** tự gửi khung giám sát 1 s một lần (`--debug-period`, `debugperiod` trong lúc chạy); sau này đọc chu kỳ từ cấu hình debug của TRB.
+
+Còn mở:
+- **Ethernet** (điểm 3): chưa cấu hình, để sẵn `--connect host:port` (nối tới Gateway) và `--listen port` (Gateway nối vào); điền sau.
+- **Khung hỏi PSU** chưa có, cần khi làm phần PSU.
+- Chu kỳ debug lấy từ cấu hình debug (`PERIOD_TR_DEBUG`) thay cho giá trị cố định.

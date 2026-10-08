@@ -85,4 +85,30 @@ const FieldTable &table()
     return t;
 }
 
+core::FrameSpec pollSpec(bool checkCrc)
+{
+    return {cmd(), kPollLength, kCrcStart, checkCrc, QStringLiteral("TRB hỏi giám sát")};
+}
+
+QByteArray buildPoll(int mb, int trb)
+{
+    QByteArray f(kPollLength, 0);
+    f[2] = f[3] = char(0x11);
+    f[kOffMb] = char(mb);
+    f[kOffTrb] = char(trb);
+    core::seal(f, kCrcStart);
+    return f;
+}
+
+QByteArray buildFrame(int mb, int trb, const QList<double> &values)
+{
+    QByteArray f(kLength, 0);
+    f[2] = f[3] = char(0x11);
+    f[kOffMb] = char(mb);
+    f[kOffTrb] = char(trb);
+    table().encode(values, f);
+    core::seal(f, kCrcStart);
+    return f;
+}
+
 } // namespace proto::trbmon
