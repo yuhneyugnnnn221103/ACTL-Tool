@@ -119,13 +119,20 @@ set(SIM_SOURCES
     sim/sim_world.h sim/sim_world.cpp
     sim/bus_port.h sim/bus_port.cpp
 )
-add_executable(actl_sim sim/main_sim.cpp ${SIM_SOURCES}
+set(SIM_CORE_FILES
     core/transport.h core/serial_transport.h core/tcp_server_transport.h core/tcp_client_transport.h
     core/frame.cpp core/frame_parser.cpp
     core/serial_transport.cpp core/tcp_server_transport.cpp core/tcp_client_transport.cpp
     proto/field_table.cpp proto/trb_monitor_proto.cpp proto/trb_control_proto.cpp proto/trb_config_proto.cpp
 )
-target_link_libraries(actl_sim PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::SerialPort
+# Bản dòng lệnh: actl_sim_cli --listen 5000
+add_executable(actl_sim_cli sim/main_sim.cpp ${SIM_SOURCES} ${SIM_CORE_FILES})
+target_link_libraries(actl_sim_cli PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::SerialPort
+    Qt${QT_VERSION_MAJOR}::Network)
+# Bản có giao diện: dùng chung giao diện/style với app chính
+add_executable(actl_sim WIN32 sim/main_gui.cpp sim/sim_window.h sim/sim_window.cpp ${SIM_SOURCES} ${SIM_CORE_FILES}
+    ui/theme.cpp ui/status_pill.cpp model/device_store.cpp resources.qrc)
+target_link_libraries(actl_sim PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::SerialPort
     Qt${QT_VERSION_MAJOR}::Network)
 
 # Test (cần Qt Test): ctest --test-dir build

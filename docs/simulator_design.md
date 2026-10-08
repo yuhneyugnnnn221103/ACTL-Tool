@@ -60,11 +60,11 @@ Giao thức đổi trong `proto/` thì app và giả lập đổi theo, không c
 
 ## 5. Điều khiển giả lập
 
-Ở GĐ đầu chỉ dùng dòng lệnh và file kịch bản, không có giao diện đồ họa:
+`actl_sim` có giao diện đơn giản (lưới TRB, nút thao tác, bơm lỗi); `actl_sim_cli` là bản dòng lệnh dùng chung phần lõi:
 
 ```
-actl_sim --port COM5 --baud 1000000              # RS485
-actl_sim --tcp 192.168.1.10:5000                 # Ethernet, kết nối tới Gateway (hoặc --listen 5000)
+actl_sim_cli --serial COM5 --baud 1000000              # RS485
+actl_sim_cli --connect 192.168.1.10:5000                 # Ethernet, kết nối tới Gateway (hoặc --listen 5000)
          --scenario normal|warning|trip|lost|flap|noise|stress|file.json
          --drop 2 --corrupt 1 --delay 5..30       # bơm lỗi đường truyền (% và ms)
          --seed 42 --fast-erase 5                 # lặp lại được; rút thời gian chờ xóa flash

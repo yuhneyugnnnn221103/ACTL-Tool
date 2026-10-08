@@ -31,7 +31,9 @@ public:
     void clearForced() { m_forced.clear(); }
     void setTrip(int index, quint8 bits) { m_trip[index] = bits; }
     void clearTrip() { m_trip.fill(0); }
-    quint8 trip(int index) const { return m_trip.at(index); }
+    quint8 trip(int index) const { return quint8(m_trip.at(index)); }
+    bool hasTrip() const { for (char c : m_trip) if (c) return true; return false; }
+    bool hasForced() const { return !m_forced.isEmpty(); }
 
     QList<double> sample();                    // giá trị giám sát hiện tại (có nhiễu nhỏ)
     QByteArray monitorFrame();                 // khung giám sát 280 byte
