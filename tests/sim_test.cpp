@@ -85,7 +85,8 @@ private slots:
         QCOMPARE(quint8(r.at(trbmon::kOffTrb)), quint8(6));
         const QList<double> v = trbmon::table().decode(r);
         QVERIFY(v.at(trbmon::kIdxTrbV) >= 145 && v.at(trbmon::kIdxTrbV) <= 155);
-        QCOMPARE(v.at(trbmon::kIdxInitAdar), 255.0);
+        QCOMPARE(v.at(trbmon::kIdxInitAdar), 255.0);   // chưa có lệnh beam: cả 8 ADAR đã khởi tạo
+        QCOMPARE(v.at(trbmon::kIdxPa), 0.0);           // chưa có lệnh điều khiển: PA tắt
         QCOMPARE(w.stats().polls, quint64(1));
     }
 
@@ -147,6 +148,26 @@ private slots:
         w.handle(asFrame(trbctl::buildControl(0, 1, c)));
         w.handle(asFrame(trbctl::buildControl(0, 1, trbctl::ControlCmd{0, false, false, false, true})));
         QCOMPARE(w.stats().debugConflicts, quint64(2));   // lại có hai TRB debug
+    }
+
+    void adarAndPaBitsFollowTheLastCommands()
+    {
+        sim::SimWorld w(1, 2, 1);
+        auto read = [&](int t) { return trbmon::table().decode(w.handle(asFrame(trbmon::buildPoll(0, t)))); };
+        trbctl::ControlCmd c;
+        c.paMask = 0b0101;                                    // PA TRM1 và TRM3 bật
+        w.handle(asFrame(trbctl::buildControl(0, 0, c)));
+        trbctl::BeamCmd b;
+        b.adarMask = 0b10000011;                              // ADAR1, ADAR2, ADAR8 bật
+        w.handle(asFrame(trbctl::buildBeam(0, 0, b)));
+        const QList<double> v = read(0);
+        QCOMPARE(v.at(trbmon::kIdxPa), 5.0);
+        QCOMPARE(v.at(trbmon::kIdxInitAdar), 131.0);
+        QCOMPARE(read(1).at(trbmon::kIdxPa), 0.0);            // TRB khác không đổi
+        QCOMPARE(read(1).at(trbmon::kIdxInitAdar), 255.0);
+        c.paMask = 0;
+        w.handle(asFrame(trbctl::buildControl(0, 0, c)));
+        QCOMPARE(read(0).at(trbmon::kIdxPa), 0.0);            // tắt PA
     }
 
     void broadcastControlReachesEveryTrb()

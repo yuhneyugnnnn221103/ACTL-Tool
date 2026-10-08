@@ -33,8 +33,10 @@ QList<double> TrbModel::sample()
     v[trbmon::kIdxTrbTemp] = 40;
     v[trbmon::kIdxMcuTemp] = 50;
     v[trbmon::kIdxHumidity] = 40;
-    v[trbmon::kIdxInitAdar] = 0xFF;
-    v[trbmon::kIdxPa] = 0x0F;
+    // Bit i của INIT_ADAR = ADAR(i+1) đang bật, của PA = PA TRM(i+1) đang bật (1 bật, 0 tắt), theo lệnh gần nhất.
+    // Chưa có lệnh beam nào thì coi cả 8 ADAR đã khởi tạo xong; chưa có lệnh điều khiển thì PA tắt.
+    v[trbmon::kIdxInitAdar] = m_beamSet ? m_beam.adarMask : 0xFF;
+    v[trbmon::kIdxPa] = m_control.paMask & 0x0F;
     v[trbmon::kIdxPg] = 0x0F;
     for (int i = 0; i < trbmon::kNumTrip; ++i) v[trbmon::kIdxTrip0 + i] = quint8(m_trip.at(i));
     for (auto it = m_forced.cbegin(); it != m_forced.cend(); ++it) v[it.key()] = it.value();

@@ -39,12 +39,12 @@ public:
 
     // Điều khiển / beam / ghi cấu hình / hỏi cấu hình. Trả về khung trả lời, rỗng nếu không có.
     void applyControl(const proto::trbctl::ControlCmd &c);
-    void applyBeam(const proto::trbctl::BeamCmd &b) { m_beam = b; }
+    void applyBeam(const proto::trbctl::BeamCmd &b) { m_beam = b; m_beamSet = true; }
     void writeConfig(const core::Frame &frame);
 
 private:
     int m_mb, m_trb;
-    bool m_online = true, m_debug = false;
+    bool m_online = true, m_debug = false, m_beamSet = false;
     proto::trbctl::ControlCmd m_control;
     proto::trbctl::BeamCmd m_beam;
     QList<double> m_config;
