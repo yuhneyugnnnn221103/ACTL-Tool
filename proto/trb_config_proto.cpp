@@ -123,12 +123,13 @@ const QList<ThresholdMap> &thresholdMap()
             const int base = trbmon::kIdxTrm0 + trm * trbmon::kTrmFields;
             for (int ch = 0; ch < 8; ++ch) pair(base + ch, g, QStringLiteral("I_SEN_%1").arg(ch + 1));
             for (int ch = 0; ch < 4; ++ch) pair(base + 20 + ch, g, QStringLiteral("I_SEN_PA_%1").arg(ch + 1));
+            // TEMP_TRB là ngưỡng nhiệt độ chung cho cả 16 cảm biến TEMP1..4 của TRM1..4.
+            for (int ch = 0; ch < 4; ++ch) m.append({base + 16 + ch, table().indexOf("GENERAL", "TEMP_TRB_MAX"), table().indexOf("GENERAL", "TEMP_TRB_MIN")});
         }
         pair(trbmon::kIdxTrbV, "GENERAL", "VOLTAGE_TRB");
         pair(trbmon::kIdxTrbI, "GENERAL", "I_SEN_TRB");
         pair(trbmon::kIdxTrbTemp, "GENERAL", "TEMP_POWER");
         pair(trbmon::kIdxMcuTemp, "GENERAL", "TEMP_MCU");
-        // TEMP_TRB chưa ánh xạ: chưa rõ tương ứng trường giám sát nào.
         return m;
     }();
     return map;

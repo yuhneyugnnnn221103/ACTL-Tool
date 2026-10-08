@@ -121,7 +121,7 @@ private slots:
     void thresholdMapPointsAtRealFields()
     {
         const auto &map = trbcfg::thresholdMap();
-        QCOMPARE(map.size(), 4 * (8 + 4) + 4);   // 4 TRM x (I_SEN + I_SEN_PA) + V, I, nhiệt power, nhiệt MCU
+        QCOMPARE(map.size(), 4 * (8 + 4 + 4) + 4);   // 4 TRM x (I_SEN + I_SEN_PA + TEMP) + V, I, nhiệt power, nhiệt MCU
         QSet<int> seen;
         for (const auto &m : map) {
             QVERIFY(m.monitorField >= 0 && m.monitorField < trbmon::kNumFields);
@@ -132,6 +132,16 @@ private slots:
         }
         QVERIFY(seen.contains(trbmon::kIdxTrbV) && seen.contains(trbmon::kIdxMcuTemp));
         QVERIFY(!seen.contains(trbmon::kIdxTrip0));
+        // TEMP_TRB dùng chung cho nhiệt độ TRM1..4 (TEMP1..4 của mỗi TRM).
+        const int tMax = trbcfg::table().indexOf("GENERAL", "TEMP_TRB_MAX"), tMin = trbcfg::table().indexOf("GENERAL", "TEMP_TRB_MIN");
+        int shared = 0;
+        for (const auto &m : map) {
+            if (m.cfgMax != tMax) continue;
+            QCOMPARE(m.cfgMin, tMin);
+            QVERIFY(trbmon::table().fields().at(m.monitorField).name.contains("TEMP"));
+            ++shared;
+        }
+        QCOMPARE(shared, 16);
     }
 
     void encodeDecodeRoundTripIsBigEndian()
