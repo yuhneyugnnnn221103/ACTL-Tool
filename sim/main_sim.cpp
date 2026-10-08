@@ -91,7 +91,9 @@ int main(int argc, char *argv[])
 
     const int nSource = int(p.isSet("serial")) + int(p.isSet("connect")) + int(p.isSet("listen"));
     if (nSource != 1) {
-        std::cerr << "Cần đúng một trong --serial, --connect, --listen. Xem --help.\n";
+        std::cerr << "Cần chọn đúng một cách nối tới Gateway: --serial COMx, --connect host:port hoặc --listen port.\n"
+                     "Ví dụ: actl_sim --listen 5000      hoặc      actl_sim --serial COM5 --baud 1000000\n\n";
+        std::cerr << p.helpText().toStdString();
         return 2;
     }
 
