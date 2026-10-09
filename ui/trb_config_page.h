@@ -43,7 +43,6 @@ private:
     QPushButton *m_cancel;
     int m_mb = 0, m_trb = 0;
     bool m_hasNew = false;      // cột "Giá trị mới" đã có nội dung thật (đọc từ thiết bị hoặc mở file)
-    bool m_fillNewOnRead = false;
     bool m_updating = false;
 };
 

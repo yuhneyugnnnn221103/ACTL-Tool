@@ -163,7 +163,8 @@ QTableWidget, QTableView, QTreeWidget, QTreeView, QListWidget {
     selection-color: @text@;
     outline: none;
 }
-QTableWidget::item, QTableView::item { border: none; padding: 4px 8px; }
+/* Không đặt border/background cho ::item: có border thì Qt bỏ qua màu nền từng ô (đánh dấu cảnh báo, ô khác biệt). */
+QTableWidget::item, QTableView::item { padding: 4px 8px; }
 QTreeWidget::item, QListWidget::item { padding: 4px 8px; border-radius: 6px; }
 QTreeWidget::item:selected, QListWidget::item:selected { background: @accentSoft@; color: @text@; }
 QTableCornerButton::section { background: @surfaceAlt@; border: none; }

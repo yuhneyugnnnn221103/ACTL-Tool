@@ -36,9 +36,7 @@ TrbConfigPage::TrbConfigPage(const AppContext &ctx, QWidget *parent) : QWidget(p
     auto *cfg = ctx.trbConfig;
     connect(cfg, &services::TrbConfig::configRead, this, [this](int mb, int trb) {
         if (mb != m_mb || trb != m_trb) return;
-        showDeviceColumn();
-        if (m_fillNewOnRead) setNewValues(*m_ctx.trbConfig->cached(mb, trb));
-        m_fillNewOnRead = false;
+        showDeviceColumn();     // chỉ cập nhật cột "Trên thiết bị"; cột "Giá trị mới" giữ nguyên
         refreshDiff();
     });
     connect(cfg, &services::TrbConfig::progress, this, [this](int done, int total) {
@@ -48,7 +46,6 @@ TrbConfigPage::TrbConfigPage(const AppContext &ctx, QWidget *parent) : QWidget(p
     });
     connect(cfg, &services::TrbConfig::finished, this, [this](int ok, int fail) {
         setBusy(false);
-        m_fillNewOnRead = false;
         m_progressText->setText(QStringLiteral("Xong: %1 thành công, %2 lỗi").arg(ok).arg(fail));
     });
     selectDevice(0, 0);
@@ -128,9 +125,18 @@ QWidget *TrbConfigPage::buildContent()
     single->addStretch(1);
     single->addWidget(button(QStringLiteral("Đọc"), [this] {
         if (!ready()) return;
-        m_fillNewOnRead = true;
         setBusy(true);
         m_ctx.trbConfig->readDevices({{m_mb, m_trb}});
+    }));
+    single->addWidget(button(QStringLiteral("Lấy từ thiết bị"), [this] {
+        const QList<double> *dev = m_ctx.trbConfig->cached(m_mb, m_trb);
+        if (!dev) {
+            QMessageBox::information(this, QStringLiteral("Lấy từ thiết bị"),
+                                     QStringLiteral("Chưa đọc cấu hình của TRB này. Hãy bấm Đọc trước."));
+            return;
+        }
+        setNewValues(*dev);     // chép cột "Trên thiết bị" sang "Giá trị mới" để làm điểm xuất phát khi sửa
+        refreshDiff();
     }));
     single->addWidget(button(QStringLiteral("Ghi và kiểm tra"), [this] {
         if (!ready()) return;
@@ -303,8 +309,11 @@ void TrbConfigPage::refreshDiff()
 {
     const QHash<int, double> edited = editedFields();
     m_updating = true;
-    for (int r = 0; r < m_table->rowCount(); ++r)
-        m_table->item(r, ColNew)->setBackground(edited.contains(r) ? QBrush(kDiffColor) : QBrush());
+    // Đánh dấu ô ở cột "Trên thiết bị" khác ô tương ứng trong "Giá trị mới" (giá trị sẽ ghi).
+    for (int r = 0; r < m_table->rowCount(); ++r) {
+        m_table->item(r, ColDevice)->setBackground(edited.contains(r) ? QBrush(kDiffColor) : QBrush());
+        m_table->item(r, ColNew)->setBackground(QBrush());
+    }
     m_updating = false;
 }
 
