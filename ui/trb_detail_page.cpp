@@ -75,7 +75,12 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     auto *next = new QPushButton(QStringLiteral("Sau ▶"));
     theme::setRole(prev, "secondary");
     theme::setRole(next, "secondary");
-    m_pill = new StatusPill;
+    auto *pillBox = new QHBoxLayout;
+    pillBox->setSpacing(theme::kSpace);
+    for (int i = 0; i < 4; ++i) {      // Trip, Quá ngưỡng, Mất kết nối đồng thời (hoặc Tốt / Chưa có dữ liệu)
+        m_pills << new StatusPill;
+        pillBox->addWidget(m_pills.last());
+    }
     m_debugPill = new StatusPill;
     m_debugPill->hide();
     m_status = new QLabel;
@@ -87,7 +92,7 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     head->addWidget(prev);
     head->addWidget(next);
     head->addSpacing(12);
-    head->addWidget(m_pill);
+    head->addLayout(pillBox);
     head->addWidget(m_status, 1);
     head->addWidget(m_debugPill);
 
@@ -304,10 +309,16 @@ void TrbDetailPage::refresh()
     const model::TrbState &s = m_store->trb(m_mb, m_trb);
     const bool has = s.frames > 0;
 
-    QString pillText = theme::statusMark(s.status) + (theme::statusMark(s.status).isEmpty() ? QString() : QStringLiteral(" "))
-                       + statusText(s.status);
-    m_pill->setPill(pillText,
-                    OverviewGrid::statusColor(s.status), theme::statusTextColor(s.status));
+    // Hiện đủ mọi trạng thái hiện tại của TRB, mỗi trạng thái một thẻ (ví dụ Trip + Quá ngưỡng + Mất kết nối).
+    const QList<Status> cond = m_store->conditions(m_mb, m_trb);
+    for (int i = 0; i < m_pills.size(); ++i) {
+        m_pills[i]->setVisible(i < cond.size());
+        if (i >= cond.size()) continue;
+        const Status st = cond.at(i);
+        const QString mark = theme::statusMark(st);
+        m_pills[i]->setPill((mark.isEmpty() ? QString() : mark + QLatin1Char(' ')) + statusText(st),
+                            OverviewGrid::statusColor(st), theme::statusTextColor(st));
+    }
     QString text;
     if (has)
         text = QStringLiteral("Cập nhật %1 trước · %2 bản tin")

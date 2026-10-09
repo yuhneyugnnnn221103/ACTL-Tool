@@ -46,7 +46,8 @@ private:
     int m_mb = 0, m_trb = 0;
 
     QComboBox *m_mbBox, *m_trbBox, *m_target, *m_mode;
-    StatusPill *m_pill, *m_debugPill;   // m_debugPill: TRB đang ở chế độ Debug (nếu có)
+    QList<StatusPill *> m_pills;
+    StatusPill *m_debugPill;   // m_debugPill: TRB đang ở chế độ Debug (nếu có)
     QLabel *m_status;
     struct Table { QTableWidget *w; int firstField; };
     QList<Table> m_tables;

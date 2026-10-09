@@ -2,6 +2,26 @@
 
 namespace ui {
 
+QString eventTag(EventKind k)
+{
+    switch (k) {
+    case EventKind::Trip:  return QStringLiteral("TRIP");   // TRB/PSU vào trạng thái Trip
+    case EventKind::Warn:  return QStringLiteral("WARN");   // giá trị vượt ngưỡng
+    case EventKind::Ok:    return QStringLiteral("OK");     // trở lại bình thường
+    case EventKind::Pg:    return QStringLiteral("PG");     // Power Good
+    case EventKind::Ctrl:  return QStringLiteral("CTRL");   // lệnh điều khiển / beam đã gửi
+    case EventKind::Cfg:   return QStringLiteral("CFG");    // đọc/ghi cấu hình
+    case EventKind::Debug: return QStringLiteral("DBG");    // chế độ Debug
+    case EventKind::Ota:   return QStringLiteral("OTA");    // nạp code FPGA / STM32
+    case EventKind::Net:   return QStringLiteral("NET");    // kết nối, ngắt kết nối Gateway / RS485
+    case EventKind::Err:   return QStringLiteral("ERR");    // lỗi đường truyền, file, nhập liệu
+    case EventKind::Auth:  return QStringLiteral("AUTH");   // khóa / mở khóa chế độ kỹ sư
+    }
+    return {};
+}
+
+QString tagged(EventKind k, const QString &text) { return QStringLiteral("[%1] %2").arg(eventTag(k), text); }
+
 FrameClass classifyFrame(const QByteArray &raw)
 {
     FrameClass c;

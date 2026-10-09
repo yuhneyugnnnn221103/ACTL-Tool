@@ -1,6 +1,7 @@
 #pragma once
 // Phân nhóm dòng log để mỗi trang chỉ hiện nội dung của mình trong khung Sự kiện / Hex thô.
 #include <QByteArray>
+#include <QString>
 
 namespace ui {
 
@@ -13,6 +14,11 @@ enum LogGroup {
     LogFirmware = 16,       // nạp FPGA và STM32
     LogAll = 31
 };
+
+// Mã loại sự kiện đặt ở đầu mỗi dòng trong khung Sự kiện, ví dụ "[TRIP] MB0 / TRB3: Trip".
+enum class EventKind { Trip, Warn, Ok, Pg, Ctrl, Cfg, Debug, Ota, Net, Err, Auth };
+QString eventTag(EventKind k);                          // "TRIP", "WARN", ...
+QString tagged(EventKind k, const QString &text);       // "[TRIP] text"
 
 struct FrameClass {
     int group = LogSystem;

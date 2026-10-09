@@ -550,6 +550,33 @@ private slots:
         QCOMPARE(updated.size(), 16);
     }
 
+    void conditionsListEveryStateOfOneTrb()
+    {
+        using model::Status;
+        model::DeviceStore store(1, 4);
+        const QList<double> v = zeros(trbmon::kNumFields);
+        QCOMPARE(store.conditions(0, 0), QList<Status>({Status::NoData}));
+        store.updateTrb(0, 0, v, {}, 1000, Status::Ok);
+        QCOMPARE(store.conditions(0, 0), QList<Status>({Status::Ok}));
+        store.updateTrb(0, 1, v, {}, 1000, Status::Warning, {5});
+        QCOMPARE(store.conditions(0, 1), QList<Status>({Status::Warning}));
+        store.updateTrb(0, 2, v, {}, 1000, Status::Trip, {5});
+        QCOMPARE(store.conditions(0, 2), QList<Status>({Status::Trip, Status::Warning}));
+        store.markStale(9000, 3000);                              // mất kết nối: giữ cả trip và quá ngưỡng cũ
+        QCOMPARE(store.conditions(0, 2), QList<Status>({Status::Trip, Status::Warning, Status::Lost}));
+        QCOMPARE(store.conditions(0, 1), QList<Status>({Status::Warning, Status::Lost}));
+        QCOMPARE(store.conditions(0, 0), QList<Status>({Status::Lost}));
+    }
+
+    void eventLinesCarryATypeTag()
+    {
+        QCOMPARE(ui::tagged(ui::EventKind::Trip, "MB0 / TRB1: Trip"), QStringLiteral("[TRIP] MB0 / TRB1: Trip"));
+        QCOMPARE(ui::eventTag(ui::EventKind::Net), QStringLiteral("NET"));
+        QSet<QString> tags;
+        for (int k = int(ui::EventKind::Trip); k <= int(ui::EventKind::Auth); ++k) tags.insert(ui::eventTag(ui::EventKind(k)));
+        QCOMPARE(tags.size(), 11);                                // mọi loại có mã riêng
+    }
+
     void powerGoodFailureCountsAsTrip()
     {
         Rig rig("monitor");

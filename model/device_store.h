@@ -34,6 +34,8 @@ public:
     // Đếm theo "điều kiện": một TRB có thể thuộc nhiều nhóm cùng lúc (Trip kèm quá ngưỡng; mất kết nối nhưng trước đó đang
     // Trip hoặc quá ngưỡng), nên tổng các nhóm có thể vượt số TRB. Ok, Lost, NoData loại trừ nhau như Status.
     int countCondition(Status s) const;
+    // Các điều kiện của một TRB (Trip, Warning, Lost, hoặc Ok / NoData / Updating nếu không có gì bất thường).
+    QList<Status> conditions(int mb, int trb) const;
 
     void updateTrb(int mb, int trb, const QList<double> &values, const QByteArray &raw,
                    qint64 timestampMs, Status status, const QList<int> &alarms = {});

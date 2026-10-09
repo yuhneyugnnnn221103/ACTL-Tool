@@ -33,6 +33,16 @@
 
 namespace ui {
 
+namespace {
+// Mã sự kiện theo trạng thái TRB / PSU vừa chuyển tới.
+EventKind kindOf(model::Status to)
+{
+    using model::Status;
+    return to == Status::Trip ? EventKind::Trip : to == Status::Warning ? EventKind::Warn
+         : to == Status::Updating ? EventKind::Ota : EventKind::Ok;
+}
+}
+
 using model::Status;
 
 namespace {
@@ -69,35 +79,43 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     connect(m_detail, &TrbDetailPage::deviceChanged, m_grid, &OverviewGrid::select);
     connect(m_detail, &TrbDetailPage::deviceChanged, this, [this] { refilterLogs(); });   // trang chi tiết chỉ hiện log của TRB đang xem
     connect(ctx.trbControl, &services::TrbControl::commandFinished, this, [this](const QString &d, bool sent) {
-        logEvent((sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d,
+        logEvent(tagged(sent ? EventKind::Ctrl : EventKind::Err,
+                         (sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d),
                  LogTrbMonitor);
     });
     connect(ctx.trbConfig, &services::TrbConfig::deviceFinished, this, [this](int mb, int trb, bool ok, const QString &m) {
-        logEvent(QStringLiteral("Cấu hình %1: %2%3").arg(trbName(mb, trb), ok ? QString() : QStringLiteral("LỖI, "), m), LogTrbConfig);
+        logEvent(tagged(ok ? EventKind::Cfg : EventKind::Err,
+                         QStringLiteral("Cấu hình %1: %2%3").arg(trbName(mb, trb), ok ? QString() : QStringLiteral("LỖI, "), m)), LogTrbConfig);
     });
     connect(ctx.trbControl, &services::TrbControl::debugTrbChanged, this, [this] {
         const auto d = m_ctx.trbControl->debugTrb();
-        logEvent(d ? QStringLiteral("Chế độ Debug: %1 (chỉ một TRB được Debug)").arg(trbName(d->first, d->second))
-                   : QStringLiteral("Không còn TRB nào ở chế độ Debug"), LogTrbMonitor);
+        logEvent(tagged(EventKind::Debug, d ? QStringLiteral("Chế độ Debug: %1 (chỉ một TRB được Debug)").arg(trbName(d->first, d->second))
+                                          : QStringLiteral("Không còn TRB nào ở chế độ Debug")), LogTrbMonitor);
     });
     connect(ctx.psuControl, &services::PsuControl::commandFinished, this, [this](const QString &d, bool sent) {
-        logEvent((sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d,
+        logEvent(tagged(sent ? EventKind::Ctrl : EventKind::Err,
+                         (sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d),
                  LogPsuMonitor);
     });
     connect(ctx.psuConfig, &services::PsuConfig::deviceFinished, this, [this](int addr, bool ok, const QString &m) {
-        logEvent(QStringLiteral("Cấu hình PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m), LogPsuConfig);
+        logEvent(tagged(ok ? EventKind::Cfg : EventKind::Err,
+                         QStringLiteral("Cấu hình PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m)), LogPsuConfig);
     });
     connect(ctx.psuStore, &model::PsuStore::psuStatusChanged, this, [this](int addr, Status from, Status to) {
         m_listDirty = true;
         if (from == Status::NoData && to == Status::Ok) return; // lần đầu thấy PSU: không cần báo
-        logEvent(QStringLiteral("PSU %1: %2 → %3").arg(addr).arg(statusText(from), statusText(to)), LogPsuMonitor);
+        if (to == Status::Lost || (from == Status::Lost && to == Status::Ok)) return;   // bỏ qua sự kiện mất / có lại kết nối
+        logEvent(tagged(kindOf(to), from == Status::Lost ? QStringLiteral("PSU %1: %2").arg(addr).arg(statusText(to))
+                                                         : QStringLiteral("PSU %1: %2 → %3").arg(addr).arg(statusText(from), statusText(to))),
+                 LogPsuMonitor);
     });
-    connect(ctx.fpgaOta, &services::FpgaOta::finished, this, [this](const QString &s) { logEvent(QStringLiteral("Nạp FPGA: ") + s, LogFirmware); });
+    connect(ctx.fpgaOta, &services::FpgaOta::finished, this, [this](const QString &s) { logEvent(tagged(EventKind::Ota, QStringLiteral("Nạp FPGA: ") + s), LogFirmware); });
     connect(ctx.stmOta, &services::StmOta::deviceFinished, this, [this](int addr, bool ok, const QString &m) {
-        logEvent(QStringLiteral("Nạp STM32 PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m), LogFirmware);
+        logEvent(tagged(ok ? EventKind::Ota : EventKind::Err,
+                         QStringLiteral("Nạp STM32 PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m)), LogFirmware);
     });
     connect(ctx.auth, &Auth::lockedChanged, this, [this](bool locked) {
-        logEvent(locked ? QStringLiteral("Đã khóa chế độ kỹ sư") : QStringLiteral("Đã mở khóa chế độ kỹ sư"));
+        logEvent(tagged(EventKind::Auth, locked ? QStringLiteral("Đã khóa chế độ kỹ sư") : QStringLiteral("Đã mở khóa chế độ kỹ sư")));
     });
 
     auto *body = new QWidget;
@@ -125,7 +143,10 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
             [this](int mb, int trb, Status from, Status to) {
         m_listDirty = true;
         if (from == Status::NoData && to == Status::Ok) return; // lần đầu thấy thiết bị: không cần báo
-        logEvent(QStringLiteral("%1: %2 → %3").arg(trbName(mb, trb), statusText(from), statusText(to)), LogTrbMonitor, mb, trb);
+        if (to == Status::Lost || (from == Status::Lost && to == Status::Ok)) return;   // bỏ qua sự kiện mất / có lại kết nối
+        logEvent(tagged(kindOf(to), from == Status::Lost ? QStringLiteral("%1: %2").arg(trbName(mb, trb), statusText(to))
+                                                         : QStringLiteral("%1: %2 → %3").arg(trbName(mb, trb), statusText(from), statusText(to))),
+                 LogTrbMonitor, mb, trb);
     });
 
     watchLink(ctx.monitorLink, QStringLiteral("Giám sát (TCP)"), m_tcpPill, m_tcpButton);
@@ -219,9 +240,9 @@ void MainWindow::watchLink(core::Link *link, const QString &title, StatusPill *p
         return title + QStringLiteral(": ") + state;
     };
     show(S::Closed);
-    connect(link, &core::Link::stateChanged, this, [=](S s) { logEvent(show(s)); });
+    connect(link, &core::Link::stateChanged, this, [=](S s) { logEvent(tagged(EventKind::Net, show(s))); });
     connect(link, &core::Link::errorOccurred, this,
-            [=](const QString &m) { logEvent(QStringLiteral("Lỗi %1: %2").arg(title, m)); });
+            [=](const QString &m) { logEvent(tagged(EventKind::Err, QStringLiteral("Lỗi %1: %2").arg(title, m))); });
 
     auto hex = [=](const char *dir, const QByteArray &d) { logHex(link->name(), dir, d); };
     connect(link, &core::Link::frameReceived, this, [=](const core::Frame &f) { hex("RX", f.raw); });
@@ -233,7 +254,7 @@ void MainWindow::toggleTcp()
     core::Link *link = m_ctx.monitorLink;
     if (m_tcpState != core::Transport::State::Closed) { QMetaObject::invokeMethod(link, &core::Link::stop); return; }
     const QString host = m_tcpAddress->text().trimmed();
-    if (host.isEmpty()) { logEvent(QStringLiteral("Chưa nhập địa chỉ IP của Gateway")); return; }
+    if (host.isEmpty()) { logEvent(tagged(EventKind::Err, QStringLiteral("Chưa nhập địa chỉ IP của Gateway"))); return; }
     const quint16 port = quint16(m_tcpPort->value());
     Settings::save("monitor/gatewayAddress", host);
     Settings::save("monitor/gatewayPort", port);
@@ -247,7 +268,7 @@ void MainWindow::toggleSerial()
     if (m_comState != core::Transport::State::Closed) { QMetaObject::invokeMethod(link, &core::Link::stop); return; }
     const QString port = m_comPort->currentText();
     const int baud = m_comBaud->currentText().toInt();
-    if (port.isEmpty() || baud <= 0) { logEvent(QStringLiteral("Chưa chọn cổng COM hoặc baudrate không hợp lệ")); return; }
+    if (port.isEmpty() || baud <= 0) { logEvent(tagged(EventKind::Err, QStringLiteral("Chưa chọn cổng COM hoặc baudrate không hợp lệ"))); return; }
     Settings::save("service/port", port);
     Settings::save("service/baud", baud);
     core::SerialTransport *t = m_ctx.serial;

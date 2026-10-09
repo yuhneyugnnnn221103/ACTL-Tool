@@ -100,20 +100,22 @@ int main(int argc, char *argv[])
     QObject::connect(&trbMonitor, &services::TrbMonitor::powerGoodChanged, &window, [&](int mb, int trb, int bits) {
         QStringList bad;
         for (int i = 0; i < 4; ++i) if (bits >> i & 1) bad << QStringLiteral("TRM%1").arg(i + 1);
-        window.logEvent(QStringLiteral("MB%1 / TRB%2: %3").arg(mb).arg(trb)
+        window.logEvent(ui::tagged(ui::EventKind::Pg, QStringLiteral("MB%1 / TRB%2: %3").arg(mb).arg(trb)
                             .arg(bits ? QStringLiteral("mất PG (Power Good) %1, tính là trip").arg(bad.join(", "))
-                                      : QStringLiteral("PG đã tốt trở lại")),
+                                      : QStringLiteral("PG đã tốt trở lại"))),
                         ui::LogTrbMonitor, mb, trb);
     });
-    QObject::connect(&alarms, &services::AlarmEngine::alarmEvent, &window, [&](int mb, int trb, const QString &t, bool) {
-        window.logEvent(QStringLiteral("MB%1 / TRB%2: %3").arg(mb).arg(trb).arg(t), ui::LogTrbMonitor, mb, trb);
+    QObject::connect(&alarms, &services::AlarmEngine::alarmEvent, &window, [&](int mb, int trb, const QString &t, bool raised) {
+        window.logEvent(ui::tagged(raised ? ui::EventKind::Warn : ui::EventKind::Ok, QStringLiteral("MB%1 / TRB%2: %3").arg(mb).arg(trb).arg(t)),
+                        ui::LogTrbMonitor, mb, trb);
     });
-    QObject::connect(&psuAlarms, &services::AlarmEngine::alarmEvent, &window, [&](int addr, int, const QString &t, bool) {
-        window.logEvent(QStringLiteral("PSU %1: %2").arg(addr).arg(t), ui::LogPsuMonitor);
+    QObject::connect(&psuAlarms, &services::AlarmEngine::alarmEvent, &window, [&](int addr, int, const QString &t, bool raised) {
+        window.logEvent(ui::tagged(raised ? ui::EventKind::Warn : ui::EventKind::Ok, QStringLiteral("PSU %1: %2").arg(addr).arg(t)),
+                        ui::LogPsuMonitor);
     });
-    QObject::connect(&logger, &services::CsvLogger::errorOccurred, &window, [&](const QString &m) { window.logEvent(m); });
-    if (!thresholdError.isEmpty()) window.logEvent(thresholdError);
-    if (!psuThresholdError.isEmpty()) window.logEvent(psuThresholdError);
+    QObject::connect(&logger, &services::CsvLogger::errorOccurred, &window, [&](const QString &m) { window.logEvent(ui::tagged(ui::EventKind::Err, m)); });
+    if (!thresholdError.isEmpty()) window.logEvent(ui::tagged(ui::EventKind::Err, thresholdError));
+    if (!psuThresholdError.isEmpty()) window.logEvent(ui::tagged(ui::EventKind::Err, psuThresholdError));
     window.showMaximized();
 
     ioThread.start();

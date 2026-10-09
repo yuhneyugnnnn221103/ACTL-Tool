@@ -21,15 +21,22 @@ DeviceStore::DeviceStore(int mbCount, int trbPerMb, QObject *parent)
     m_counts[int(Status::NoData)] = m_trbs.size();
 }
 
+QList<Status> DeviceStore::conditions(int mb, int trb) const
+{
+    const TrbState &t = m_trbs.at(mb * m_trbPerMb + trb);
+    QList<Status> out;
+    if (t.status == Status::Trip || (t.status == Status::Lost && t.lastLive == Status::Trip)) out << Status::Trip;
+    if (!t.alarms.isEmpty() && (t.status == Status::Warning || t.status == Status::Trip || t.status == Status::Lost)) out << Status::Warning;
+    if (t.status == Status::Lost) out << Status::Lost;
+    if (out.isEmpty()) out << t.status;      // Ok, NoData, Updating
+    return out;
+}
+
 int DeviceStore::countCondition(Status s) const
 {
     if (s == Status::Ok || s == Status::Lost || s == Status::NoData || s == Status::Updating) return count(s);
     int n = 0;
-    for (const TrbState &t : m_trbs) {
-        const bool tripped = t.status == Status::Trip || (t.status == Status::Lost && t.lastLive == Status::Trip);
-        const bool over = !t.alarms.isEmpty() && (t.status == Status::Warning || t.status == Status::Trip || t.status == Status::Lost);
-        n += s == Status::Trip ? tripped : over;
-    }
+    for (int i = 0; i < m_trbs.size(); ++i) n += conditions(i / m_trbPerMb, i % m_trbPerMb).contains(s);
     return n;
 }
 

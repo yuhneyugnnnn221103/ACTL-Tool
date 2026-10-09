@@ -190,6 +190,8 @@ Gateway hỏi `AB CD 11 11 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giá
 
 - Trip code hiện 8 ô theo thứ tự bit 0 (LSB) ở trái đến bit 7 (MSB) ở phải. Các thẻ đếm trạng thái ở thanh trên đếm theo điều kiện, một TRB có thể tính vào nhiều thẻ (vừa trip vừa quá ngưỡng; mất kết nối nhưng trước đó đang trip hoặc quá ngưỡng), nên tổng có thể vượt số TRB.
 
+- Mỗi dòng trong khung Sự kiện bắt đầu bằng mã loại: `[TRIP]` vào trạng thái Trip, `[WARN]` giá trị vượt ngưỡng, `[OK]` trở lại bình thường, `[PG]` Power Good, `[CTRL]` lệnh điều khiển/beam đã gửi, `[CFG]` đọc/ghi cấu hình, `[DBG]` chế độ Debug, `[OTA]` nạp code, `[NET]` kết nối Gateway/RS485, `[ERR]` lỗi, `[AUTH]` khóa/mở khóa kỹ sư. Sự kiện TRB/PSU mất kết nối và có lại kết nối không được ghi (xem trạng thái ở lưới tổng quan và thẻ trạng thái); nếu TRB có lại tin mà đang Trip hoặc quá ngưỡng thì vẫn ghi sự kiện đó. Trang Chi tiết TRB hiện đủ các thẻ trạng thái của TRB đang xem (Trip, Quá ngưỡng, Mất kết nối cùng lúc).
+
 ## Việc còn lại
 
 - `actl_sim`: PSU, nạp FPGA/STM32, kịch bản JSON, cấu hình Ethernet (xem `docs/simulator_design.md`).
