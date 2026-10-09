@@ -42,6 +42,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         core/transport.h
         core/serial_transport.h core/serial_transport.cpp
         core/tcp_server_transport.h core/tcp_server_transport.cpp
+        core/tcp_client_transport.h core/tcp_client_transport.cpp
         core/replay_transport.h core/replay_transport.cpp
         core/link.h core/link.cpp
         proto/field_table.h proto/field_table.cpp

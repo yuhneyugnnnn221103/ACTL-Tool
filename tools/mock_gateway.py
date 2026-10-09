@@ -4,7 +4,7 @@
 Các lệnh (python3 tools/mock_gateway.py <lệnh> -h để xem tùy chọn):
 
   list         Liệt kê các kịch bản.
-  tcp          Kết nối vào app (PC là TCP server, mặc định 127.0.0.1:5000) rồi bơm bản tin giám sát
+  tcp          Giả Gateway: là TCP server (mặc định 0.0.0.0:5000), chờ app (TCP client) nối vào rồi bơm bản tin giám sát
                TRB (1111) và PSU (81) theo kịch bản. In ra lệnh điều khiển/beam mà app gửi xuống.
   hex          Ghi file hex để app phát lại: đặt monitor/replayFile=<file> trong actl_tool.ini.
   thresholds   Ghi thresholds.json và psu_thresholds.json mẫu để kịch bản "warning" có giá trị vượt ngưỡng.
@@ -14,7 +14,7 @@ Các lệnh (python3 tools/mock_gateway.py <lệnh> -h để xem tùy chọn):
 
 Ví dụ:
   python3 tools/mock_gateway.py thresholds --dir build            # ngưỡng mẫu, chạy trước khi mở app
-  python3 tools/mock_gateway.py tcp --scenario all --rate 2       # app tự lắng nghe khi khởi động; chạy lệnh này sau khi mở app
+  python3 tools/mock_gateway.py tcp --scenario all --rate 2       # chạy trước, trong app nhập IP máy này (127.0.0.1) cổng 5000 rồi Kết nối
   python3 tools/mock_gateway.py serial --drop 0.2 --corrupt 0.1   # thử cấu hình khi RS485 mất gói / ghi sai
 
 Mọi CMD phía PSU là 2 byte lặp (01 01, 03 03, 04 04, 81 81, 82 82, 90 90 .. 95 95), CRC phủ từ byte CMD.
@@ -318,16 +318,52 @@ def decode_control(buf):
 
 
 def cmd_tcp(args):
+    """Giả Gateway: là TCP server, chờ app (TCP client) nối vào rồi bơm bản tin giám sát."""
     ctx = Ctx(args.mb, args.trb, args.psu_first, args.psu_count, args.seed)
-    sock = None
-    while sock is None:
-        try:
-            sock = socket.create_connection((args.host, args.port), timeout=3)
-        except OSError as e:
-            print(f"chưa nối được {args.host}:{args.port} ({e}); hãy bấm 'Lắng nghe' trong app. Thử lại sau 2 s...")
-            time.sleep(2)
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind((args.host, args.port))
+    srv.listen(1)
+    print(f"giả Gateway đang chờ app nối vào {args.host}:{args.port} (trong app nhập IP máy này và cổng {args.port}, bấm Kết nối). Ctrl+C để dừng.")
+    try:
+        while True:
+            sock, peer = srv.accept()
+            print(f"app {peer[0]}:{peer[1]} đã nối vào")
+            if tcp_session(args, ctx, sock) is False:
+                break
+            print("chờ app nối lại...")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        srv.close()
+
+
+def burst_frames(frames):
+    """Gom các khung giám sát của 8 TRB cùng một MB thành một lần gửi, như Gateway thật."""
+    out, buf, cur = [], bytearray(), None
+    for item in frames:
+        data, pause = item if isinstance(item, tuple) else (item, 0)
+        mb = data[4] if len(data) > 4 and data[2:4] == b"\x11\x11" and not pause else None
+        if mb is not None and (cur is None or mb == cur) and len(buf) // 280 < 8:
+            buf += data
+            cur = mb
+            continue
+        if buf:
+            out.append((bytes(buf), 0))
+            buf, cur = bytearray(), None
+        if mb is not None:
+            buf += data
+            cur = mb
+        else:
+            out.append((data, pause))
+    if buf:
+        out.append((bytes(buf), 0))
+    return out
+
+
+def tcp_session(args, ctx, sock):
     sock.settimeout(0.01)
-    print(f"đã nối {args.host}:{args.port}, kịch bản '{args.scenario}', {args.rate} lượt/giây. Ctrl+C để dừng.")
+    print(f"kịch bản '{args.scenario}', {args.rate} lượt/giây, mỗi lần gửi dồn 8 bản tin TRB của một MB.")
 
     stop = threading.Event()
     rx = bytearray()
@@ -361,7 +397,7 @@ def cmd_tcp(args):
             if name != last_name:
                 print(f"[{ctx.t:6.1f}s] kịch bản: {name} - {SCENARIOS[name][1]}")
                 last_name = name
-            for item in frames:
+            for item in burst_frames(frames):
                 data, pause = item if isinstance(item, tuple) else (item, 0)
                 sock.setblocking(True)
                 sock.sendall(data)
@@ -370,12 +406,13 @@ def cmd_tcp(args):
                     time.sleep(pause)
             time.sleep(max(0.0, 1.0 / args.rate))
     except KeyboardInterrupt:
-        pass
+        return False
     except (BrokenPipeError, ConnectionResetError):
         print("app đã ngắt kết nối")
     finally:
         stop.set()
         sock.close()
+    return True
 
 
 # ----------------------------------------------------------------------------- file hex / ngưỡng
@@ -612,7 +649,7 @@ def main():
 
     p = sub.add_parser("list"); p.set_defaults(fn=cmd_list)
     p = sub.add_parser("tcp"); common(p); p.set_defaults(fn=cmd_tcp)
-    p.add_argument("--host", default="127.0.0.1"); p.add_argument("--port", type=int, default=5000)
+    p.add_argument("--host", default="0.0.0.0", help="địa chỉ lắng nghe"); p.add_argument("--port", type=int, default=5000)
     p.add_argument("--rate", type=float, default=2.0, help="số lượt gửi đủ mọi thiết bị mỗi giây")
     p.add_argument("--duration", type=float, default=0, help="giây; 0 = chạy mãi")
     p = sub.add_parser("hex"); common(p); p.set_defaults(fn=cmd_hex)

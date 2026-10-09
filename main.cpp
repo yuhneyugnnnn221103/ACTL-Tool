@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
     // Hai đường truyền, chung một thread I/O. Thêm đường mới = thêm một transport + một Link ở đây.
     core::Transport *monitorTransport;
     if (cfg.monitorReplayFile.isEmpty())
-        monitorTransport = ctx.tcp = new core::TcpServerTransport(QHostAddress(cfg.monitorAddress), cfg.monitorPort);
+        monitorTransport = ctx.tcp = new core::TcpClientTransport(cfg.monitorAddress, cfg.monitorPort);
     else
         monitorTransport = new core::ReplayTransport(cfg.monitorReplayFile, cfg.replayIntervalMs, true);
     ctx.monitorLink = new core::Link(QStringLiteral("monitor"), monitorTransport, &registry);
@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
     window.showMaximized();
 
     ioThread.start();
-    QMetaObject::invokeMethod(ctx.monitorLink, &core::Link::start); // TCP tự lắng nghe; cổng COM mở bằng nút
+    QMetaObject::invokeMethod(ctx.monitorLink, &core::Link::start); // TCP tự nối tới Gateway (và nối lại khi mất); cổng COM mở bằng nút
     const int rc = app.exec();
     ioThread.quit();
     ioThread.wait();

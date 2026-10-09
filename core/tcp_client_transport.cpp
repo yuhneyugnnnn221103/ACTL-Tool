@@ -10,6 +10,7 @@ TcpClientTransport::TcpClientTransport(const QString &host, quint16 port, QObjec
     connect(&m_socket, &QTcpSocket::connected, this, [this] {
         m_socket.setSocketOption(QAbstractSocket::LowDelayOption, 1);
         m_retry.stop();
+        m_errorShown = false;
         setState(State::Connected);
     });
     connect(&m_socket, &QTcpSocket::readyRead, this, [this] { emit bytesReceived(m_socket.readAll()); });
@@ -19,13 +20,23 @@ TcpClientTransport::TcpClientTransport(const QString &host, quint16 port, QObjec
         m_retry.start();
     });
     connect(&m_socket, &QTcpSocket::errorOccurred, this, [this] {
-        if (m_wanted) emit errorOccurred(m_socket.errorString());
+        if (m_wanted && !m_errorShown) {   // chỉ báo lần đầu; các lần thử nối lại sau đó im lặng cho đỡ đầy log
+            m_errorShown = true;
+            emit errorOccurred(m_socket.errorString());
+        }
     });
+}
+
+void TcpClientTransport::configure(const QString &host, quint16 port)
+{
+    m_host = host;
+    m_port = port;
 }
 
 void TcpClientTransport::open()
 {
     m_wanted = true;
+    m_errorShown = false;
     setState(State::Waiting);
     connectNow();
     m_retry.start();

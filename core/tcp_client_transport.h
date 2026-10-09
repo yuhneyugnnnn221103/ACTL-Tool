@@ -10,6 +10,7 @@ class TcpClientTransport : public Transport {
     Q_OBJECT
 public:
     TcpClientTransport(const QString &host, quint16 port, QObject *parent = nullptr);
+    void configure(const QString &host, quint16 port); // gọi khi đang đóng
     void open() override;
     void close() override;
     void write(const QByteArray &data) override;
@@ -22,7 +23,7 @@ private:
     quint16 m_port;
     QTcpSocket m_socket;
     QTimer m_retry;
-    bool m_wanted = false;
+    bool m_wanted = false, m_errorShown = false;
 };
 
 } // namespace core

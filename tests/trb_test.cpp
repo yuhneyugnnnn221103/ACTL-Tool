@@ -528,6 +528,28 @@ private slots:
                     + store.countCondition(Status::Warning) > 4);   // tổng vượt số TRB
     }
 
+    void gatewayBurstOfEightFramesInOneChunkIsAllParsed()
+    {
+        Rig rig("monitor");
+        services::TrbMonitor::registerFrames(rig.registry, true);
+        rig.link.start();
+        model::DeviceStore store(2, 8);
+        services::TrbMonitor mon(&rig.link, &store, nullptr);
+        QSignalSpy updated(&mon, &services::TrbMonitor::trbUpdated);
+        QList<double> v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxPg] = 0x0F;
+        QByteArray burst;
+        for (int t = 0; t < 8; ++t) burst += monitorFrame(1, t, v);       // Gateway gửi dồn 8 TRB của MB1 trong một lần
+        QCOMPARE(burst.size(), 8 * trbmon::kLength);
+        rig.transport->inject(burst);
+        QCOMPARE(updated.size(), 8);
+        QCOMPARE(store.count(model::Status::Ok), 8);
+        QCOMPARE(store.trb(1, 7).frames, quint64(1));
+        // Chia mảnh bất kỳ giữa các khung (TCP không giữ ranh giới) cũng không mất khung nào.
+        for (int off = 0; off < burst.size(); off += 333) rig.transport->inject(burst.mid(off, 333));
+        QCOMPARE(updated.size(), 16);
+    }
+
     void powerGoodFailureCountsAsTrip()
     {
         Rig rig("monitor");

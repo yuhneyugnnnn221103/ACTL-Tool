@@ -7,7 +7,7 @@ Trạng thái: **giai đoạn 1 (TRB) đã làm xong**: `actl_sim` giám sát, �
 Module giả lập là **một chương trình riêng chạy trên PC** (`actl_sim`), cắm vào phía thiết bị của Gateway qua cổng COM RS485 hoặc Ethernet và đóng vai 160 TRB + 5 PSU. App ACTL Tool **không đổi**: nó vẫn nói chuyện với Gateway như với hệ thống thật.
 
 ```
-ACTL Tool  <──TCP (monitor) + RS485 (service)──>  Gateway  <──COM RS485 / Ethernet──>  actl_sim
+ACTL Tool  <──TCP (app là client, Gateway là server) + RS485 (service)──>  Gateway  <──COM RS485 / Ethernet──>  actl_sim
  (hiển thị, điều khiển,                          (tự hỏi vòng,                         (160 TRB + 5 PSU giả,
   cấu hình, nạp code)                             chuyển tiếp)                          kịch bản, bơm lỗi)
 ```

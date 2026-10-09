@@ -20,14 +20,14 @@ Code đã biên dịch và chạy test trên Linux với Qt 6.4, dùng thiết b
 ## Kết nối
 
 ```
-PC ── TCP (PC là server) ── Gateway ── MB 0..19 ── TRB 0..7
+PC ── TCP (Gateway là server, PC là client) ── Gateway ── MB 0..19 ── TRB 0..7
 PC ── RS485 (cổng COM)  ──    │
                               └────── PSU
 ```
 
 | Đường | Dùng cho |
 |---|---|
-| TCP, link `monitor` | Giám sát và điều khiển. Gateway tự hỏi từng thiết bị rồi chuyển bản tin lên PC |
+| TCP, link `monitor` | Giám sát và điều khiển. App nối tới Gateway (tự nối lại khi mất kết nối). Gateway tự hỏi từng thiết bị rồi chuyển bản tin lên PC, mỗi lần gửi dồn 8 bản tin TRB của một MB |
 | RS485, link `service` | Cấu hình và nạp code, hỏi-đáp, mỗi lúc một thao tác |
 
 Địa chỉ TRB là cặp (MB 0–19, TRB 0–7); `FF FF` là broadcast.
@@ -84,7 +84,7 @@ Các khóa hay dùng trong `actl_tool.ini`:
 
 | Khóa | Mặc định | Ý nghĩa |
 |---|---|---|
-| `monitor/address`, `monitor/port` | `0.0.0.0`, `5000` | Địa chỉ PC lắng nghe TCP |
+| `monitor/gatewayAddress`, `monitor/gatewayPort` | `192.168.1.10`, `5000` | Địa chỉ IP và cổng TCP của Gateway (Gateway là server, app là client) |
 | `monitor/replayFile` | rỗng | Phát lại file hex thay cho TCP để thử không cần phần cứng |
 | `service/port`, `service/baud` | rỗng, `1000000` | Cổng COM RS485 |
 | `system/staleMs` | `3000` | Quá thời gian này không có bản tin thì coi là mất kết nối |
@@ -101,7 +101,7 @@ Các khóa hay dùng trong `actl_tool.ini`:
 
 ```
 python3 tools/mock_gateway.py thresholds --dir build          # ghi ngưỡng mẫu cạnh file chạy (làm trước khi mở app)
-python3 tools/mock_gateway.py tcp --scenario all --rate 2      # nối vào app (app tự lắng nghe cổng 5000)
+python3 tools/mock_gateway.py tcp --scenario all --rate 2      # giả Gateway: là TCP server cổng 5000; trong app nhập IP máy này rồi Kết nối
 python3 tools/mock_gateway.py serial --drop 0.2                # RS485 giả (pty) để thử đọc/ghi cấu hình
 python3 tools/mock_gateway.py hex replay.hex --scenario trip   # file hex cho monitor/replayFile
 python3 tools/mock_gateway.py list                             # các kịch bản
@@ -124,7 +124,7 @@ services/  Mỗi chức năng một lớp: trb_monitor, trb_control, trb_config,
 model/     device_store (TRB), psu_store (PSU), thresholds
 proto/     Định nghĩa bản tin; field_table mô tả trường dùng chung cho
            giải mã, đóng gói, hiển thị, CSV và ngưỡng
-core/      transport (TCP server, serial, phát lại file), frame_parser, link
+core/      transport (TCP client, TCP server, serial, phát lại file), frame_parser, link
 app/       main, settings, context
 tests/     Test cho từng lớp, dùng transport và thiết bị giả lập
 ```
@@ -161,6 +161,12 @@ Mọi bản tin có dạng `AB CD | CMD | địa chỉ | dữ liệu | CRC16 | E
 | ACK nạp STM32 | `94 94` | 17 | 2 |
 
 Mọi CMD đều 2 byte, mã lặp hai lần (`11 11`, `A1 A1`, `81 81`...). Bản tin TRB dùng địa chỉ 2 byte (MB, TRB) và CRC từ byte địa chỉ; bản tin PSU và nạp STM32 dùng địa chỉ 1 byte và CRC từ byte CMD. Trong ACK nạp STM32, trường `ack_cmd` vẫn là mã 1 byte (ví dụ `92`). `FrameRegistry` vẫn hỗ trợ CMD 1 byte nhưng từ chối đăng ký nếu một CMD 1 byte trùng byte đầu của một CMD 2 byte.
+
+## Kết nối mạng với Gateway
+
+Gateway là TCP server, app là TCP client. Nhập IP và cổng của Gateway ở thanh trên cùng rồi bấm "Kết nối"; app cũng tự nối khi mở, và tự nối lại mỗi 2 giây nếu mất kết nối. IP và cổng được nhớ trong `actl_tool.ini` (`monitor/gatewayAddress`, `monitor/gatewayPort`).
+
+Card mạng của PC cần cùng dải mạng với Gateway, ví dụ Gateway `192.168.1.10` thì PC đặt IP tĩnh `192.168.1.20`, mặt nạ `255.255.255.0` (cắm dây thẳng không cần gateway mặc định hay DNS). Kiểm tra bằng `ping 192.168.1.10`. App chỉ nối ra ngoài nên thường không bị tường lửa hỏi.
 
 ## Giả lập TRB (`actl_sim`, `actl_sim_cli`)
 

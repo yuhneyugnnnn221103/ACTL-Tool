@@ -147,10 +147,11 @@ QWidget *MainWindow::buildTopBar()
     auto *l = new QHBoxLayout(bar);
     l->setContentsMargins(0, 0, 0, 0);
 
-    // Đường giám sát: PC là TCP server, Gateway kết nối tới.
+    // Đường giám sát: PC là TCP client, nối tới Gateway (TCP server).
     m_tcpAddress = new QLineEdit(cfg.monitorAddress);
-    m_tcpAddress->setFixedWidth(110);
-    m_tcpAddress->setToolTip(QStringLiteral("Địa chỉ IP của PC để lắng nghe (0.0.0.0 = mọi card mạng)"));
+    m_tcpAddress->setFixedWidth(120);
+    m_tcpAddress->setToolTip(QStringLiteral("Địa chỉ IP của Gateway (cùng dải mạng với PC, ví dụ 192.168.1.10)"));
+    m_tcpAddress->setPlaceholderText(QStringLiteral("IP Gateway"));
     m_tcpPort = new QSpinBox;
     m_tcpPort->setRange(1, 65535);
     m_tcpPort->setValue(cfg.monitorPort);
@@ -206,11 +207,11 @@ void MainWindow::watchLink(core::Link *link, const QString &title, StatusPill *p
     auto show = [=](S s) {
         (isTcp ? m_tcpState : m_comState) = s;
         const QString state = s == S::Connected ? QStringLiteral("đã kết nối")
-                            : s == S::Waiting   ? QStringLiteral("chờ Gateway") : QStringLiteral("đóng");
+                            : s == S::Waiting   ? (isTcp ? QStringLiteral("đang nối Gateway") : QStringLiteral("chờ")) : QStringLiteral("đóng");
         const Status look = s == S::Connected ? Status::Ok : s == S::Waiting ? Status::Warning : Status::Lost;
         pillLabel->setPill(theme::statusMark(look) + QLatin1Char(' ') + title + QStringLiteral(": ") + state,
                            theme::statusColor(look), theme::statusTextColor(look));
-        button->setText(s == S::Closed ? (isTcp ? QStringLiteral("Lắng nghe") : QStringLiteral("Mở")) : QStringLiteral("Đóng"));
+        button->setText(s == S::Closed ? (isTcp ? QStringLiteral("Kết nối") : QStringLiteral("Mở")) : (isTcp ? QStringLiteral("Ngắt") : QStringLiteral("Đóng")));
         m_tcpAddress->setEnabled(m_tcpState == S::Closed);
         m_tcpPort->setEnabled(m_tcpState == S::Closed);
         m_comPort->setEnabled(m_comState == S::Closed);
@@ -231,13 +232,13 @@ void MainWindow::toggleTcp()
 {
     core::Link *link = m_ctx.monitorLink;
     if (m_tcpState != core::Transport::State::Closed) { QMetaObject::invokeMethod(link, &core::Link::stop); return; }
-    const QHostAddress addr(m_tcpAddress->text().trimmed());
-    if (addr.isNull()) { logEvent(QStringLiteral("Địa chỉ IP không hợp lệ: ") + m_tcpAddress->text()); return; }
+    const QString host = m_tcpAddress->text().trimmed();
+    if (host.isEmpty()) { logEvent(QStringLiteral("Chưa nhập địa chỉ IP của Gateway")); return; }
     const quint16 port = quint16(m_tcpPort->value());
-    Settings::save("monitor/address", addr.toString());
-    Settings::save("monitor/port", port);
-    core::TcpServerTransport *t = m_ctx.tcp;
-    QMetaObject::invokeMethod(link, [=] { t->configure(addr, port); link->start(); });
+    Settings::save("monitor/gatewayAddress", host);
+    Settings::save("monitor/gatewayPort", port);
+    core::TcpClientTransport *t = m_ctx.tcp;
+    QMetaObject::invokeMethod(link, [=] { t->configure(host, port); link->start(); });
 }
 
 void MainWindow::toggleSerial()

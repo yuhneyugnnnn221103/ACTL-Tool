@@ -2,7 +2,7 @@
 // Mọi thứ giao diện cần, gom lại để thêm service mới không phải sửa chữ ký hàm ở nhiều nơi.
 #include "../app/settings.h"
 #include "../core/serial_transport.h"
-#include "../core/tcp_server_transport.h"
+#include "../core/tcp_client_transport.h"
 #include "../services/csv_logger.h"
 #include "../model/psu_store.h"
 #include "../services/fpga_ota.h"
@@ -20,9 +20,9 @@ struct AppContext {
     model::Thresholds *thresholds = nullptr;
     model::PsuStore *psuStore = nullptr;
     model::Thresholds *psuThresholds = nullptr;
-    core::Link *monitorLink = nullptr;       // TCP: giám sát + điều khiển
+    core::Link *monitorLink = nullptr;       // TCP: PC là client, Gateway là server; giám sát + điều khiển
     core::Link *serviceLink = nullptr;       // RS485: cấu hình + nạp code
-    core::TcpServerTransport *tcp = nullptr; // nullptr khi đang phát lại file hex
+    core::TcpClientTransport *tcp = nullptr; // nullptr khi đang phát lại file hex
     core::SerialTransport *serial = nullptr;
     services::TrbControl *trbControl = nullptr;
     services::TrbConfig *trbConfig = nullptr;
