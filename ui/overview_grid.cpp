@@ -72,11 +72,18 @@ void OverviewGrid::paintEvent(QPaintEvent *)
 
     for (int mb = 0; mb < m_store->mbCount(); ++mb) {
         for (int trb = 0; trb < m_store->trbPerMb(); ++trb) {
-            const Status s = m_store->trb(mb, trb).status;
+            const model::TrbState &st = m_store->trb(mb, trb);
+            const Status s = st.status;
             const QRectF c = cellRect(mb, trb);
             p.setPen(Qt::NoPen);
             p.setBrush(statusColor(s));
             p.drawRoundedRect(c, 6, 6);
+            // Mất kết nối nhưng trước đó đang Trip / quá ngưỡng: nền xám kèm viền màu của trạng thái cũ.
+            if (s == Status::Lost && (st.lastLive == Status::Trip || st.lastLive == Status::Warning)) {
+                p.setPen(QPen(statusColor(st.lastLive), 3));
+                p.setBrush(Qt::NoBrush);
+                p.drawRoundedRect(c.adjusted(3.5, 3.5, -3.5, -3.5), 4, 4);
+            }
             if (mb == m_dbgMb && trb == m_dbgTrb) {   // viền xanh dương: TRB đang Debug
                 p.setPen(QPen(theme::statusColor(Status::Updating).darker(130), 3));
                 p.setBrush(Qt::NoBrush);

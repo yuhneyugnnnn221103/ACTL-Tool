@@ -505,6 +505,24 @@ private slots:
         QVERIFY(!store.contains(2, 0) && !store.contains(0, 2) && !store.contains(-1, 0));
     }
 
+    void lostTrbRemembersWhatItWasBeforeAndKeepsItsData()
+    {
+        model::DeviceStore store(1, 2);
+        QList<double> v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxTrip0] = 4;
+        store.updateTrb(0, 0, v, {}, 1000, model::Status::Trip, {3});
+        store.updateTrb(0, 1, zeros(trbmon::kNumFields), {}, 1000, model::Status::Warning, {5});
+        QCOMPARE(store.trb(0, 0).lastLive, model::Status::Trip);
+        store.markStale(9000, 3000);
+        for (int t = 0; t < 2; ++t) QCOMPARE(store.trb(0, t).status, model::Status::Lost);
+        QCOMPARE(store.trb(0, 0).lastLive, model::Status::Trip);       // trạng thái cũ còn được nhớ
+        QCOMPARE(store.trb(0, 1).lastLive, model::Status::Warning);
+        QCOMPARE(store.trb(0, 0).values.at(trbmon::kIdxTrip0), 4.0);   // số liệu và ô vượt ngưỡng cuối cùng còn nguyên
+        QCOMPARE(store.trb(0, 1).alarms, QList<int>({5}));
+        store.updateTrb(0, 0, v, {}, 9500, model::Status::Ok);
+        QCOMPARE(store.trb(0, 0).lastLive, model::Status::Ok);
+    }
+
     // ---------- Ngưỡng và cảnh báo ----------
     void thresholdsPerDeviceFallBackToDefault()
     {

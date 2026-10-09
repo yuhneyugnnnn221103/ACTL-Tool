@@ -13,6 +13,7 @@ QString statusText(Status s);
 
 struct TrbState {
     Status status = Status::NoData;
+    Status lastLive = Status::NoData;   // trạng thái gần nhất khác Lost (Ok, Warning, Trip, Updating): biết trước khi mất kết nối là gì
     qint64 lastSeenMs = 0;
     quint64 frames = 0;
     QList<double> values;   // theo thứ tự bảng trường proto::trbmon::table()

@@ -491,6 +491,8 @@ QString MainWindow::trbTooltip(int mb, int trb) const
     using namespace proto::trbmon;
     const model::TrbState &s = m_store->trb(mb, trb);
     QString t = QStringLiteral("%1\nTrạng thái: %2").arg(trbName(mb, trb), statusText(s.status));
+    if (s.status == Status::Lost && s.lastLive != Status::NoData)
+        t += QStringLiteral(" (trước đó: %1)").arg(statusText(s.lastLive));
     if (const auto d = m_ctx.trbControl->debugTrb(); d && d->first == mb && d->second == trb)
         t += QStringLiteral("\nĐang ở chế độ Debug");
     if (s.frames == 0) return t;

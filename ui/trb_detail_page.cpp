@@ -302,8 +302,11 @@ void TrbDetailPage::refresh()
     const model::TrbState &s = m_store->trb(m_mb, m_trb);
     const bool has = s.frames > 0;
 
-    m_pill->setPill(theme::statusMark(s.status) + (theme::statusMark(s.status).isEmpty() ? QString() : QStringLiteral(" "))
-                        + statusText(s.status),
+    QString pillText = theme::statusMark(s.status) + (theme::statusMark(s.status).isEmpty() ? QString() : QStringLiteral(" "))
+                       + statusText(s.status);
+    if (s.status == Status::Lost && (s.lastLive == Status::Trip || s.lastLive == Status::Warning))
+        pillText += QStringLiteral(" · trước đó: %1").arg(statusText(s.lastLive));
+    m_pill->setPill(pillText,
                     OverviewGrid::statusColor(s.status), theme::statusTextColor(s.status));
     QString text;
     if (has)

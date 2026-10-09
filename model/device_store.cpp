@@ -52,6 +52,7 @@ void DeviceStore::setStatus(int mb, int trb, Status to)
     --m_counts[int(from)];
     ++m_counts[int(to)];
     s.status = to;
+    if (to != Status::Lost && to != Status::NoData) s.lastLive = to;
     emit trbStatusChanged(mb, trb, from, to);
 }
 

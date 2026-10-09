@@ -178,6 +178,8 @@ actl_sim_cli --listen 5000                    # hoặc cho Gateway nối vào
 
 Gateway hỏi `AB CD 11 11 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giám sát 280 byte của TRB đó. Điều khiển `A2 A2`, beam `14 14`, ghi `A1 A1` và hỏi `A3 A3` cấu hình được xử lý (không có ACK); TRB bật Debug tự gửi khung giám sát mỗi giây. Bit của `INIT_ADAR` theo mặt nạ ADAR của lệnh beam gần nhất và bit của `PA` theo mặt nạ PA của lệnh điều khiển gần nhất (1 bật, 0 tắt). Bản dòng lệnh có các lệnh khi chạy (gõ `help`): `lost 0 2`, `over 0 1 "TRM1.I SEN2" 2500`, `trip 0 1 1 0x04`, `faults drop 10`, `status`. Chưa có PSU, nạp FPGA/STM32 và kịch bản JSON. Test: `sim_test`.
 
+- TRB mất kết nối vẫn giữ số liệu, đèn, trip code và ô quá ngưỡng cuối cùng nhận được (dòng "Cập nhật n s trước" cho biết đã cũ bao lâu). Trên lưới tổng quan, TRB mất kết nối có nền xám; nếu trước đó đang Trip hoặc quá ngưỡng thì có thêm viền đỏ hoặc cam, và chú thích ghi "(trước đó: Trip)".
+
 ## Việc còn lại
 
 - `actl_sim`: PSU, nạp FPGA/STM32, kịch bản JSON, cấu hình Ethernet (xem `docs/simulator_design.md`).
