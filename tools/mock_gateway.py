@@ -64,11 +64,14 @@ def put(frame: bytearray, off: int, value: int, size: int) -> None:
 
 # ----------------------------------------------------------------------------- bản tin TRB
 
-TRB_LEN, TRB_CRC_START = 280, 4
+TRB_LEN, TRB_CRC_START = 310, 4
 TRB_TRM_OFF, TRB_TRM_SIZE = 6, 50          # 4 khối TRM x 50 byte
 TRB_V, TRB_I, TRB_TEMP = 206, 208, 210
 TRB_TRIP0, TRB_STATE0 = 212, 228
 TRB_ADAR, TRB_PA, TRB_PG, TRB_MCU, TRB_HUM = 232, 233, 234, 235, 237
+# Sau độ ẩm: 1 byte dự phòng (239), rồi 24 byte bản tin lỗi (240..263), PERIOD TXEN 3 byte (264), PULSE TXEN 2 byte (267),
+# PERIOD BEAMSYNC 3 byte (269), PULSE BEAMSYNC 2 byte (272), 32 byte dự phòng, CRC, E1 E2.
+TRB_ERR0, TRB_ERR_COUNT, TRB_PERIOD_TXEN, TRB_PULSE_TXEN, TRB_PERIOD_BEAM, TRB_PULSE_BEAM = 240, 24, 264, 267, 269, 272
 TRB_TRIP_COUNT = 16
 
 # Trong khối TRM: I_SEN1..8 (+0), DET1..8 (+16), TEMP1..4 (+32), I_PA1..4 (+40), I_LNA (+48); mỗi trường 2 byte.
@@ -103,6 +106,10 @@ def trb_frame(mb, trb, rng, *, isen=None, v=150, i=500, power_temp=40, mcu=50, h
     f[TRB_ADAR], f[TRB_PA], f[TRB_PG] = adar, pa, pg
     put(f, TRB_MCU, mcu, 2)
     put(f, TRB_HUM, humidity, 2)
+    put(f, TRB_PERIOD_TXEN, 1000, 3)
+    put(f, TRB_PULSE_TXEN, 100, 2)
+    put(f, TRB_PERIOD_BEAM, 2000, 3)
+    put(f, TRB_PULSE_BEAM, 200, 2)
     return seal(f, TRB_CRC_START)
 
 
@@ -344,7 +351,7 @@ def burst_frames(frames):
     for item in frames:
         data, pause = item if isinstance(item, tuple) else (item, 0)
         mb = data[4] if len(data) > 4 and data[2:4] == b"\x11\x11" and not pause else None
-        if mb is not None and (cur is None or mb == cur) and len(buf) // 280 < 8:
+        if mb is not None and (cur is None or mb == cur) and len(buf) // TRB_LEN < 8:
             buf += data
             cur = mb
             continue
@@ -573,8 +580,8 @@ def cmd_selftest(_args):
     rng = random.Random(1)
     print("bản tin giám sát:")
     t = trb_frame(3, 5, rng, trips=[1] * 16)
-    check(len(t) == TRB_LEN and t[:4] == bytes([H1, H2, 0x11, 0x11]), "TRB 280 byte, CMD 1111")
-    check(crc16(t[4:276]) == (t[276] << 8 | t[277]) and t[278:] == bytes([T1, T2]), "TRB CRC từ byte 4, tailer E1 E2")
+    check(len(t) == TRB_LEN and t[:4] == bytes([H1, H2, 0x11, 0x11]), "TRB 310 byte, CMD 1111")
+    check(crc16(t[4:TRB_LEN - 4]) == (t[TRB_LEN - 4] << 8 | t[TRB_LEN - 3]) and t[TRB_LEN - 2:] == bytes([T1, T2]), "TRB CRC từ byte 4, tailer E1 E2")
     check(t[4] == 3 and t[5] == 5 and t[TRB_TRIP0:TRB_TRIP0 + 16] == bytes([1] * 16), "địa chỉ và trip code đúng vị trí")
     p = psu_frame(2, rng, trips=[0xAA] * 10)
     check(len(p) == PSU_LEN and p[2:4] == b"\x81\x81" and p[PSU_ADDR] == 2, "PSU 266 byte, CMD 81 81, địa chỉ ở byte 4")

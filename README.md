@@ -6,7 +6,7 @@ Phần mềm PC (Qt 6, C++17, QWidget) giám sát, điều khiển, cấu hình 
 
 | Chức năng | Tình trạng |
 |---|---|
-| Giám sát TRB (bản tin 280 byte), lưới tổng quan 20 × 8 | Xong |
+| Giám sát TRB (bản tin 310 byte), lưới tổng quan 20 × 8 | Xong |
 | Chi tiết TRB, lệnh điều khiển và beam | Xong, chưa chờ ACK |
 | Cảnh báo quá ngưỡng theo từng TRB, log CSV | Xong |
 | Cấu hình TRB (đơn lẻ, hàng loạt), khóa mật khẩu | Xong |
@@ -145,7 +145,7 @@ Mọi bản tin có dạng `AB CD | CMD | địa chỉ | dữ liệu | CRC16 | E
 
 | Bản tin | CMD | Độ dài | CRC tính từ byte |
 |---|---|---|---|
-| Giám sát TRB | `11 11` | 280 | 4 |
+| Giám sát TRB | `11 11` | 310 | 4 |
 | Điều khiển TRB | `A2 A2` | 14 | 4 |
 | Beam TRB | `14 14` | 17 | 4 |
 | Ghi cấu hình TRB | `A1 A1` | 520 | 4 |

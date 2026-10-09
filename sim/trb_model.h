@@ -36,7 +36,7 @@ public:
     bool hasForced() const { return !m_forced.isEmpty(); }
 
     QList<double> sample();                    // giá trị giám sát hiện tại (có nhiễu nhỏ)
-    QByteArray monitorFrame();                 // khung giám sát 280 byte
+    QByteArray monitorFrame();                 // khung giám sát 310 byte
     QByteArray configReply() const;            // A4 A4
 
     // Điều khiển / beam / ghi cấu hình / hỏi cấu hình. Trả về khung trả lời, rỗng nếu không có.

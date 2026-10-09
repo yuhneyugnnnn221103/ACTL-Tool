@@ -1,5 +1,5 @@
 #pragma once
-// Bản tin giám sát TRB, 280 byte (theo cfg_protocol.h):
+// Bản tin giám sát TRB, 310 byte (theo cfg_protocol.h):
 // [AB CD][11 11][MB][TRB][TRM1..4: 4x50B][TRB 6B][Trip 16B][State 4B]
 // [INIT_ADAR][PA][PG][Nhiệt MCU 2B][Độ ẩm power 2B][Dự phòng 37B][CRC 2B][E1 E2]
 #include "../core/frame.h"
@@ -7,7 +7,7 @@
 
 namespace proto::trbmon {
 
-constexpr int kLength = 280, kCrcStart = 4, kOffMb = 4, kOffTrb = 5;
+constexpr int kLength = 310, kCrcStart = 4, kOffMb = 4, kOffTrb = 5;
 constexpr int kNumTrm = 4, kTrmFields = 25, kNumTrip = 16;
 
 // Chỉ số trong bảng trường (thứ tự add() trong table()).
@@ -17,7 +17,12 @@ constexpr int kIdxTrip0 = kIdxTrbV + 3;
 constexpr int kIdxState0 = kIdxTrip0 + kNumTrip;
 constexpr int kIdxInitAdar = kIdxState0 + kNumTrm, kIdxPa = kIdxInitAdar + 1, kIdxPg = kIdxInitAdar + 2;
 constexpr int kIdxMcuTemp = kIdxInitAdar + 3, kIdxHumidity = kIdxInitAdar + 4;
-constexpr int kNumFields = kIdxHumidity + 1;
+// Sau độ ẩm power: 1 byte dự phòng, rồi 24 byte "bản tin lỗi", PERIOD/PULSE của TXEN và BEAMSYNC, 32 byte dự phòng, CRC, E1 E2.
+constexpr int kNumErr = 24;
+constexpr int kIdxErr0 = kIdxHumidity + 1;
+constexpr int kIdxPeriodTxen = kIdxErr0 + kNumErr, kIdxPulseTxen = kIdxPeriodTxen + 1;
+constexpr int kIdxPeriodBeamsync = kIdxPulseTxen + 1, kIdxPulseBeamsync = kIdxPeriodBeamsync + 1;
+constexpr int kNumFields = kIdxPulseBeamsync + 1;
 
 // PG (Power Good): bit i = TRM(i+1), 1 = nguồn tốt. Bit 0 trong 4 bit thấp là lỗi và được coi như một trip.
 constexpr int kPgMask = 0x0F;
@@ -41,7 +46,7 @@ const FieldTable &table();
 constexpr int kPollLength = 12;
 core::FrameSpec pollSpec(bool checkCrc);
 QByteArray buildPoll(int mb, int trb);
-// Khung trả lời 280 byte từ giá trị theo bảng trường (dùng cho giả lập và test).
+// Khung trả lời 310 byte từ giá trị theo bảng trường (dùng cho giả lập và test).
 QByteArray buildFrame(int mb, int trb, const QList<double> &values);
 
 } // namespace proto::trbmon

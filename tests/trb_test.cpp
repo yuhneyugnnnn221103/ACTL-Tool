@@ -92,14 +92,33 @@ private slots:
         const FieldTable &t = trbmon::table();
         QCOMPARE(t.size(), trbmon::kNumFields);
         int end = 6;
-        for (const Field &f : t.fields()) { QCOMPARE(f.offset, end); end += f.size; }
-        QCOMPARE(end, trbmon::kLength - 4 - 37);              // 37 byte dự phòng rồi CRC, tailer
+        for (const Field &f : t.fields()) {
+            if (f.name == QStringLiteral("BẢN TIN LỖI 1")) ++end;     // byte 240 (đếm từ 1) là dự phòng, nằm giữa độ ẩm và bản tin lỗi
+            QCOMPARE(f.offset, end);
+            end += f.size;
+        }
+        QCOMPARE(end, trbmon::kLength - 4 - 32);              // 32 byte dự phòng rồi CRC, tailer
+        QCOMPARE(trbmon::kLength, 310);
         QCOMPARE(t.fields().at(trbmon::kIdxTrm0).name, QStringLiteral("TRM1.I SEN1"));
         QCOMPARE(t.fields().at(trbmon::kIdxTrm0 + trbmon::kTrmFields).offset, 6 + 50);     // TRM2 sau 50 byte
         QCOMPARE(t.fields().at(trbmon::kIdxTrbV).offset, 6 + 4 * 50);
         QCOMPARE(t.fields().at(trbmon::kIdxTrip0).offset, 6 + 4 * 50 + 6);
         QCOMPARE(t.fields().at(trbmon::kIdxInitAdar).offset, 6 + 4 * 50 + 6 + 16 + 4);
         QCOMPARE(t.fields().at(trbmon::kIdxHumidity).size, 2);
+        // Số byte tính từ 1: lỗi 241-264, PERIOD TXEN 265-267, PULSE TXEN 268-269, PERIOD BEAMSYNC 270-272, PULSE BEAMSYNC 273-274.
+        auto first = [&](int idx) { return t.fields().at(idx).offset + 1; };
+        QCOMPARE(t.fields().at(trbmon::kIdxErr0).name, QStringLiteral("BẢN TIN LỖI 1"));
+        QCOMPARE(first(trbmon::kIdxErr0), 241);
+        QCOMPARE(first(trbmon::kIdxErr0 + trbmon::kNumErr - 1), 264);
+        QCOMPARE(t.fields().at(trbmon::kIdxErr0 + trbmon::kNumErr - 1).name, QStringLiteral("BẢN TIN LỖI 24"));
+        QCOMPARE(first(trbmon::kIdxPeriodTxen), 265);
+        QCOMPARE(t.fields().at(trbmon::kIdxPeriodTxen).size, 3);
+        QCOMPARE(first(trbmon::kIdxPulseTxen), 268);
+        QCOMPARE(t.fields().at(trbmon::kIdxPulseTxen).size, 2);
+        QCOMPARE(first(trbmon::kIdxPeriodBeamsync), 270);
+        QCOMPARE(t.fields().at(trbmon::kIdxPeriodBeamsync).size, 3);
+        QCOMPARE(first(trbmon::kIdxPulseBeamsync), 273);
+        QCOMPARE(t.fields().at(trbmon::kIdxPulseBeamsync).size, 2);
     }
 
     void configTableLayout()

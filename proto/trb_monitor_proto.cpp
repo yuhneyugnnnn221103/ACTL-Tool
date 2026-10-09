@@ -16,6 +16,7 @@ static FieldTable build()
     int off = 6;
     auto u16 = [&](const QString &name) { t.add(name, off, 2); off += 2; };
     auto u8 = [&](const QString &name) { t.add(name, off, 1); off += 1; };
+    auto u24 = [&](const QString &name) { t.add(name, off, 3); off += 3; };
 
     for (int m = 1; m <= kNumTrm; ++m) {
         const QString p = QStringLiteral("TRM%1.").arg(m);
@@ -35,7 +36,13 @@ static FieldTable build()
     u8(QStringLiteral("PG"));
     u16(QStringLiteral("TEMP MCU"));
     u16(QStringLiteral("HUMIDITY POWER"));
-    Q_ASSERT(t.size() == kNumFields && off == kLength - 4 - 37);
+    off += 1;                                              // byte 240 (đếm từ 1): dự phòng
+    for (int i = 1; i <= kNumErr; ++i) u8(QStringLiteral("BẢN TIN LỖI %1").arg(i));
+    u24(QStringLiteral("PERIOD TXEN"));
+    u16(QStringLiteral("PULSE TXEN"));
+    u24(QStringLiteral("PERIOD BEAMSYNC"));
+    u16(QStringLiteral("PULSE BEAMSYNC"));
+    Q_ASSERT(t.size() == kNumFields && off == kLength - 4 - 32);   // còn 32 byte dự phòng, CRC, E1 E2
     return t;
 }
 
