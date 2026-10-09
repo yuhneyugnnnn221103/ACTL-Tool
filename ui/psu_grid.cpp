@@ -63,17 +63,18 @@ void PsuGrid::paintEvent(QPaintEvent *)
     QFont markFont = font();
     markFont.setBold(true);
     p.setFont(markFont);
-    auto fill = [&](const QRectF &r, Status s, const QString &text) {
+    auto fill = [&](const QRectF &r, Status s, const QString &text, bool lost) {
         p.setPen(Qt::NoPen);
         p.setBrush(OverviewGrid::statusColor(s));
         p.drawRoundedRect(r, 6, 6);
         p.setPen(theme::statusTextColor(s));
-        p.drawText(r, Qt::AlignCenter, text);
+        p.drawText(r, Qt::AlignCenter, lost && text.isEmpty() ? QStringLiteral("?") : text);   // mất kết nối: nền theo số liệu cuối, thêm dấu ?
     };
     for (int row = 0; row < m_store->count(); ++row) {
         const int addr = m_store->firstAddr() + row;
-        fill(nameRect(row), m_store->psu(addr).status, QStringLiteral("PSU %1").arg(addr));
-        for (int c = 0; c < kClusters; ++c) fill(cellRect(row, c), m_store->clusterStatus(addr, c), {});
+        const bool lost = m_store->isLost(addr);
+        fill(nameRect(row), m_store->displayStatus(addr), lost ? QStringLiteral("PSU %1 ?").arg(addr) : QStringLiteral("PSU %1").arg(addr), false);
+        for (int c = 0; c < kClusters; ++c) fill(cellRect(row, c), m_store->clusterDisplayStatus(addr, c), {}, lost);
     }
 }
 

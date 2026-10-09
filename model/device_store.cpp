@@ -32,6 +32,16 @@ QList<Status> DeviceStore::conditions(int mb, int trb) const
     return out;
 }
 
+Status DeviceStore::displayStatus(int mb, int trb) const
+{
+    const TrbState &t = m_trbs.at(mb * m_trbPerMb + trb);
+    if (t.status != Status::Lost) return t.status;
+    const QList<Status> c = conditions(mb, trb);
+    if (c.contains(Status::Trip)) return Status::Trip;
+    if (c.contains(Status::Warning)) return Status::Warning;
+    return t.lastLive == Status::Updating ? Status::Updating : Status::Ok;
+}
+
 int DeviceStore::countCondition(Status s) const
 {
     if (s == Status::Ok || s == Status::Lost || s == Status::NoData || s == Status::Updating) return count(s);

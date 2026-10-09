@@ -27,6 +27,10 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSplitter>
+#include <QScrollBar>
+#include <QTextBlockFormat>
+#include <QTextCharFormat>
+#include <QTextCursor>
 #include <QStackedWidget>
 #include <QTabWidget>
 #include <QTimer>
@@ -34,6 +38,44 @@
 namespace ui {
 
 namespace {
+// Định dạng một dòng sự kiện theo mã loại ở đầu dòng ("12:00:00.000 [TRIP] ..."); TRIP/PG/WARN có thêm nền nhạt để thấy ngay.
+QTextCharFormat eventFormat(const QString &line)
+{
+    struct Look { const char *tag, *fg, *bg; bool bold; };
+    static const Look kLooks[] = {
+        {"TRIP", "#B91C1C", "#FEE2E2", true},  {"PG", "#B91C1C", "#FEE2E2", true}, {"ERR", "#B91C1C", nullptr, true},
+        {"WARN", "#B45309", "#FEF3C7", true},  {"OK", "#15803D", nullptr, false},  {"CTRL", "#1D4ED8", nullptr, false},
+        {"CFG", "#0F766E", nullptr, false},    {"DBG", "#7C3AED", nullptr, false}, {"OTA", "#9333EA", nullptr, false},
+        {"NET", "#6B7280", nullptr, false},    {"AUTH", "#92400E", nullptr, false}};
+    QTextCharFormat f;
+    const int open = line.indexOf(QLatin1Char('['));
+    const int close = open >= 0 ? line.indexOf(QLatin1Char(']'), open) : -1;
+    if (open > 0 && close > open) {
+        const QString tag = line.mid(open + 1, close - open - 1);
+        for (const Look &l : kLooks)
+            if (tag == QLatin1String(l.tag)) {
+                f.setForeground(QColor(QLatin1String(l.fg)));
+                if (l.bg) f.setBackground(QColor(QLatin1String(l.bg)));
+                if (l.bold) f.setFontWeight(QFont::DemiBold);
+                break;
+            }
+    }
+    return f;
+}
+
+// Thêm một dòng có màu vào cuối khung; cuộn theo nếu đang ở cuối. Mỗi dòng là một block riêng định dạng mặc định
+// để màu nền của dòng trước không lan sang dòng sau.
+void appendColored(QPlainTextEdit *edit, const QString &line)
+{
+    QScrollBar *bar = edit->verticalScrollBar();
+    const bool atBottom = bar->value() >= bar->maximum();
+    QTextCursor c(edit->document());
+    c.movePosition(QTextCursor::End);
+    if (!edit->document()->isEmpty()) c.insertBlock(QTextBlockFormat(), QTextCharFormat());
+    c.insertText(line, eventFormat(line));
+    if (atBottom) bar->setValue(bar->maximum());
+}
+
 // Mã sự kiện theo trạng thái TRB / PSU vừa chuyển tới.
 EventKind kindOf(model::Status to)
 {
@@ -391,15 +433,31 @@ void MainWindow::appendLog(QPlainTextEdit *edit, QList<LogEntry> &buffer, const 
 {
     buffer.append(e);
     if (buffer.size() > 5000) buffer.removeFirst();
-    if (logVisible(e)) edit->appendPlainText(e.text);
+    if (!logVisible(e)) return;
+    if (edit == m_eventLog) appendColored(edit, e.text);
+    else edit->appendPlainText(e.text);
 }
 
 void MainWindow::rebuildLog(QPlainTextEdit *edit, const QList<LogEntry> &buffer)
 {
-    QStringList lines;
-    for (const LogEntry &e : buffer)
-        if (logVisible(e)) lines << e.text;
-    edit->setPlainText(lines.join(QLatin1Char('\n')));
+    if (edit == m_eventLog) {
+        edit->clear();
+        QTextCursor c(edit->document());
+        c.beginEditBlock();
+        bool first = true;
+        for (const LogEntry &e : buffer) {
+            if (!logVisible(e)) continue;
+            if (!first) c.insertBlock(QTextBlockFormat(), QTextCharFormat());
+            c.insertText(e.text, eventFormat(e.text));
+            first = false;
+        }
+        c.endEditBlock();
+    } else {
+        QStringList lines;
+        for (const LogEntry &e : buffer)
+            if (logVisible(e)) lines << e.text;
+        edit->setPlainText(lines.join(QLatin1Char('\n')));
+    }
     edit->moveCursor(QTextCursor::End);
 }
 

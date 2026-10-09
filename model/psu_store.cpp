@@ -22,6 +22,22 @@ Status PsuStore::clusterStatus(int addr, int cluster) const
     return clusterAlarms(addr, cluster).isEmpty() ? Status::Ok : Status::Warning;
 }
 
+Status PsuStore::clusterDisplayStatus(int addr, int cluster) const
+{
+    const Status s = psu(addr).status;
+    if (s == Status::NoData || s == Status::Updating) return s;
+    return clusterAlarms(addr, cluster).isEmpty() ? Status::Ok : Status::Warning;
+}
+
+Status PsuStore::displayStatus(int addr) const
+{
+    const PsuState &p = psu(addr);
+    if (p.status != Status::Lost) return p.status;
+    if (p.lastLive == Status::Trip) return Status::Trip;
+    if (!p.alarms.isEmpty()) return Status::Warning;
+    return p.lastLive == Status::Updating ? Status::Updating : Status::Ok;
+}
+
 void PsuStore::updatePsu(int addr, const QList<double> &values, const QByteArray &raw, qint64 timestampMs,
                          Status status, const QList<int> &alarms)
 {
@@ -50,6 +66,7 @@ void PsuStore::setStatus(int addr, Status to)
     const Status from = s.status;
     if (from == to) return;
     s.status = to;
+    if (to != Status::Lost && to != Status::NoData) s.lastLive = to;
     emit psuStatusChanged(addr, from, to);
 }
 
