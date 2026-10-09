@@ -17,6 +17,7 @@ struct Palette {
     QColor surfaceAlt{0xF9, 0xFA, 0xFB};  // header bảng, vùng phụ
     QColor border{0xE2, 0xE5, 0xEA};      // viền mảnh 1px
     QColor grid{0xEE, 0xF0, 0xF3};        // lưới bảng, rất nhạt
+    QColor stripe{0xF1, 0xF4, 0xF8};      // dòng chẵn của bảng (so le để dóng hàng)
     QColor text{0x1F, 0x29, 0x37};        // chữ chính
     QColor textMuted{0x6B, 0x72, 0x80};   // chữ phụ
     QColor accent{0x25, 0x63, 0xEB};      // màu nhấn

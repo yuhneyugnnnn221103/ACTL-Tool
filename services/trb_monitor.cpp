@@ -23,10 +23,14 @@ void TrbMonitor::onFrame(const core::Frame &frame)
     if (!m_store->contains(mb, trb)) { ++m_badAddress; return; }
 
     const QList<double> v = trbmon::table().decode(frame.raw);
-    // Tạm quy ước: có trip code khác 0 là Trip; Trip được ưu tiên hơn Quá ngưỡng.
+    // Tạm quy ước: có trip code khác 0 hoặc mất PG (Power Good) là Trip; Trip được ưu tiên hơn Quá ngưỡng.
     bool trip = false;
     for (int i = 0; i < trbmon::kNumTrip; ++i)
         trip = trip || v.at(trbmon::kIdxTrip0 + i) != 0;
+    const int pgFault = trbmon::pgFaultBits(v.at(trbmon::kIdxPg));
+    trip = trip || pgFault != 0;
+    int &lastPg = m_pgFault[mb << 8 | trb];
+    if (pgFault != lastPg) { lastPg = pgFault; emit powerGoodChanged(mb, trb, pgFault); }
 
     const QList<int> bad = m_alarms ? m_alarms->check(mb, trb, v) : QList<int>();
     const model::Status before = m_store->trb(mb, trb).status;

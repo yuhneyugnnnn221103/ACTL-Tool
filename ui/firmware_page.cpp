@@ -32,6 +32,7 @@ QTableWidget *makeTable(const QStringList &headers, int rows)
     t->verticalHeader()->hide();
     t->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     t->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    t->setAlternatingRowColors(true);
     t->setSelectionMode(QAbstractItemView::NoSelection);
     for (int r = 0; r < rows; ++r)
         for (int c = 0; c < headers.size(); ++c) t->setItem(r, c, new QTableWidgetItem);

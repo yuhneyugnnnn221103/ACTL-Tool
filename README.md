@@ -180,6 +180,8 @@ Gateway hỏi `AB CD 11 11 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giá
 
 - TRB mất kết nối vẫn giữ số liệu, đèn, trip code và ô quá ngưỡng cuối cùng nhận được (dòng "Cập nhật n s trước" cho biết đã cũ bao lâu). Trên lưới tổng quan, TRB mất kết nối có nền xám; nếu trước đó đang Trip hoặc quá ngưỡng thì có thêm viền đỏ hoặc cam, và chú thích ghi "(trước đó: Trip)".
 
+- PG (Power Good) của TRM1..4: bit nào của 4 bit thấp byte PG bằng 0 thì TRB được tính là Trip (kèm dòng sự kiện "mất PG TRMn" và chú thích ở lưới tổng quan). Mọi bảng dữ liệu tô so le màu dòng; thời gian "Cập nhật ... trước" hiện dạng giờ:phút:giây.
+
 ## Việc còn lại
 
 - `actl_sim`: PSU, nạp FPGA/STM32, kịch bản JSON, cấu hình Ethernet (xem `docs/simulator_design.md`).

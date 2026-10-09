@@ -72,6 +72,7 @@ QWidget *PsuConfigPage::buildContent()
 
     const auto &fields = psucfg::table().fields();
     m_table = new QTableWidget(fields.size(), 4);
+    m_table->setAlternatingRowColors(true);
     m_table->setHorizontalHeaderLabels({QStringLiteral("Nhóm"), QStringLiteral("Trường"),
                                         QStringLiteral("Trên PSU"), QStringLiteral("Giá trị mới")});
     m_table->verticalHeader()->hide();

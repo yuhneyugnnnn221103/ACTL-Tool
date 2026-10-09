@@ -438,6 +438,7 @@ private slots:
 
         thr.set(3, 5, trbmon::kIdxTrbV, {100, 200});
         QList<double> v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxPg] = 0x0F;       // PG tốt, nếu không sẽ tính là trip
         v[trbmon::kIdxTrbV] = 150;
         v[trbmon::kIdxTrm0] = 77;
         rig.transport->inject(monitorFrame(3, 5, v));
@@ -459,6 +460,7 @@ private slots:
         QCOMPARE(store.trb(3, 5).status, model::Status::Trip);
 
         v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxPg] = 0x0F;
         v[trbmon::kIdxTrbV] = 150;
         rig.transport->inject(monitorFrame(3, 5, v));
         QCOMPARE(store.trb(3, 5).status, model::Status::Ok);
@@ -503,6 +505,36 @@ private slots:
         store.updateTrb(1, 1, zeros(trbmon::kNumFields), {}, 9500, model::Status::Ok);   // có lại tin: hồi phục
         QCOMPARE(store.trb(1, 1).status, model::Status::Ok);
         QVERIFY(!store.contains(2, 0) && !store.contains(0, 2) && !store.contains(-1, 0));
+    }
+
+    void powerGoodFailureCountsAsTrip()
+    {
+        Rig rig("monitor");
+        services::TrbMonitor::registerFrames(rig.registry, true);
+        rig.link.start();
+        model::DeviceStore store(2, 2);
+        services::TrbMonitor mon(&rig.link, &store, nullptr);
+        QSignalSpy pg(&mon, &services::TrbMonitor::powerGoodChanged);
+
+        QList<double> v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxPg] = 0x0F;
+        rig.transport->inject(monitorFrame(1, 1, v));
+        QCOMPARE(store.trb(1, 1).status, model::Status::Ok);
+        QCOMPARE(pg.size(), 0);
+
+        v[trbmon::kIdxPg] = 0b1010;                     // PG TRM1 và TRM3 mất
+        rig.transport->inject(monitorFrame(1, 1, v));
+        QCOMPARE(store.trb(1, 1).status, model::Status::Trip);
+        QCOMPARE(pg.size(), 1);
+        QCOMPARE(pg.last().at(2).toInt(), 0b0101);
+        rig.transport->inject(monitorFrame(1, 1, v));   // không đổi: không báo lại
+        QCOMPARE(pg.size(), 1);
+
+        v[trbmon::kIdxPg] = 0xF0 | 0x0F;                // bit cao không tính
+        rig.transport->inject(monitorFrame(1, 1, v));
+        QCOMPARE(store.trb(1, 1).status, model::Status::Ok);
+        QCOMPARE(pg.last().at(2).toInt(), 0);
+        QCOMPARE(trbmon::pgFaultBits(0x07), 0b1000);
     }
 
     void lostTrbRemembersWhatItWasBeforeAndKeepsItsData()

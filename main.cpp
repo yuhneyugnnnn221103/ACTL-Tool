@@ -97,6 +97,14 @@ int main(int argc, char *argv[])
         });
 
     ui::MainWindow window(ctx);
+    QObject::connect(&trbMonitor, &services::TrbMonitor::powerGoodChanged, &window, [&](int mb, int trb, int bits) {
+        QStringList bad;
+        for (int i = 0; i < 4; ++i) if (bits >> i & 1) bad << QStringLiteral("TRM%1").arg(i + 1);
+        window.logEvent(QStringLiteral("MB%1 / TRB%2: %3").arg(mb).arg(trb)
+                            .arg(bits ? QStringLiteral("mất PG (Power Good) %1, tính là trip").arg(bad.join(", "))
+                                      : QStringLiteral("PG đã tốt trở lại")),
+                        ui::LogTrbMonitor, mb, trb);
+    });
     QObject::connect(&alarms, &services::AlarmEngine::alarmEvent, &window, [&](int mb, int trb, const QString &t, bool) {
         window.logEvent(QStringLiteral("MB%1 / TRB%2: %3").arg(mb).arg(trb).arg(t), ui::LogTrbMonitor, mb, trb);
     });

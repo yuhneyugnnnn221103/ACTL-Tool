@@ -2,6 +2,7 @@
 #include "alarm_engine.h"
 #include "../core/link.h"
 #include "../model/device_store.h"
+#include <QHash>
 
 namespace services {
 
@@ -20,11 +21,13 @@ public slots:
 
 signals:
     void trbUpdated(int mb, int trb, bool statusChanged);
+    void powerGoodChanged(int mb, int trb, int faultBits);   // bit i = PG của TRM(i+1) đang lỗi; 0 = hết lỗi
 
 private:
     model::DeviceStore *m_store;
     AlarmEngine *m_alarms;
     quint64 m_badAddress = 0;
+    QHash<int, int> m_pgFault;   // khóa mb << 8 | trb: mặt nạ PG lỗi của bản tin trước
 };
 
 } // namespace services

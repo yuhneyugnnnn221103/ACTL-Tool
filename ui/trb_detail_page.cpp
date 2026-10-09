@@ -4,6 +4,7 @@
 #include "overview_grid.h"
 #include "status_pill.h"
 #include "theme.h"
+#include "time_text.h"
 #include "../proto/trb_monitor_proto.h"
 #include <QCheckBox>
 #include <QComboBox>
@@ -113,6 +114,7 @@ QTableWidget *TrbDetailPage::makeTable(const QStringList &rows, int firstField)
     t->setHorizontalHeaderLabels(numbered(QStringLiteral("TRM%1"), trbmon::kNumTrm));
     t->setVerticalHeaderLabels(rows);
     t->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    t->setAlternatingRowColors(true);
     t->setSelectionMode(QAbstractItemView::NoSelection);
     t->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     t->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -304,14 +306,12 @@ void TrbDetailPage::refresh()
 
     QString pillText = theme::statusMark(s.status) + (theme::statusMark(s.status).isEmpty() ? QString() : QStringLiteral(" "))
                        + statusText(s.status);
-    if (s.status == Status::Lost && (s.lastLive == Status::Trip || s.lastLive == Status::Warning))
-        pillText += QStringLiteral(" · trước đó: %1").arg(statusText(s.lastLive));
     m_pill->setPill(pillText,
                     OverviewGrid::statusColor(s.status), theme::statusTextColor(s.status));
     QString text;
     if (has)
-        text = QStringLiteral("Cập nhật %1 s trước · %2 bản tin")
-                   .arg((QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs) / 1000.0, 0, 'f', 1).arg(s.frames);
+        text = QStringLiteral("Cập nhật %1 trước · %2 bản tin")
+                   .arg(elapsedText(QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs)).arg(s.frames);
     m_status->setText(text);
 
     const auto debug = m_control->debugTrb();

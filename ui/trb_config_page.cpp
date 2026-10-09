@@ -75,6 +75,7 @@ QWidget *TrbConfigPage::buildContent()
 
     const auto &fields = trbcfg::table().fields();
     m_table = new QTableWidget(fields.size(), 4);
+    m_table->setAlternatingRowColors(true);
     m_table->setHorizontalHeaderLabels({QStringLiteral("Nhóm"), QStringLiteral("Trường"),
                                         QStringLiteral("Trên thiết bị"), QStringLiteral("Giá trị mới")});
     m_table->verticalHeader()->hide();

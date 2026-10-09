@@ -7,6 +7,7 @@
 #include "psu_page.h"
 #include "status_pill.h"
 #include "theme.h"
+#include "time_text.h"
 #include "trb_config_page.h"
 #include "trb_detail_page.h"
 #include "../proto/psu_monitor_proto.h"
@@ -473,8 +474,8 @@ QString MainWindow::psuTooltip(int addr, int cluster) const
         t += QStringLiteral("\nPSU đang Trip (chưa xác định được cụm nào, chờ bảng trip code)");
     if (s.frames == 0) return t;
 
-    t += QStringLiteral("\nCập nhật: %1 s trước · %2 bản tin")
-             .arg((QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs) / 1000.0, 0, 'f', 1).arg(s.frames);
+    t += QStringLiteral("\nCập nhật: %1 trước · %2 bản tin")
+             .arg(elapsedText(QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs)).arg(s.frames);
     if (cluster < 0) {
         QStringList trips;
         for (int i = 0; i < kNumTrip; ++i)
@@ -500,11 +501,16 @@ QString MainWindow::trbTooltip(int mb, int trb) const
     QStringList trips;
     for (int i = 0; i < kNumTrip; ++i)
         trips << QStringLiteral("%1").arg(int(s.values.at(kIdxTrip0 + i)), 2, 16, QLatin1Char('0')).toUpper();
-    t += QStringLiteral("\nCập nhật: %1 s trước · %2 bản tin")
-             .arg((QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs) / 1000.0, 0, 'f', 1).arg(s.frames);
+    t += QStringLiteral("\nCập nhật: %1 trước · %2 bản tin")
+             .arg(elapsedText(QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs)).arg(s.frames);
     t += QStringLiteral("\nĐiện áp / dòng / nhiệt TRB (thô): %1 / %2 / %3")
              .arg(s.values.at(kIdxTrbV)).arg(s.values.at(kIdxTrbI)).arg(s.values.at(kIdxTrbTemp));
     t += QStringLiteral("\nTrip code: ") + trips.join(' ');
+    if (const int pg = pgFaultBits(s.values.at(kIdxPg))) {
+        QStringList bad;
+        for (int i = 0; i < 4; ++i) if (pg >> i & 1) bad << QStringLiteral("TRM%1").arg(i + 1);
+        t += QStringLiteral("\nMất PG (Power Good): ") + bad.join(", ");
+    }
     for (int f : s.alarms) t += QStringLiteral("\nQuá ngưỡng: ") + table().fields().at(f).name;
     return t;
 }

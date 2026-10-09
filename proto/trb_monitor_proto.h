@@ -19,6 +19,10 @@ constexpr int kIdxInitAdar = kIdxState0 + kNumTrm, kIdxPa = kIdxInitAdar + 1, kI
 constexpr int kIdxMcuTemp = kIdxInitAdar + 3, kIdxHumidity = kIdxInitAdar + 4;
 constexpr int kNumFields = kIdxHumidity + 1;
 
+// PG (Power Good): bit i = TRM(i+1), 1 = nguồn tốt. Bit 0 trong 4 bit thấp là lỗi và được coi như một trip.
+constexpr int kPgMask = 0x0F;
+inline int pgFaultBits(double pgByte) { return ~int(pgByte) & kPgMask; }
+
 // Ý nghĩa 16 byte trip code (i = 0..15 ứng với Trip 1..16):
 //   Trip 1-4   vượt max I_SEN1..8 của TRM1..4 (bit 0 = I_SEN1 ... bit 7 = I_SEN8)
 //   Trip 5, 6  vượt max dòng PA: Trip 5 = TRM1 và TRM2, Trip 6 = TRM3 và TRM4 (bit 0-3 = PA1-4 của TRM lẻ, bit 4-7 = PA1-4 của TRM chẵn)

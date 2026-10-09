@@ -54,7 +54,7 @@ QString styleSheet()
 
     const Palette &p = palette();
     const QList<QPair<QString, QColor>> tokens = {
-        {"bg", p.bg}, {"surface", p.surface}, {"surfaceAlt", p.surfaceAlt}, {"border", p.border}, {"grid", p.grid},
+        {"bg", p.bg}, {"surface", p.surface}, {"surfaceAlt", p.surfaceAlt}, {"border", p.border}, {"grid", p.grid}, {"stripe", p.stripe},
         {"text", p.text}, {"textMuted", p.textMuted}, {"accent", p.accent}, {"accentHover", p.accentHover},
         {"accentPressed", p.accentPressed}, {"accentSoft", p.accentSoft}, {"danger", p.danger},
         {"dangerHover", p.dangerHover}, {"dangerPressed", p.dangerPressed}, {"disabledBg", p.disabledBg},

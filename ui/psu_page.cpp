@@ -3,6 +3,7 @@
 #include "overview_grid.h"
 #include "status_pill.h"
 #include "theme.h"
+#include "time_text.h"
 #include "../proto/psu_monitor_proto.h"
 #include <QCheckBox>
 #include <QDateTime>
@@ -29,6 +30,7 @@ QTableWidget *makeTable(int rows, const QStringList &columns, const QStringList 
     t->setHorizontalHeaderLabels(columns);
     t->setVerticalHeaderLabels(rowLabels);
     t->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    t->setAlternatingRowColors(true);
     t->setSelectionMode(QAbstractItemView::NoSelection);
     t->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     t->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
@@ -191,8 +193,8 @@ void PsuPage::refresh()
                     OverviewGrid::statusColor(s.status), theme::statusTextColor(s.status));
     QString text;
     if (has)
-        text = QStringLiteral("Cập nhật %1 s trước · %2 bản tin")
-                   .arg((QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs) / 1000.0, 0, 'f', 1).arg(s.frames);
+        text = QStringLiteral("Cập nhật %1 trước · %2 bản tin")
+                   .arg(elapsedText(QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs)).arg(s.frames);
     if (s.status == Status::Lost) text += QStringLiteral(" · SỐ LIỆU BÊN DƯỚI LÀ SỐ LIỆU CŨ");
     m_status->setText(text);
 

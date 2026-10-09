@@ -155,7 +155,7 @@ QFrame[card="true"] QLabel { background: transparent; }
 /* ---------- Bảng, cây, danh sách ---------- */
 QTableWidget, QTableView, QTreeWidget, QTreeView, QListWidget {
     background: @surface@;
-    alternate-background-color: @surfaceAlt@;
+    alternate-background-color: @stripe@;
     border: 1px solid @border@;
     border-radius: 8px;
     gridline-color: @grid@;
