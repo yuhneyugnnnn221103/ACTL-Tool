@@ -507,6 +507,27 @@ private slots:
         QVERIFY(!store.contains(2, 0) && !store.contains(0, 2) && !store.contains(-1, 0));
     }
 
+    void statusCountersMayOverlapAndSumPastTheDeviceCount()
+    {
+        model::DeviceStore store(1, 4);
+        const QList<double> v = zeros(trbmon::kNumFields);
+        store.updateTrb(0, 0, v, {}, 1000, model::Status::Ok);
+        store.updateTrb(0, 1, v, {}, 1000, model::Status::Warning, {5});
+        store.updateTrb(0, 2, v, {}, 1000, model::Status::Trip, {5, 6});      // vừa trip vừa quá ngưỡng
+        store.updateTrb(0, 3, v, {}, 1000, model::Status::Trip);
+        store.markStale(9000, 3000);                                           // cả 4 mất kết nối nhưng nhớ trạng thái cũ
+        store.updateTrb(0, 0, v, {}, 9500, model::Status::Ok);                 // TRB 0 có tin lại
+        store.updateTrb(0, 2, v, {}, 9500, model::Status::Trip, {5, 6});       // TRB 2 vẫn vừa trip vừa quá ngưỡng
+
+        using model::Status;
+        QCOMPARE(store.countCondition(Status::Ok), 1);       // TRB 0
+        QCOMPARE(store.countCondition(Status::Lost), 2);     // TRB 1, 3
+        QCOMPARE(store.countCondition(Status::Trip), 2);     // TRB 2 (đang trip) + TRB 3 (mất kết nối, trước đó trip)
+        QCOMPARE(store.countCondition(Status::Warning), 2);  // TRB 1 (mất kết nối, còn ô quá ngưỡng) + TRB 2
+        QVERIFY(store.countCondition(Status::Ok) + store.countCondition(Status::Lost) + store.countCondition(Status::Trip)
+                    + store.countCondition(Status::Warning) > 4);   // tổng vượt số TRB
+    }
+
     void powerGoodFailureCountsAsTrip()
     {
         Rig rig("monitor");

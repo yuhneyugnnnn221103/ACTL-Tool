@@ -31,6 +31,9 @@ public:
     bool contains(int mb, int trb) const { return mb >= 0 && mb < m_mbCount && trb >= 0 && trb < m_trbPerMb; }
     const TrbState &trb(int mb, int trb) const { return m_trbs.at(mb * m_trbPerMb + trb); }
     int count(Status s) const { return m_counts[int(s)]; }
+    // Đếm theo "điều kiện": một TRB có thể thuộc nhiều nhóm cùng lúc (Trip kèm quá ngưỡng; mất kết nối nhưng trước đó đang
+    // Trip hoặc quá ngưỡng), nên tổng các nhóm có thể vượt số TRB. Ok, Lost, NoData loại trừ nhau như Status.
+    int countCondition(Status s) const;
 
     void updateTrb(int mb, int trb, const QList<double> &values, const QByteArray &raw,
                    qint64 timestampMs, Status status, const QList<int> &alarms = {});

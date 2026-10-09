@@ -419,12 +419,11 @@ QWidget *SimWindow::buildActions()
     for (int i = 0; i < trbmon::kNumTrip; ++i) m_tripIndex->addItem(QStringLiteral("Trip %1 - %2").arg(i + 1).arg(trbmon::tripName(i)));
     l->addWidget(m_tripIndex);
     auto *bits = new QHBoxLayout;
-    for (int b = 7; b >= 0; --b) {
+    for (int b = 0; b < 8; ++b) {     // bit 0 (LSB) ở trái, giống ô trip trong app chính
         auto *cb = new QCheckBox(QString::number(b));
-        m_tripBits.prepend(cb);
+        m_tripBits.append(cb);
         bits->addWidget(cb);
     }
-    // m_tripBits đang theo thứ tự bit 0..7 nhưng hiển thị từ bit 7 xuống bit 0 như số nhị phân
     l->addLayout(bits);
     auto updateTips = [this] {
         const int i = m_tripIndex->currentIndex();

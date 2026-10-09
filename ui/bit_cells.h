@@ -4,7 +4,7 @@
 
 namespace ui {
 
-// Một byte hiển thị thành 8 ô (bit7 ở trái ... bit0 ở phải), tự vẽ. Bit 1 tô màu Trip, bit 0 tô nhạt.
+// Một byte hiển thị thành 8 ô (bit0 - LSB ở trái ... bit7 - MSB ở phải), tự vẽ. Bit 1 tô màu Trip, bit 0 tô nhạt.
 class BitCells : public QWidget {
     Q_OBJECT
 public:

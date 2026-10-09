@@ -419,7 +419,7 @@ void MainWindow::refresh()
         const Status st = counters[i].first;
         const QString mark = theme::statusMark(st);
         m_counterPills[i]->setPill(QStringLiteral("%1%2 %3").arg(mark.isEmpty() ? QString() : mark + QLatin1Char(' '))
-                                       .arg(m_store->count(st)).arg(counters[i].second),
+                                       .arg(m_store->countCondition(st)).arg(counters[i].second),
                                    theme::statusColor(st), theme::statusTextColor(st));
     }
     if (m_listDirty) rebuildAbnormalList();

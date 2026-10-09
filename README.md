@@ -182,6 +182,8 @@ Gateway hỏi `AB CD 11 11 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giá
 
 - PG (Power Good) của TRM1..4: bit nào của 4 bit thấp byte PG bằng 0 thì TRB được tính là Trip (kèm dòng sự kiện "mất PG TRMn" và chú thích ở lưới tổng quan). Mọi bảng dữ liệu tô so le màu dòng; thời gian "Cập nhật ... trước" hiện dạng giờ:phút:giây.
 
+- Trip code hiện 8 ô theo thứ tự bit 0 (LSB) ở trái đến bit 7 (MSB) ở phải. Các thẻ đếm trạng thái ở thanh trên đếm theo điều kiện, một TRB có thể tính vào nhiều thẻ (vừa trip vừa quá ngưỡng; mất kết nối nhưng trước đó đang trip hoặc quá ngưỡng), nên tổng có thể vượt số TRB.
+
 ## Việc còn lại
 
 - `actl_sim`: PSU, nạp FPGA/STM32, kịch bản JSON, cấu hình Ethernet (xem `docs/simulator_design.md`).

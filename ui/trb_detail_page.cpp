@@ -190,7 +190,7 @@ QWidget *TrbDetailPage::buildMonitor()
         stateLayout->addStretch(1);
     }
 
-    // Mỗi trip code là một byte, hiện thành 8 ô bit (bit 7 ... bit 0), bit 1 tô đỏ.
+    // Mỗi trip code là một byte, hiện thành 8 ô bit (bit 0 ... bit 7, LSB ở trái), bit 1 tô đỏ.
     auto *trip = new QGroupBox(QStringLiteral("Trip code"));
     auto *tripLayout = new QVBoxLayout(trip);
     QStringList captions;

@@ -51,7 +51,7 @@ int BitCells::bitAt(const QPoint &p) const
     if (x < 0 || p.y() < 2 || p.y() > 2 + kCell) return -1;
     const int i = x / (kCell + kGap);
     if (i >= kBits || x % (kCell + kGap) >= kCell) return -1;
-    return kBits - 1 - i;
+    return i;
 }
 
 void BitCells::paintEvent(QPaintEvent *)
@@ -65,7 +65,7 @@ void BitCells::paintEvent(QPaintEvent *)
     const QColor off = theme::palette().border;
     p.setPen(Qt::NoPen);
     for (int i = 0; i < kBits; ++i) {
-        const int bit = kBits - 1 - i;
+        const int bit = i;                  // bit 0 (LSB) ở trái ... bit 7 (MSB) ở phải
         p.setBrush(m_known && (m_value >> bit & 1) ? on : off);
         p.drawRoundedRect(QRectF(cellsLeft() + i * (kCell + kGap), 2, kCell, kCell), 4, 4);
     }

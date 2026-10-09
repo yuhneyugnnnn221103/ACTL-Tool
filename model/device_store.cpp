@@ -21,6 +21,18 @@ DeviceStore::DeviceStore(int mbCount, int trbPerMb, QObject *parent)
     m_counts[int(Status::NoData)] = m_trbs.size();
 }
 
+int DeviceStore::countCondition(Status s) const
+{
+    if (s == Status::Ok || s == Status::Lost || s == Status::NoData || s == Status::Updating) return count(s);
+    int n = 0;
+    for (const TrbState &t : m_trbs) {
+        const bool tripped = t.status == Status::Trip || (t.status == Status::Lost && t.lastLive == Status::Trip);
+        const bool over = !t.alarms.isEmpty() && (t.status == Status::Warning || t.status == Status::Trip || t.status == Status::Lost);
+        n += s == Status::Trip ? tripped : over;
+    }
+    return n;
+}
+
 void DeviceStore::updateTrb(int mb, int trb, const QList<double> &values, const QByteArray &raw,
                             qint64 timestampMs, Status status, const QList<int> &alarms)
 {

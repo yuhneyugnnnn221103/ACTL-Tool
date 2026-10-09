@@ -123,7 +123,7 @@ QWidget *PsuPage::buildMonitor()
     auto *flags = new QGroupBox(QStringLiteral("Thời gian và trip"));
     auto *form = new QFormLayout(flags);
     form->addRow(QStringLiteral("RTC (thô)"), valueRow(psumon::kNumRtc, m_rtc, rtcNames));
-    form->addRow(QStringLiteral("Trip code (bit 7 ... bit 0)"),
+    form->addRow(QStringLiteral("Trip code (bit 0 ... bit 7)"),
                  BitCells::makeGrid(psuTripCaptions(), 5, m_trip));
 
     auto *tables = new QHBoxLayout;
