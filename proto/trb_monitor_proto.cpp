@@ -36,7 +36,7 @@ static FieldTable build()
     u8(QStringLiteral("PG"));
     u16(QStringLiteral("TEMP MCU"));
     u16(QStringLiteral("HUMIDITY POWER"));
-    off += 1;                                              // byte 240 (đếm từ 1): dự phòng
+    u8(QStringLiteral("INIT DATA"));                       // byte 240 (đếm từ 1)
     for (int i = 1; i <= kNumErr; ++i) u8(QStringLiteral("BẢN TIN LỖI %1").arg(i));
     u24(QStringLiteral("PERIOD TXEN"));
     u16(QStringLiteral("PULSE TXEN"));

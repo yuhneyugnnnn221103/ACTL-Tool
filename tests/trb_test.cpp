@@ -93,7 +93,6 @@ private slots:
         QCOMPARE(t.size(), trbmon::kNumFields);
         int end = 6;
         for (const Field &f : t.fields()) {
-            if (f.name == QStringLiteral("BẢN TIN LỖI 1")) ++end;     // byte 240 (đếm từ 1) là dự phòng, nằm giữa độ ẩm và bản tin lỗi
             QCOMPARE(f.offset, end);
             end += f.size;
         }
@@ -105,6 +104,9 @@ private slots:
         QCOMPARE(t.fields().at(trbmon::kIdxTrip0).offset, 6 + 4 * 50 + 6);
         QCOMPARE(t.fields().at(trbmon::kIdxInitAdar).offset, 6 + 4 * 50 + 6 + 16 + 4);
         QCOMPARE(t.fields().at(trbmon::kIdxHumidity).size, 2);
+        QCOMPARE(t.fields().at(trbmon::kIdxInitData).name, QStringLiteral("INIT DATA"));
+        QCOMPARE(t.fields().at(trbmon::kIdxInitData).offset + 1, 240);   // số byte tính từ 1
+        QCOMPARE(t.fields().at(trbmon::kIdxInitData).size, 1);
         // Số byte tính từ 1: lỗi 241-264, PERIOD TXEN 265-267, PULSE TXEN 268-269, PERIOD BEAMSYNC 270-272, PULSE BEAMSYNC 273-274.
         auto first = [&](int idx) { return t.fields().at(idx).offset + 1; };
         QCOMPARE(t.fields().at(trbmon::kIdxErr0).name, QStringLiteral("BẢN TIN LỖI 1"));

@@ -17,9 +17,10 @@ constexpr int kIdxTrip0 = kIdxTrbV + 3;
 constexpr int kIdxState0 = kIdxTrip0 + kNumTrip;
 constexpr int kIdxInitAdar = kIdxState0 + kNumTrm, kIdxPa = kIdxInitAdar + 1, kIdxPg = kIdxInitAdar + 2;
 constexpr int kIdxMcuTemp = kIdxInitAdar + 3, kIdxHumidity = kIdxInitAdar + 4;
-// Sau độ ẩm power: 1 byte dự phòng, rồi 24 byte "bản tin lỗi", PERIOD/PULSE của TXEN và BEAMSYNC, 32 byte dự phòng, CRC, E1 E2.
+// Sau độ ẩm power: INIT DATA (1 byte), rồi 24 byte "bản tin lỗi", PERIOD/PULSE của TXEN và BEAMSYNC, 32 byte dự phòng, CRC, E1 E2.
 constexpr int kNumErr = 24;
-constexpr int kIdxErr0 = kIdxHumidity + 1;
+constexpr int kIdxInitData = kIdxHumidity + 1;
+constexpr int kIdxErr0 = kIdxInitData + 1;
 constexpr int kIdxPeriodTxen = kIdxErr0 + kNumErr, kIdxPulseTxen = kIdxPeriodTxen + 1;
 constexpr int kIdxPeriodBeamsync = kIdxPulseTxen + 1, kIdxPulseBeamsync = kIdxPeriodBeamsync + 1;
 constexpr int kNumFields = kIdxPulseBeamsync + 1;
