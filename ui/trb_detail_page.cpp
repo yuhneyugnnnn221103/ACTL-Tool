@@ -309,7 +309,6 @@ void TrbDetailPage::refresh()
     if (has)
         text = QStringLiteral("Cập nhật %1 s trước · %2 bản tin")
                    .arg((QDateTime::currentMSecsSinceEpoch() - s.lastSeenMs) / 1000.0, 0, 'f', 1).arg(s.frames);
-    if (s.status == Status::Lost) text += QStringLiteral(" · SỐ LIỆU BÊN DƯỚI LÀ SỐ LIỆU CŨ");
     m_status->setText(text);
 
     const auto debug = m_control->debugTrb();
@@ -349,9 +348,9 @@ void TrbDetailPage::refresh()
                                         ? QStringLiteral("background:#EF9F27; font-weight:bold;") : QString());
     }
 
-    // Số liệu cũ (mất kết nối) thì đèn về "không rõ" thay vì hiện trạng thái đã cũ như đang đúng.
+    // Mất kết nối vẫn giữ nguyên trạng thái đèn lần cuối nhận được; dòng "Cập nhật n s trước" cho biết số liệu cũ đến đâu.
     using Led = LedIndicator::State;
-    const bool fresh = has && s.status != Status::Lost;
+    const bool fresh = has;
     auto setLeds = [&](const QList<LedIndicator *> &list, int field, Led off, const QString &name) {
         for (int i = 0; i < list.size(); ++i) {
             const bool on = bits(field) >> i & 1;
