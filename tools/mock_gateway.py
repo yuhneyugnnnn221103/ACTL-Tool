@@ -345,32 +345,23 @@ def cmd_tcp(args):
         srv.close()
 
 
-def burst_frames(frames):
-    """Gom các khung giám sát của 8 TRB cùng một MB thành một lần gửi, như Gateway thật."""
-    out, buf, cur = [], bytearray(), None
+def burst_frames(frames, mb_count, trb_count):
+    """Như Gateway thật: gom 8 TRB của mỗi MB thành một lần gửi (8 x TRB_LEN byte). TRB không có khung
+    (không phản hồi / sai CRC / lỗi) được thay bằng một khối TRB_LEN byte 0x00."""
+    trb, rest = {}, []
     for item in frames:
         data, pause = item if isinstance(item, tuple) else (item, 0)
-        mb = data[4] if len(data) > 4 and data[2:4] == b"\x11\x11" and not pause else None
-        if mb is not None and (cur is None or mb == cur) and len(buf) // TRB_LEN < 8:
-            buf += data
-            cur = mb
-            continue
-        if buf:
-            out.append((bytes(buf), 0))
-            buf, cur = bytearray(), None
-        if mb is not None:
-            buf += data
-            cur = mb
+        if len(data) > 5 and data[2:4] == b"\x11\x11" and not pause:
+            trb[(data[4], data[5])] = data
         else:
-            out.append((data, pause))
-    if buf:
-        out.append((bytes(buf), 0))
-    return out
+            rest.append((data, pause))
+    out = [(b"".join(trb.get((mb, t), bytes(TRB_LEN)) for t in range(trb_count)), 0) for mb in range(mb_count)]
+    return out + rest
 
 
 def tcp_session(args, ctx, sock):
     sock.settimeout(0.01)
-    print(f"kịch bản '{args.scenario}', {args.rate} lượt/giây, mỗi lần gửi dồn 8 bản tin TRB của một MB.")
+    print(f"kịch bản '{args.scenario}', {args.rate} lượt/giây, mỗi lần gửi dồn 8 bản tin TRB của một MB (TRB không phản hồi thay bằng khối 0x00).")
 
     stop = threading.Event()
     rx = bytearray()
@@ -404,7 +395,7 @@ def tcp_session(args, ctx, sock):
             if name != last_name:
                 print(f"[{ctx.t:6.1f}s] kịch bản: {name} - {SCENARIOS[name][1]}")
                 last_name = name
-            for item in burst_frames(frames):
+            for item in burst_frames(frames, args.mb, args.trb):
                 data, pause = item if isinstance(item, tuple) else (item, 0)
                 sock.setblocking(True)
                 sock.sendall(data)

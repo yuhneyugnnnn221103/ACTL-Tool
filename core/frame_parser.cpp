@@ -11,7 +11,12 @@ void FrameParser::feed(const QByteArray &data, const std::function<void(const Fr
     int pos = 0;
 
     while (n - pos >= 4) {
-        if (d[pos] != kHeader1 || d[pos + 1] != kHeader2) { ++pos; ++m_stats.droppedBytes; continue; }
+        if (d[pos] != kHeader1 || d[pos + 1] != kHeader2) {
+            // Byte 0x00 là phần Gateway chèn thay cho khung của thiết bị không trả lời / lỗi: bỏ qua, không tính là byte lỗi.
+            if (d[pos] == 0) ++m_stats.zeroFill; else ++m_stats.droppedBytes;
+            ++pos;
+            continue;
+        }
 
         const FrameSpec *spec = m_registry->match(d + pos + 2);
         if (!spec) { ++pos; ++m_stats.droppedBytes; continue; }

@@ -192,6 +192,8 @@ Gateway hỏi `AB CD 11 11 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giá
 
 - Mỗi dòng trong khung Sự kiện bắt đầu bằng mã loại: `[TRIP]` vào trạng thái Trip, `[WARN]` giá trị vượt ngưỡng, `[OK]` trở lại bình thường, `[PG]` Power Good, `[CTRL]` lệnh điều khiển/beam đã gửi, `[CFG]` đọc/ghi cấu hình, `[DBG]` chế độ Debug, `[OTA]` nạp code, `[NET]` kết nối Gateway/RS485, `[ERR]` lỗi, `[AUTH]` khóa/mở khóa kỹ sư. Dòng sự kiện tô màu theo mã (TRIP/PG đỏ, WARN cam, OK xanh lá, CTRL xanh dương, CFG xanh ngọc, DBG/OTA tím, NET xám, ERR đỏ đậm, AUTH nâu; TRIP, PG, WARN có nền nhạt). Sự kiện TRB/PSU mất kết nối và có lại kết nối không được ghi (xem trạng thái ở lưới tổng quan và thẻ trạng thái); nếu TRB có lại tin mà đang Trip hoặc quá ngưỡng thì vẫn ghi sự kiện đó. Trang Chi tiết TRB hiện đủ các thẻ trạng thái của TRB đang xem (Trip, Quá ngưỡng, Mất kết nối cùng lúc).
 
+- TRB không phản hồi, sai CRC hoặc lỗi bản tin: Gateway thay bằng một khối 310 byte `0x00` trong lượt gửi 8 TRB của MB. Khối này không có địa chỉ nên app không biết TRB nào; app bỏ qua byte `0x00` (không tính là byte lỗi hay lỗi CRC) và đánh dấu mất kết nối khi quá hạn `system/staleMs` (mặc định 3000 ms) không có bản tin mới. Đặt `staleMs` lớn hơn chu kỳ hỏi vòng của Gateway (nên gấp 2 lần trở lên), nếu không TRB bình thường cũng bị đánh dấu mất kết nối.
+
 ## Việc còn lại
 
 - `actl_sim`: PSU, nạp FPGA/STM32, kịch bản JSON, cấu hình Ethernet (xem `docs/simulator_design.md`).

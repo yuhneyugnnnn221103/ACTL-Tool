@@ -598,6 +598,34 @@ private slots:
         QCOMPARE(tags.size(), 11);                                // mọi loại có mã riêng
     }
 
+    void gatewayZeroBlockForSilentTrbIsSkippedWithoutNoise()
+    {
+        Rig rig("monitor");
+        services::TrbMonitor::registerFrames(rig.registry, true);
+        rig.link.start();
+        model::DeviceStore store(1, 8);
+        services::TrbMonitor mon(&rig.link, &store, nullptr);
+        QSignalSpy updated(&mon, &services::TrbMonitor::trbUpdated);
+        QList<double> v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxPg] = 0x0F;
+        QByteArray burst;                                    // MB0: TRB 3 và 6 không phản hồi -> Gateway chèn 310 byte 0x00
+        for (int t = 0; t < 8; ++t) burst += (t == 3 || t == 6) ? QByteArray(trbmon::kLength, '\0') : monitorFrame(0, t, v);
+        QCOMPARE(burst.size(), 8 * trbmon::kLength);
+        rig.transport->inject(burst);
+        QCOMPARE(updated.size(), 6);
+        QCOMPARE(store.trb(0, 3).status, model::Status::NoData);
+        QCOMPARE(store.trb(0, 4).status, model::Status::Ok);
+        QCOMPARE(store.trb(0, 7).status, model::Status::Ok);
+        // Khối 0x00 không bị tính là byte lỗi hay lỗi CRC (không làm nhiễu bộ đếm ở thanh trên).
+        core::FrameParser parser(&rig.registry);
+        int frames = 0;
+        parser.feed(burst, [&](const core::Frame &) { ++frames; });
+        QCOMPARE(frames, 6);
+        QCOMPARE(parser.stats().droppedBytes, quint64(0));
+        QCOMPARE(parser.stats().crcErrors, quint64(0));
+        QCOMPARE(parser.stats().zeroFill, quint64(2 * trbmon::kLength));
+    }
+
     void powerGoodFailureCountsAsTrip()
     {
         Rig rig("monitor");
