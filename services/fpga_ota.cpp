@@ -206,7 +206,7 @@ void FpgaOta::bootAndVerify(const Options &options)
 // Ghi version mới cho các TRB không lỗi rồi đọc lại từng TRB. false nếu không có gì để ghi.
 bool FpgaOta::writeVersions()
 {
-    if (m_opt.version.isEmpty() || countUsable() == 0) return false;
+    if (fpgaota::versionValue(m_opt.version) == 0 || countUsable() == 0) return false;
     m_phase = Phase::WriteVersion;
     emit phaseChanged(QStringLiteral("Ghi version %1").arg(fpgaota::versionText(m_opt.version)));
     for (const Node &n : m_nodes)

@@ -1,4 +1,5 @@
 #include "fpga_ota_proto.h"
+#include <QDate>
 #include <QFileInfo>
 #include <QStringList>
 
@@ -34,20 +35,41 @@ QByteArray buildWriteVersion(int mb, int trb, const QByteArray &version)
     return f;
 }
 
-QByteArray versionFromFileName(const QString &fileName)
+// Tên file là ngày nạp: YYYYMMDD (hoặc YYMMDD, hiểu là 20YY). Ký tự số đổi thành số nguyên rồi ghi 4 byte big-endian.
+quint32 versionFromFileName(const QString &fileName)
 {
-    return QFileInfo(fileName).completeBaseName().toLatin1().left(kVersionSize).leftJustified(kVersionSize, '\0');
+    const QString name = QFileInfo(fileName).completeBaseName();
+    if (name.size() != 8 && name.size() != 6) return 0;
+    quint32 v = 0;
+    for (QChar c : name) {
+        if (c < QLatin1Char('0') || c > QLatin1Char('9')) return 0;
+        v = v * 10 + quint32(c.unicode() - '0');
+    }
+    if (name.size() == 6) v += 20000000;
+    return QDate(int(v / 10000), int(v / 100 % 100), int(v % 100)).isValid() ? v : 0;
+}
+
+QByteArray versionBytes(quint32 v)
+{
+    QByteArray b(4, '\0');
+    for (int i = 0; i < 4; ++i) b[i] = char(v >> (24 - 8 * i));
+    return b;
+}
+
+quint32 versionValue(const QByteArray &version)
+{
+    if (version.size() != kVersionSize) return 0;
+    quint32 v = 0;
+    for (char c : version) v = v << 8 | quint8(c);
+    return v;
 }
 
 QString versionText(const QByteArray &version)
 {
-    if (version.size() != kVersionSize || version == QByteArray(kVersionSize, '\0') || version == QByteArray(kVersionSize, char(0xFF)))
-        return {};
-    QByteArray t = version;
-    while (t.endsWith('\0')) t.chop(1);
-    for (char c : t)
-        if (c < 0x20 || c > 0x7E) return QString::fromLatin1(version.toHex(' ').toUpper());
-    return QString::fromLatin1(t);
+    const quint32 v = versionValue(version);
+    if (v == 0 || v == 0xFFFFFFFFu) return {};
+    const QDate d(int(v / 10000), int(v / 100 % 100), int(v % 100));
+    return d.isValid() ? d.toString(QStringLiteral("yyyy-MM-dd")) : QString::number(v);
 }
 
 QByteArray buildLoad(int mb, int trb, quint16 packetId, const QByteArray &chunk)

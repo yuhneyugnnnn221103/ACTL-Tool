@@ -27,7 +27,7 @@ public:
         int eraseWaitSec = 420;
         int packetGapMs = 5;          // nghỉ sau mỗi gói để FPGA kịp ghi flash
         int bootWaitMs = 3000;
-        QByteArray version;           // 4 byte ghi xuống TRB sau khi nạp xong không lỗi; rỗng = không ghi
+        QByteArray version;           // 4 byte ghi xuống TRB sau khi nạp xong không lỗi; 0 hoặc rỗng = không ghi
     };
 
     static bool registerFrames(core::FrameRegistry &registry);

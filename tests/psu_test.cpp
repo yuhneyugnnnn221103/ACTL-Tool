@@ -229,18 +229,23 @@ private slots:
     void fpgaStatusCarriesVersionAndWriteVersionFrame()
     {
         namespace fo = proto::fpgaota;
-        QCOMPARE(fo::versionFromFileName("C:/x/v1.2.bin"), QByteArray("v1.2"));
-        QCOMPARE(fo::versionFromFileName("abcdef.bin"), QByteArray("abcd"));
-        QCOMPARE(fo::versionFromFileName("a.bin"), QByteArray("a\0\0\0", 4));
-        QCOMPARE(fo::versionText(QByteArray("a\0\0\0", 4)), QString("a"));
+        QCOMPARE(fo::versionFromFileName("C:/x/20261013.bin"), quint32(20261013));
+        QCOMPARE(fo::versionFromFileName("261013.bin"), quint32(20261013));
+        QCOMPARE(fo::versionFromFileName("20261313.bin"), quint32(0));   // tháng sai
+        QCOMPARE(fo::versionFromFileName("v1.2.bin"), quint32(0));
+        QCOMPARE(fo::versionBytes(20261013), QByteArray::fromHex("01352895"));
+        QCOMPARE(fo::versionValue(fo::versionBytes(20261013)), quint32(20261013));
+        QCOMPARE(fo::versionText(fo::versionBytes(20261013)), QString("2026-10-13"));
+        QCOMPARE(fo::versionText(fo::versionBytes(12345)), QString("12345"));
         QCOMPARE(fo::versionText(QByteArray(4, '\0')), QString());
+        QCOMPARE(fo::versionText(QByteArray(4, char(0xFF))), QString());
 
         core::FrameRegistry registry;
         QVERIFY(services::FpgaOta::registerFrames(registry));
         QByteArray reply(40, '\0');
         reply[0] = char(0xAB); reply[1] = char(0xCD); reply[2] = reply[3] = char(0x99);
         reply[4] = 1; reply[5] = 2;
-        reply.replace(18, 4, "v1.2");
+        reply.replace(18, 4, fo::versionBytes(20261013));
         reply[38] = char(0xE1); reply[39] = char(0xE2);
         core::seal(reply, 4);
         core::FrameParser parser(&registry);
@@ -249,14 +254,14 @@ private slots:
         QCOMPARE(got.size(), 1);
         const fo::Status st = fo::parseStatus(got.first().raw);
         QCOMPARE(st.code, quint8(2));
-        QCOMPARE(st.version, QByteArray("v1.2"));
+        QCOMPARE(fo::versionValue(st.version), quint32(20261013));
 
-        const QByteArray w = fo::buildWriteVersion(2, 5, "v1.3");
+        const QByteArray w = fo::buildWriteVersion(2, 5, fo::versionBytes(20261014));
         QCOMPARE(w.size(), 269);
         QCOMPARE(w.mid(2, 2), QByteArray::fromHex("4444"));
         QCOMPARE(quint8(w[4]), quint8(2));
         QCOMPARE(quint8(w[5]), quint8(5));
-        QCOMPARE(w.mid(6, 4), QByteArray("v1.3"));
+        QCOMPARE(fo::versionValue(w.mid(6, 4)), quint32(20261014));
         QCOMPARE(w.right(2), QByteArray::fromHex("E1E2"));
         const quint16 crc = core::crc16(reinterpret_cast<const quint8 *>(w.constData()) + 4, 269 - 8);
         QCOMPARE(quint8(w[265]), quint8(crc >> 8));

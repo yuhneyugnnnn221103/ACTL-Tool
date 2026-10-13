@@ -99,11 +99,12 @@ QWidget *FirmwarePage::buildFpgaTab()
     theme::setRole(browse, "secondary");
     connect(browse, &QPushButton::clicked, this, [=] {
         const QByteArray d = pickFile(this, file, fileInfo);
-        if (!d.isEmpty()) {
-            m_fpgaImage = d;
-            m_fpgaVersion = proto::fpgaota::versionFromFileName(file->text());
-            fileInfo->setText(fileInfo->text() + QStringLiteral(", version \"%1\"").arg(proto::fpgaota::versionText(m_fpgaVersion)));
-        }
+        if (d.isEmpty()) return;
+        const quint32 v = proto::fpgaota::versionFromFileName(file->text());
+        m_fpgaImage = d;
+        m_fpgaVersion = proto::fpgaota::versionBytes(v);
+        fileInfo->setText(v ? fileInfo->text() + QStringLiteral(", version %1 (%2)").arg(v).arg(proto::fpgaota::versionText(m_fpgaVersion))
+                            : fileInfo->text() + QStringLiteral(", tên file không phải ngày YYYYMMDD: sẽ KHÔNG ghi version"));
     });
 
     m_fpgaBroadcast = new QRadioButton(QStringLiteral("Broadcast: nạp cho MỌI TRB trong hệ thống"));
@@ -160,7 +161,8 @@ QWidget *FirmwarePage::buildFpgaTab()
         if (!ready()) return;
         if (m_fpgaImage.isEmpty()) { QMessageBox::information(this, QStringLiteral("Nạp FPGA"), QStringLiteral("Chưa chọn file .bin.")); return; }
         if (m_ctx.fpgaOta->nodes().isEmpty()) { QMessageBox::information(this, QStringLiteral("Nạp FPGA"), QStringLiteral("Hãy chạy bước 1 trước.")); return; }
-        QString text = QStringLiteral("Nạp %1 byte (version \"%2\") cho %3?").arg(m_fpgaImage.size()).arg(proto::fpgaota::versionText(m_fpgaVersion), who());
+        QString text = QStringLiteral("Nạp %1 byte (%2) cho %3?").arg(m_fpgaImage.size())
+                           .arg(proto::fpgaota::versionValue(m_fpgaVersion) ? QStringLiteral("version %1").arg(proto::fpgaota::versionText(m_fpgaVersion)) : QStringLiteral("không ghi version"), who());
         if (!m_ctx.fpgaOta->erased()) text += QStringLiteral("\n\nChưa xóa flash ở bước 2 (hoặc đã nạp xong lần trước). Nạp lên vùng chưa xóa có thể ghi sai.");
         if (!yes(this, QStringLiteral("Nạp code"), text)) return;
         if (!m_ctx.auth->unlock(this)) return;
