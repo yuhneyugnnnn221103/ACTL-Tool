@@ -76,7 +76,7 @@ Các file nằm cạnh file chạy và được tạo ở lần chạy đầu.
 | `thresholds.json` | Ngưỡng min/max theo từng TRB, tự cập nhật mỗi lần đọc cấu hình |
 | `psu_thresholds.json` | Như trên, theo địa chỉ PSU |
 | `psu_default_config.json` | Tùy chọn: cấu hình mặc định PSU, cùng định dạng file "Lưu file…" của trang Cấu hình PSU |
-| `logs/yyyy-MM-dd/trb/MB03_TRB05_*.csv` | Số liệu giám sát, mỗi TRB một file riêng (MB, TRB đếm từ 1), mặc định 10 giây một dòng, ghi ngay khi đổi trạng thái. File chỉ được tạo khi TRB có dữ liệu |
+| `logs/yyyy-MM-dd/trb/MB03_TRB05_*.csv` | Số liệu giám sát, mỗi TRB một file riêng (MB, TRB đếm từ 1), mặc định mỗi bản tin nhận được ghi một dòng (`log/periodMs` = 0). File chỉ được tạo khi TRB có dữ liệu |
 | `logs/yyyy-MM-dd/psu/PSU2_*.csv` | Số liệu giám sát PSU, mỗi PSU một file, cùng chu kỳ ghi |
 | `logs/yyyy-MM-dd/events_*.csv` | Sự kiện |
 
@@ -89,7 +89,7 @@ Các khóa hay dùng trong `actl_tool.ini`:
 | `service/port`, `service/baud` | rỗng, `1000000` | Cổng COM RS485 |
 | `system/staleMs` | `3000` | Quá thời gian này không có bản tin thì coi là mất kết nối |
 | `trb/checkCrc` | `true` | Kiểm tra CRC bản tin giám sát và cấu hình TRB |
-| `log/periodMs`, `log/maxFileMb` | `10000`, `100` | Chu kỳ ghi và cỡ file log tối đa |
+| `log/periodMs`, `log/maxFileMb` | `0`, `100` | Khoảng ms tối thiểu giữa hai dòng log của một thiết bị (0 = ghi mọi bản tin) và cỡ file log tối đa (MB) |
 | `fpgaOta/eraseWaitSec` | `420` | Thời gian chờ sau khi xóa flash FPGA |
 | `psu/firstAddr`, `psu/count` | `1`, `5` | Dải địa chỉ PSU |
 | `psu/checkCrc` | `true` | Kiểm tra CRC bản tin giám sát và cấu hình PSU |

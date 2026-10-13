@@ -52,7 +52,7 @@ struct Settings {
         s.cfgWriteGapMs = get("config/writeGapMs", 300).toInt();
         s.logEnabled = get("log/enabled", true).toBool();
         s.logDir = get("log/dir", appDir + "/logs").toString();
-        s.logPeriodMs = get("log/periodMs", 10000).toInt(); // chu kỳ ghi mỗi TRB; đổi trạng thái thì ghi ngay
+        s.logPeriodMs = get("log/periodMs", 0).toInt(); // 0: ghi mọi bản tin nhận được; >0: tối thiểu ms giữa hai dòng của một thiết bị (đổi trạng thái thì ghi ngay)
         s.logMaxFileMb = get("log/maxFileMb", 100).toInt();
         s.thresholdsFile = get("alarm/thresholdsFile", appDir + "/thresholds.json").toString();
         s.psuThresholdsFile = get("alarm/psuThresholdsFile", appDir + "/psu_thresholds.json").toString();
