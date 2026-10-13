@@ -39,7 +39,7 @@ private:
     QProgressBar *m_fpgaProgress;
     QList<QPushButton *> m_fpgaActions;
     QPushButton *m_fpgaSkip, *m_fpgaCancel;
-    QByteArray m_fpgaImage;
+    QByteArray m_fpgaImage, m_fpgaVersion; // version: 4 byte lấy từ tên file .bin
 
     QTableWidget *m_stmTable;
     QSpinBox *m_stmVersion;

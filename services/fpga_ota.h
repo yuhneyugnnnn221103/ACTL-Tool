@@ -8,7 +8,7 @@ namespace services {
 // Nạp bitstream cho FPGA trên TRB. Bốn bước do người dùng bấm lần lượt:
 //   1. checkOnline()   hỏi trạng thái từng TRB
 //   2. erase()         xóa flash rồi chờ
-//   3. load()          gửi các gói, cuối cùng hỏi lại từng TRB
+//   3. load()          gửi các gói, hỏi lại từng TRB; nếu không lỗi thì ghi version mới (0x44) rồi đọc lại
 //   4. bootAndVerify() yêu cầu boot rồi hỏi lại từng TRB
 class FpgaOta : public QObject {
     Q_OBJECT
@@ -27,6 +27,7 @@ public:
         int eraseWaitSec = 420;
         int packetGapMs = 5;          // nghỉ sau mỗi gói để FPGA kịp ghi flash
         int bootWaitMs = 3000;
+        QByteArray version;           // 4 byte ghi xuống TRB sau khi nạp xong không lỗi; rỗng = không ghi
     };
 
     static bool registerFrames(core::FrameRegistry &registry);
@@ -51,7 +52,7 @@ signals:
     void finished(const QString &summary);
 
 private:
-    enum class Phase { Idle, Online, EraseWait, LoadBroadcast, LoadNode, PostCheck, BootWait, Verify };
+    enum class Phase { Idle, Online, EraseWait, LoadBroadcast, LoadNode, PostCheck, WriteVersion, BootWait, Verify };
     static constexpr int kMaxTries = 3;
 
     bool usable(const Node &n) const { return n.online && !n.failed; }
@@ -59,6 +60,7 @@ private:
     void query();
     void send(const QByteArray &frame, int gapMs, bool wait);
     void failNode(const QString &note);
+    bool writeVersions();
     void loadPacket();
     void loadNextNode();
     void sendPacketTo(const Node &n);

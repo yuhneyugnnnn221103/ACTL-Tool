@@ -84,7 +84,7 @@ QWidget *FirmwarePage::buildFpgaTab()
 {
     const int perMb = m_ctx.store->trbPerMb(), total = m_ctx.store->mbCount() * perMb;
     m_fpgaTable = makeTable({QStringLiteral("TRB"), QStringLiteral("Kết quả"), QStringLiteral("CODE"),
-                             QStringLiteral("STAT"), QStringLiteral("BOOTSTS"), QStringLiteral("WBSTAR")}, total);
+                             QStringLiteral("STAT"), QStringLiteral("BOOTSTS"), QStringLiteral("WBSTAR"), QStringLiteral("Phiên bản code")}, total);
     for (int r = 0; r < total; ++r) {
         QTableWidgetItem *it = m_fpgaTable->item(r, 0);
         it->setText(QStringLiteral("MB%1 / TRB%2").arg(r / perMb + 1).arg(r % perMb + 1));
@@ -99,7 +99,11 @@ QWidget *FirmwarePage::buildFpgaTab()
     theme::setRole(browse, "secondary");
     connect(browse, &QPushButton::clicked, this, [=] {
         const QByteArray d = pickFile(this, file, fileInfo);
-        if (!d.isEmpty()) m_fpgaImage = d;
+        if (!d.isEmpty()) {
+            m_fpgaImage = d;
+            m_fpgaVersion = proto::fpgaota::versionFromFileName(file->text());
+            fileInfo->setText(fileInfo->text() + QStringLiteral(", version \"%1\"").arg(proto::fpgaota::versionText(m_fpgaVersion)));
+        }
     });
 
     m_fpgaBroadcast = new QRadioButton(QStringLiteral("Broadcast: nạp cho MỌI TRB trong hệ thống"));
@@ -156,7 +160,7 @@ QWidget *FirmwarePage::buildFpgaTab()
         if (!ready()) return;
         if (m_fpgaImage.isEmpty()) { QMessageBox::information(this, QStringLiteral("Nạp FPGA"), QStringLiteral("Chưa chọn file .bin.")); return; }
         if (m_ctx.fpgaOta->nodes().isEmpty()) { QMessageBox::information(this, QStringLiteral("Nạp FPGA"), QStringLiteral("Hãy chạy bước 1 trước.")); return; }
-        QString text = QStringLiteral("Nạp %1 byte cho %2?").arg(m_fpgaImage.size()).arg(who());
+        QString text = QStringLiteral("Nạp %1 byte (version \"%2\") cho %3?").arg(m_fpgaImage.size()).arg(proto::fpgaota::versionText(m_fpgaVersion), who());
         if (!m_ctx.fpgaOta->erased()) text += QStringLiteral("\n\nChưa xóa flash ở bước 2 (hoặc đã nạp xong lần trước). Nạp lên vùng chưa xóa có thể ghi sai.");
         if (!yes(this, QStringLiteral("Nạp code"), text)) return;
         if (!m_ctx.auth->unlock(this)) return;
@@ -292,6 +296,7 @@ FpgaOta::Options FirmwarePage::fpgaOptions() const
     o.eraseWaitSec = m_fpgaEraseMin->value() * 60;
     o.packetGapMs = m_fpgaGap->value();
     o.bootWaitMs = m_ctx.settings.fpgaBootWaitMs;
+    o.version = m_fpgaVersion;
     return o;
 }
 
@@ -306,6 +311,7 @@ void FirmwarePage::fpgaShowNode(int index)
     m_fpgaTable->item(row, 3)->setText(hex32(n.status.stat));
     m_fpgaTable->item(row, 4)->setText(hex32(n.status.bootsts));
     m_fpgaTable->item(row, 5)->setText(hex32(n.status.wbstar));
+    m_fpgaTable->item(row, 6)->setText(proto::fpgaota::versionText(n.status.version));
 }
 
 void FirmwarePage::fpgaSetBusy(bool busy)

@@ -203,6 +203,20 @@ void FpgaOta::bootAndVerify(const Options &options)
     m_timer.start(m_opt.bootWaitMs);
 }
 
+// Ghi version mới cho các TRB không lỗi rồi đọc lại từng TRB. false nếu không có gì để ghi.
+bool FpgaOta::writeVersions()
+{
+    if (m_opt.version.isEmpty() || countUsable() == 0) return false;
+    m_phase = Phase::WriteVersion;
+    emit phaseChanged(QStringLiteral("Ghi version %1").arg(fpgaota::versionText(m_opt.version)));
+    for (const Node &n : m_nodes)
+        if (usable(n)) send(fpgaota::buildWriteVersion(n.dev.first, n.dev.second, m_opt.version), 20, false);
+    m_node = -1;
+    nextNode(true);
+    query();
+    return true;
+}
+
 void FpgaOta::onRequestFinished(quint64 id, bool ok, const core::Frame &reply)
 {
     if (!busy() || id != m_waitId) return;
@@ -242,10 +256,25 @@ void FpgaOta::onRequestFinished(quint64 id, bool ok, const core::Frame &reply)
     case Phase::PostCheck:
         if (!ok) failNode(QStringLiteral("Không trả lời sau khi nạp"));
         else if (st.code & (fpgaota::ErrFlashWrite | fpgaota::ErrFlashErase)) failNode(QStringLiteral("Sau nạp: ") + fpgaota::errorText(st.code));
-        else if (!m_nodes.at(m_node).failed) { m_nodes[m_node].note = QStringLiteral("Đã nạp xong"); emit nodeChanged(m_node); }
+        else if (!m_nodes.at(m_node).failed) { m_nodes[m_node].note = QStringLiteral("Đã nạp xong"); }
+        emit nodeChanged(m_node);
         if (nextNode(false)) { query(); break; }
+        if (writeVersions()) break;
         finish(QStringLiteral("Nạp xong: %1 TRB tốt, %2 TRB lỗi").arg(countUsable()).arg(m_nodes.size() - countUsable()));
         break;
+
+    case Phase::WriteVersion: { // đọc lại version vừa ghi
+        Node &n = m_nodes[m_node];
+        if (!ok) n.note += QStringLiteral("; không đọc lại được version");
+        else if (st.version != m_opt.version) n.note += QStringLiteral("; version đọc lại là \"%1\", khác \"%2\"")
+                                                   .arg(fpgaota::versionText(st.version), fpgaota::versionText(m_opt.version));
+        else n.note += QStringLiteral("; đã ghi version %1").arg(fpgaota::versionText(st.version));
+        emit nodeChanged(m_node);
+        if (nextNode(true)) { query(); break; }
+        finish(QStringLiteral("Nạp xong: %1 TRB tốt, %2 TRB lỗi; đã ghi version %3")
+                   .arg(countUsable()).arg(m_nodes.size() - countUsable()).arg(fpgaota::versionText(m_opt.version)));
+        break;
+    }
 
     case Phase::Verify:
         if (!ok) failNode(QStringLiteral("Không trả lời sau boot"));
