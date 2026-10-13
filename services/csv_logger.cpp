@@ -21,8 +21,17 @@ CsvLogger::CsvLogger(const QString &dir, int periodMs, qint64 maxFileBytes, cons
 
     connect(&m_flushTimer, &QTimer::timeout, this, &CsvLogger::flush);
     m_flushTimer.start(2000);
+    newSession();
     connect(&m_scheduleTimer, &QTimer::timeout, this, [this] { tick(QDateTime::currentDateTime()); });
     m_scheduleTimer.start(1000);
+}
+
+void CsvLogger::newSession()
+{
+    const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"));
+    m_sessionDup = stamp == m_lastStamp ? m_sessionDup + 1 : 0;   // hai lần bắt đầu trong cùng một giây
+    m_lastStamp = stamp;
+    m_session = m_sessionDup ? QStringLiteral("%1-%2").arg(stamp).arg(m_sessionDup + 1) : stamp;
 }
 
 void CsvLogger::setRecording(bool on)
@@ -34,6 +43,7 @@ void CsvLogger::setRecording(bool on)
         closeAll(m_psu);
         m_events.file.close();
     } else {
+        newSession();
         m_lastLogged.clear();     // mở lại thì ghi ngay bản tin đầu tiên của mỗi thiết bị
         m_lastLoggedPsu.clear();
         m_errorReported = false;
@@ -140,7 +150,7 @@ bool CsvLogger::write(Stream &s, const QByteArray &line)
         QDir().mkpath(folder);
         // Phần đầu tiên chưa đầy sẽ được ghi tiếp (kể cả sau khi khởi động lại app).
         for (int part = 1;; ++part) {
-            s.file.setFileName(QStringLiteral("%1/%2_%3%4.csv").arg(folder, s.prefix, day,
+            s.file.setFileName(QStringLiteral("%1/%2_%3%4.csv").arg(folder, s.prefix, m_session,
                                part == 1 ? QString() : QStringLiteral("_%1").arg(part, 2, 10, QLatin1Char('0'))));
             if (s.file.size() < m_maxFileBytes) break;
         }

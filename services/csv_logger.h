@@ -1,9 +1,11 @@
 #pragma once
 // Ghi log CSV (UTF-8 có BOM để Excel đọc đúng tiếng Việt):
-//   <dir>/yyyy-MM-dd/trb/MB03_TRB05_yyyy-MM-dd[_NN].csv   mỗi TRB một file, một dòng = một bản tin giám sát (MB, TRB đếm từ 1)
-//   <dir>/yyyy-MM-dd/psu/PSU2_yyyy-MM-dd[_NN].csv         mỗi PSU một file
-//   <dir>/yyyy-MM-dd/events_yyyy-MM-dd[_NN].csv           một dòng = một sự kiện (chung)
-// File của thiết bị chỉ được tạo khi thiết bị có dữ liệu. Sang ngày mới hoặc file vượt maxFileBytes thì mở file mới.
+//   <dir>/yyyy-MM-dd/trb/MB03_TRB05_<phiên>[_NN].csv   mỗi TRB một file, một dòng = một bản tin giám sát (MB, TRB đếm từ 1)
+//   <dir>/yyyy-MM-dd/psu/PSU2_<phiên>[_NN].csv         mỗi PSU một file
+//   <dir>/yyyy-MM-dd/events_<phiên>[_NN].csv           một dòng = một sự kiện (chung)
+// <phiên> = giờ bắt đầu lần ghi (yyyyMMdd-HHmmss): mỗi lần bắt đầu ghi (mở app, bấm nút, hẹn giờ) là một bộ file mới,
+// nên các lần ghi không nối vào nhau. File của thiết bị chỉ được tạo khi thiết bị có dữ liệu.
+// Sang ngày mới hoặc file vượt maxFileBytes thì mở file tiếp theo.
 #include "../model/device_store.h"
 #include "../model/psu_store.h"
 #include "../proto/field_table.h"
@@ -58,6 +60,9 @@ private:
     QHash<int, qint64> m_lastLogged, m_lastLoggedPsu;
     QTimer m_flushTimer, m_scheduleTimer;
     bool m_recording = true;
+    QString m_session, m_lastStamp;
+    int m_sessionDup = 0;
+    void newSession();
     QDateTime m_startAt, m_stopAt;
     bool m_errorReported = false;
 };

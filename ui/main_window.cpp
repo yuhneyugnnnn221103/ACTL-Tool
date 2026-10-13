@@ -403,6 +403,7 @@ QWidget *MainWindow::buildLogPanel()
             if (logger->startAt().isValid()) tip << QStringLiteral("Hẹn bắt đầu: %1").arg(logger->startAt().toString(fmt));
             if (logger->stopAt().isValid()) tip << QStringLiteral("Hẹn dừng: %1").arg(logger->stopAt().toString(fmt));
             toggle->setToolTip(tip.join('\n'));
+            toggle->setText(logger->recording() ? QStringLiteral("Đang ghi log") : QStringLiteral("Ghi log"));
             theme::setRole(toggle, logger->recording() ? "recording" : "secondary");
             toggle->style()->unpolish(toggle);   // đổi role lúc chạy cần áp lại stylesheet
             toggle->style()->polish(toggle);

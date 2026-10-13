@@ -968,11 +968,15 @@ private slots:
         s.lastSeenMs = 1'700'000'000'000;
         s.values = zeros(trbmon::kNumFields);
         const QDir day(dir.path() + "/" + QDate::currentDate().toString(Qt::ISODate));
-        auto rows = [&] {
+        auto files = [&] {
             logger.flush();
-            QFile f(day.filePath("trb/MB01_TRB01_" + QDate::currentDate().toString(Qt::ISODate) + ".csv"));
-            return f.open(QIODevice::ReadOnly) ? f.readAll().count('\n') : 0;   // gồm dòng tiêu đề
+            return QDir(day.filePath("trb")).entryList({"MB01_TRB01_*.csv"}, QDir::Files, QDir::Name);
         };
+        auto lines = [&](const QString &name) {   // gồm dòng tiêu đề
+            QFile f(day.filePath("trb/" + name));
+            return f.open(QIODevice::ReadOnly) ? f.readAll().count('\n') : 0;
+        };
+        auto rows = [&] { return files().isEmpty() ? 0 : lines(files().first()); };
 
         logger.setRecording(false);
         logger.logTrb(0, 0, s, false);
@@ -995,9 +999,12 @@ private slots:
         logger.logTrb(0, 0, s, true);
         QCOMPARE(rows(), 3);                                   // sau khi dừng không ghi thêm
 
-        logger.setRecording(true);                             // bật tay: ghi tiếp vào cùng file
+        QCOMPARE(files().size(), 1);
+        const QString first = files().first();
+        logger.setRecording(true);                             // bật lại: lần ghi mới nằm trong file mới
         logger.logTrb(0, 0, s, false);
-        QCOMPARE(rows(), 4);
+        QCOMPARE(files().size(), 2);
+        QCOMPARE(lines(first), 3);                             // file của lần ghi trước không bị nối thêm
 
         logger.setSchedule(QDateTime(), t0.addSecs(-5));       // mốc dừng đã qua: dừng ngay
         QVERIFY(!logger.recording());
