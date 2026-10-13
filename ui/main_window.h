@@ -74,6 +74,7 @@ private:
     QList<LogEntry> m_eventBuffer, m_hexBuffer;   // toàn bộ log (tối đa 5000 dòng mỗi loại); khung chỉ hiện phần của trang
     QList<int> m_pageGroups;                      // nhóm log của từng trang, theo chỉ số trang
     QCheckBox *m_hexEnable;
+    void editLogSchedule();
     bool m_listDirty = true;
 };
 

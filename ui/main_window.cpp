@@ -19,6 +19,11 @@
 #include <QSerialPortInfo>
 #include <QSpinBox>
 #include <QDateTime>
+#include <QMessageBox>
+#include <QGridLayout>
+#include <QDateTimeEdit>
+#include <QDialogButtonBox>
+#include <QDialog>
 #include <QDesktopServices>
 #include <QDir>
 #include <QUrl>
@@ -388,6 +393,32 @@ QWidget *MainWindow::buildLogPanel()
     cl->setContentsMargins(0, 0, 0, 0);
     cl->addWidget(m_hexEnable);
     if (m_ctx.logger) {
+        services::CsvLogger *logger = m_ctx.logger;
+        auto *state = new QLabel;
+        auto *toggle = new QPushButton;
+        auto *schedule = new QPushButton(QStringLiteral("Hẹn giờ…"));
+        theme::setRole(schedule, "secondary");
+        auto refresh = [=] {
+            const QString fmt = QStringLiteral("HH:mm:ss dd/MM");
+            QString t = logger->recording() ? QStringLiteral("● Đang ghi log") : QStringLiteral("○ Không ghi log");
+            if (logger->startAt().isValid()) t += QStringLiteral(" · bắt đầu %1").arg(logger->startAt().toString(fmt));
+            if (logger->stopAt().isValid()) t += QStringLiteral(" · dừng %1").arg(logger->stopAt().toString(fmt));
+            state->setText(t);
+            toggle->setText(logger->recording() ? QStringLiteral("Dừng ghi") : QStringLiteral("Bắt đầu ghi"));
+            theme::setRole(toggle, logger->recording() ? "danger" : "secondary");
+        };
+        connect(logger, &services::CsvLogger::recordingChanged, this, refresh);
+        connect(logger, &services::CsvLogger::scheduleChanged, this, refresh);
+        connect(toggle, &QPushButton::clicked, this, [=] {
+            if (!logger->recording()) logger->setSchedule(QDateTime(), logger->stopAt()); // bắt đầu tay thì bỏ hẹn giờ bắt đầu
+            logger->setRecording(!logger->recording());
+        });
+        connect(schedule, &QPushButton::clicked, this, [=] { editLogSchedule(); });
+        refresh();
+        cl->addWidget(state);
+        cl->addWidget(toggle);
+        cl->addWidget(schedule);
+
         auto *open = new QPushButton(QStringLiteral("Mở thư mục log"));
         theme::setRole(open, "secondary");
         connect(open, &QPushButton::clicked, this, [this] {
@@ -404,6 +435,48 @@ QWidget *MainWindow::buildLogPanel()
         edit->clear();
     });
     return tabs;
+}
+
+// Hộp thoại hẹn giờ ghi log: mỗi mốc bật/tắt riêng. Chỉ hiệu lực một lần.
+void MainWindow::editLogSchedule()
+{
+    services::CsvLogger *logger = m_ctx.logger;
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("Hẹn giờ ghi log"));
+    auto *startOn = new QCheckBox(QStringLiteral("Bắt đầu ghi lúc"));
+    auto *stopOn = new QCheckBox(QStringLiteral("Dừng ghi lúc"));
+    auto makeEdit = [&](const QDateTime &v, QCheckBox *box) {
+        auto *e = new QDateTimeEdit(v.isValid() ? v : QDateTime::currentDateTime().addSecs(60));
+        e->setDisplayFormat(QStringLiteral("dd/MM/yyyy HH:mm:ss"));
+        e->setCalendarPopup(true);
+        e->setEnabled(v.isValid());
+        box->setChecked(v.isValid());
+        connect(box, &QCheckBox::toggled, e, &QWidget::setEnabled);
+        return e;
+    };
+    auto *startAt = makeEdit(logger->startAt(), startOn);
+    auto *stopAt = makeEdit(logger->stopAt(), stopOn);
+    auto *hint = new QLabel(QStringLiteral("Mỗi mốc chỉ dùng một lần. Nút \"Bắt đầu ghi\" / \"Dừng ghi\" vẫn bấm tay được bất kỳ lúc nào."));
+    hint->setWordWrap(true);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    auto *grid = new QGridLayout(&dlg);
+    grid->addWidget(startOn, 0, 0);
+    grid->addWidget(startAt, 0, 1);
+    grid->addWidget(stopOn, 1, 0);
+    grid->addWidget(stopAt, 1, 1);
+    grid->addWidget(hint, 2, 0, 1, 2);
+    grid->addWidget(buttons, 3, 0, 1, 2);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    const QDateTime start = startOn->isChecked() ? startAt->dateTime() : QDateTime();
+    const QDateTime stop = stopOn->isChecked() ? stopAt->dateTime() : QDateTime();
+    if (start.isValid() && stop.isValid() && stop <= start) {
+        QMessageBox::warning(this, QStringLiteral("Hẹn giờ ghi log"), QStringLiteral("Thời điểm dừng phải sau thời điểm bắt đầu."));
+        return;
+    }
+    logger->setSchedule(start, stop);
 }
 
 void MainWindow::logEvent(const QString &text, int group, int mb, int trb)

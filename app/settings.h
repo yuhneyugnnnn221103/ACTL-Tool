@@ -13,7 +13,7 @@ struct Settings {
     int serviceBaud;
     bool trbCheckCrc, psuCheckCrc;
     int cfgReadTimeoutMs, cfgWriteGapMs;
-    bool logEnabled;
+    bool logEnabled, logAutoStart;
     QString logDir, thresholdsFile, psuThresholdsFile, psuDefaultConfigFile;
     int logPeriodMs, logMaxFileMb;
     int fpgaEraseWaitSec, fpgaPacketGapMs, fpgaBootWaitMs;
@@ -51,6 +51,7 @@ struct Settings {
         s.cfgReadTimeoutMs = get("config/readTimeoutMs", 3000).toInt();
         s.cfgWriteGapMs = get("config/writeGapMs", 300).toInt();
         s.logEnabled = get("log/enabled", true).toBool();
+        s.logAutoStart = get("log/autoStart", true).toBool(); // false: mở app ở trạng thái chưa ghi, bấm "Bắt đầu ghi" hoặc hẹn giờ
         s.logDir = get("log/dir", appDir + "/logs").toString();
         s.logPeriodMs = get("log/periodMs", 0).toInt(); // 0: ghi mọi bản tin nhận được; >0: tối thiểu ms giữa hai dòng của một thiết bị (đổi trạng thái thì ghi ngay)
         s.logMaxFileMb = get("log/maxFileMb", 100).toInt();

@@ -21,10 +21,58 @@ CsvLogger::CsvLogger(const QString &dir, int periodMs, qint64 maxFileBytes, cons
 
     connect(&m_flushTimer, &QTimer::timeout, this, &CsvLogger::flush);
     m_flushTimer.start(2000);
+    connect(&m_scheduleTimer, &QTimer::timeout, this, [this] { tick(QDateTime::currentDateTime()); });
+    m_scheduleTimer.start(1000);
+}
+
+void CsvLogger::setRecording(bool on)
+{
+    if (on == m_recording) return;
+    m_recording = on;
+    if (!on) {
+        closeAll(m_trb);
+        closeAll(m_psu);
+        m_events.file.close();
+    } else {
+        m_lastLogged.clear();     // mở lại thì ghi ngay bản tin đầu tiên của mỗi thiết bị
+        m_lastLoggedPsu.clear();
+        m_errorReported = false;
+    }
+    emit recordingChanged(on);
+}
+
+void CsvLogger::setSchedule(const QDateTime &startAt, const QDateTime &stopAt)
+{
+    m_startAt = startAt;
+    m_stopAt = stopAt;
+    emit scheduleChanged();
+    tick(QDateTime::currentDateTime());
+}
+
+void CsvLogger::tick(const QDateTime &now)
+{
+    bool changed = false;
+    if (m_startAt.isValid() && now >= m_startAt) {
+        m_startAt = QDateTime();
+        changed = true;
+        if (!(m_stopAt.isValid() && now >= m_stopAt)) setRecording(true);   // đã quá cả mốc dừng thì không bật
+    }
+    if (m_stopAt.isValid() && now >= m_stopAt) {
+        m_stopAt = QDateTime();
+        changed = true;
+        setRecording(false);
+    }
+    if (changed) emit scheduleChanged();
+}
+
+void CsvLogger::closeAll(std::map<int, Stream> &streams)
+{
+    for (auto &kv : streams) kv.second.file.close();
 }
 
 void CsvLogger::logTrb(int mb, int trb, const model::TrbState &s, bool force)
 {
+    if (!m_recording) return;
     qint64 &last = m_lastLogged[mb << 8 | trb];
     if (!force && s.lastSeenMs - last < m_periodMs) return;
     last = s.lastSeenMs;
@@ -43,6 +91,7 @@ void CsvLogger::logTrb(int mb, int trb, const model::TrbState &s, bool force)
 
 void CsvLogger::logPsu(int addr, const model::PsuState &s, bool force)
 {
+    if (!m_recording) return;
     qint64 &last = m_lastLoggedPsu[addr];
     if (!force && s.lastSeenMs - last < m_periodMs) return;
     last = s.lastSeenMs;
@@ -61,6 +110,7 @@ void CsvLogger::logPsu(int addr, const model::PsuState &s, bool force)
 
 void CsvLogger::logEvent(const QString &text)
 {
+    if (!m_recording) return;
     QString quoted = text;
     quoted.replace('"', QLatin1String("\"\""));
     write(m_events, QDateTime::currentDateTime().toString(kTimeFormat).toLatin1() + ",\"" + quoted.toUtf8() + '"');

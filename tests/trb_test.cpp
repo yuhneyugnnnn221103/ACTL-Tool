@@ -960,6 +960,49 @@ private slots:
     }
 
     // ---------- Log CSV ----------
+    void csvLoggerStartsAndStopsBySchedule()
+    {
+        QTemporaryDir dir;
+        services::CsvLogger logger(dir.path(), 0, 1024 * 1024, &trbmon::table(), &proto::trbmon::table());
+        model::TrbState s;
+        s.lastSeenMs = 1'700'000'000'000;
+        s.values = zeros(trbmon::kNumFields);
+        const QDir day(dir.path() + "/" + QDate::currentDate().toString(Qt::ISODate));
+        auto rows = [&] {
+            logger.flush();
+            QFile f(day.filePath("trb/MB01_TRB01_" + QDate::currentDate().toString(Qt::ISODate) + ".csv"));
+            return f.open(QIODevice::ReadOnly) ? f.readAll().count('\n') : 0;   // gồm dòng tiêu đề
+        };
+
+        logger.setRecording(false);
+        logger.logTrb(0, 0, s, false);
+        QCOMPARE(rows(), 0);                                   // chưa ghi thì không tạo file
+
+        const QDateTime t0 = QDateTime::currentDateTime();
+        logger.setSchedule(t0.addSecs(60), t0.addSecs(120));
+        logger.tick(t0.addSecs(30));
+        QVERIFY(!logger.recording());
+        logger.tick(t0.addSecs(61));                           // tới giờ bắt đầu
+        QVERIFY(logger.recording());
+        QVERIFY(!logger.startAt().isValid());
+        logger.logTrb(0, 0, s, false);
+        s.lastSeenMs += 10;
+        logger.logTrb(0, 0, s, false);
+        QCOMPARE(rows(), 3);                                   // tiêu đề + 2 dòng
+        logger.tick(t0.addSecs(121));                          // tới giờ dừng
+        QVERIFY(!logger.recording());
+        s.lastSeenMs += 10;
+        logger.logTrb(0, 0, s, true);
+        QCOMPARE(rows(), 3);                                   // sau khi dừng không ghi thêm
+
+        logger.setRecording(true);                             // bật tay: ghi tiếp vào cùng file
+        logger.logTrb(0, 0, s, false);
+        QCOMPARE(rows(), 4);
+
+        logger.setSchedule(QDateTime(), t0.addSecs(-5));       // mốc dừng đã qua: dừng ngay
+        QVERIFY(!logger.recording());
+    }
+
     void csvLoggerWritesHeaderRowsAndThrottles()
     {
         QTemporaryDir dir;

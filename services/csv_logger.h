@@ -8,6 +8,7 @@
 #include "../model/psu_store.h"
 #include "../proto/field_table.h"
 #include <QDate>
+#include <QDateTime>
 #include <QFile>
 #include <QHash>
 #include <QTimer>
@@ -22,6 +23,15 @@ public:
               const proto::FieldTable *psuTable, QObject *parent = nullptr);
 
     QString dir() const { return m_dir; }
+
+    // Bật/tắt ghi. Khi tắt (thủ công hoặc theo hẹn giờ) mọi file được đóng; các lời gọi log* bị bỏ qua.
+    bool recording() const { return m_recording; }
+    void setRecording(bool on);
+    // Hẹn giờ: tới startAt thì bật, tới stopAt thì tắt (QDateTime không hợp lệ = không hẹn). Mỗi mốc chỉ dùng một lần.
+    void setSchedule(const QDateTime &startAt, const QDateTime &stopAt);
+    QDateTime startAt() const { return m_startAt; }
+    QDateTime stopAt() const { return m_stopAt; }
+    void tick(const QDateTime &now); // kiểm tra hẹn giờ; timer nội bộ gọi mỗi giây
     // Ghi nếu đã quá periodMs kể từ lần ghi trước của thiết bị này, hoặc force (đổi trạng thái).
     void logTrb(int mb, int trb, const model::TrbState &state, bool force);
     void logPsu(int addr, const model::PsuState &state, bool force);
@@ -29,11 +39,14 @@ public:
     void flush();
 
 signals:
+    void recordingChanged(bool on);
+    void scheduleChanged();
     void errorOccurred(const QString &message);
 
 private:
     struct Stream { QString folder, prefix, header; QFile file; QDate date; };
     bool write(Stream &s, const QByteArray &line);
+    static void closeAll(std::map<int, Stream> &streams);
     static void flushAll(std::map<int, Stream> &streams);
 
     QString m_dir;
@@ -43,7 +56,9 @@ private:
     std::map<int, Stream> m_trb, m_psu;   // khóa: mb << 8 | trb, hoặc địa chỉ PSU
     Stream m_events;
     QHash<int, qint64> m_lastLogged, m_lastLoggedPsu;
-    QTimer m_flushTimer;
+    QTimer m_flushTimer, m_scheduleTimer;
+    bool m_recording = true;
+    QDateTime m_startAt, m_stopAt;
     bool m_errorReported = false;
 };
 

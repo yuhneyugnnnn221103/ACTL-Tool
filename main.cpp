@@ -85,6 +85,7 @@ int main(int argc, char *argv[])
     ctx.psuControl = &psuControl;
     ctx.psuConfig = &psuConfig;
     ctx.trbConfig = &trbConfig;
+    logger.setRecording(cfg.logAutoStart);
     ctx.logger = cfg.logEnabled ? &logger : nullptr;
     ctx.auth = &auth;
 
