@@ -7,7 +7,7 @@ namespace core {
 // Tách khung từ luồng byte. Sai tailer/CRC hoặc CMD lạ -> trượt 1 byte để đồng bộ lại.
 class FrameParser {
 public:
-    struct Stats { quint64 frames = 0, crcErrors = 0, droppedBytes = 0, zeroFill = 0; };  // zeroFill: byte 0x00 bị bỏ qua (khung rỗng của Gateway)
+    struct Stats { quint64 frames = 0, crcErrors = 0, droppedBytes = 0, zeroFill = 0, emptyFrames = 0; };  // zeroFill: byte 0x00 bị bỏ qua (khung rỗng của Gateway)
 
     explicit FrameParser(const FrameRegistry *registry) : m_registry(registry) {}
 

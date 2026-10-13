@@ -22,6 +22,13 @@ void TrbMonitor::onFrame(const core::Frame &frame)
     const int mb = frame.at(trbmon::kOffMb), trb = frame.at(trbmon::kOffTrb);
     if (!m_store->contains(mb, trb)) { ++m_badAddress; return; }
 
+    int &empty = m_emptyRun[mb << 8 | trb];
+    if (frame.empty) {                    // Gateway báo TRB này không phản hồi: đủ m_emptyLimit lần liên tiếp thì coi là mất kết nối
+        if (++empty >= m_emptyLimit) m_store->markSilent(mb, trb);
+        return;
+    }
+    empty = 0;
+
     const QList<double> v = trbmon::table().decode(frame.raw);
     // Tạm quy ước: có trip code khác 0 hoặc mất PG (Power Good) là Trip; Trip được ưu tiên hơn Quá ngưỡng.
     bool trip = false;

@@ -73,6 +73,13 @@ void DeviceStore::markStale(qint64 nowMs, int staleMs)
     }
 }
 
+void DeviceStore::markSilent(int mb, int trb)
+{
+    if (!contains(mb, trb)) return;
+    const Status s = m_trbs.at(mb * m_trbPerMb + trb).status;
+    if (s == Status::Ok || s == Status::Warning || s == Status::Trip) setStatus(mb, trb, Status::Lost);   // chưa có số liệu thì giữ "chưa có dữ liệu"
+}
+
 void DeviceStore::setStatus(int mb, int trb, Status to)
 {
     TrbState &s = m_trbs[mb * m_trbPerMb + trb];

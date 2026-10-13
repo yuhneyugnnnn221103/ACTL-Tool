@@ -17,12 +17,14 @@ struct FrameSpec {
     int crcStart = 4;      // CRC phủ [crcStart .. length-5]; TRB/FPGA OTA = 4, STM/PSU = 2
     bool checkCrc = true;
     QString name;
+    int emptyFrom = 0;     // > 0: khung "rỗng" của Gateway (thiết bị không phản hồi) có mọi byte từ emptyFrom tới hết CRC bằng 0x00; nhận không cần CRC, Frame::empty = true
 };
 
 struct Frame {
     QByteArray cmd;
     QByteArray raw;        // nguyên khung, kể cả header/tailer
     qint64 timestampMs = 0;
+    bool empty = false;    // khung rỗng (xem FrameSpec::emptyFrom): chỉ có địa chỉ, không có số liệu
 
     quint8 at(int i) const { return static_cast<quint8>(raw.at(i)); }
 };

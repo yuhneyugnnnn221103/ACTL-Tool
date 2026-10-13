@@ -345,9 +345,17 @@ def cmd_tcp(args):
         srv.close()
 
 
+def empty_frame(mb, t):
+    """Khung Gateway tạo cho TRB không phản hồi: AB CD 11 11 MB TRB, data và CRC toàn 0x00, E1 E2."""
+    f = bytearray(TRB_LEN)
+    f[0], f[1], f[2], f[3], f[4], f[5] = H1, H2, 0x11, 0x11, mb, t
+    f[-2], f[-1] = T1, T2
+    return bytes(f)
+
+
 def burst_frames(frames, mb_count, trb_count):
     """Như Gateway thật: gom 8 TRB của mỗi MB thành một lần gửi (8 x TRB_LEN byte). TRB không có khung
-    (không phản hồi / sai CRC / lỗi) được thay bằng một khối TRB_LEN byte 0x00."""
+    (không phản hồi / sai CRC / lỗi) được thay bằng khung rỗng (chỉ có địa chỉ, data và CRC là 0x00)."""
     trb, rest = {}, []
     for item in frames:
         data, pause = item if isinstance(item, tuple) else (item, 0)
@@ -355,13 +363,13 @@ def burst_frames(frames, mb_count, trb_count):
             trb[(data[4], data[5])] = data
         else:
             rest.append((data, pause))
-    out = [(b"".join(trb.get((mb, t), bytes(TRB_LEN)) for t in range(trb_count)), 0) for mb in range(mb_count)]
+    out = [(b"".join(trb.get((mb, t), empty_frame(mb, t)) for t in range(trb_count)), 0) for mb in range(mb_count)]
     return out + rest
 
 
 def tcp_session(args, ctx, sock):
     sock.settimeout(0.01)
-    print(f"kịch bản '{args.scenario}', {args.rate} lượt/giây, mỗi lần gửi dồn 8 bản tin TRB của một MB (TRB không phản hồi thay bằng khối 0x00).")
+    print(f"kịch bản '{args.scenario}', {args.rate} lượt/giây, mỗi lần gửi dồn 8 bản tin TRB của một MB (TRB không phản hồi thay bằng khung rỗng chỉ có địa chỉ).")
 
     stop = threading.Event()
     rx = bytearray()

@@ -67,6 +67,7 @@ int main(int argc, char *argv[])
 
     services::AlarmEngine alarms(&thresholds, &proto::trbmon::table());
     services::TrbMonitor trbMonitor(ctx.monitorLink, &store, &alarms);
+    trbMonitor.setEmptyLimit(cfg.emptyFramesToLost);
     services::TrbControl trbControl(ctx.monitorLink);
     services::TrbConfig trbConfig(ctx.serviceLink, &thresholds, cfg.thresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
     services::AlarmEngine psuAlarms(&psuThresholds, &proto::psumon::table());

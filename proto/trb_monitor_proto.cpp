@@ -6,7 +6,8 @@ QByteArray cmd() { return QByteArray::fromHex("1111"); }
 
 core::FrameSpec spec(bool checkCrc)
 {
-    return {cmd(), kLength, kCrcStart, checkCrc, QStringLiteral("TRB giám sát")};
+    // Gateway thay khung của TRB không phản hồi / sai CRC / lỗi bằng khung chỉ có địa chỉ: AB CD 11 11 MB TRB, data và CRC toàn 0x00, E1 E2.
+    return {cmd(), kLength, kCrcStart, checkCrc, QStringLiteral("TRB giám sát"), 6};
 }
 
 // Hệ số quy đổi đang là 1 (giá trị thô) như tool cũ; có công thức thì sửa scale/unit tại đây.

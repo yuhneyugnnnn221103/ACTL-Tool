@@ -598,32 +598,68 @@ private slots:
         QCOMPARE(tags.size(), 11);                                // mọi loại có mã riêng
     }
 
-    void gatewayZeroBlockForSilentTrbIsSkippedWithoutNoise()
+    void gatewayEmptyFrameMarksTheSilentTrbAsLost()
     {
         Rig rig("monitor");
         services::TrbMonitor::registerFrames(rig.registry, true);
         rig.link.start();
         model::DeviceStore store(1, 8);
         services::TrbMonitor mon(&rig.link, &store, nullptr);
+        mon.setEmptyLimit(3);
         QSignalSpy updated(&mon, &services::TrbMonitor::trbUpdated);
         QList<double> v = zeros(trbmon::kNumFields);
         v[trbmon::kIdxPg] = 0x0F;
-        QByteArray burst;                                    // MB0: TRB 3 và 6 không phản hồi -> Gateway chèn 310 byte 0x00
-        for (int t = 0; t < 8; ++t) burst += (t == 3 || t == 6) ? QByteArray(trbmon::kLength, '\0') : monitorFrame(0, t, v);
-        QCOMPARE(burst.size(), 8 * trbmon::kLength);
-        rig.transport->inject(burst);
+        // Khung rỗng của Gateway: AB CD 11 11 MB TRB, data và CRC toàn 0x00, E1 E2.
+        auto empty = [](int mb, int trb) {
+            QByteArray f(trbmon::kLength, '\0');
+            f[0] = char(0xAB); f[1] = char(0xCD); f[2] = f[3] = char(0x11);
+            f[4] = char(mb); f[5] = char(trb);
+            f[trbmon::kLength - 2] = char(0xE1); f[trbmon::kLength - 1] = char(0xE2);
+            return f;
+        };
+        auto burst = [&](const QList<int> &silent) {
+            QByteArray b;
+            for (int t = 0; t < 8; ++t) b += silent.contains(t) ? empty(0, t) : monitorFrame(0, t, v);
+            return b;
+        };
+
+        rig.transport->inject(burst({3, 6}));                // lần đầu đã có TRB im lặng: chưa có số liệu nên giữ "chưa có dữ liệu"
         QCOMPARE(updated.size(), 6);
         QCOMPARE(store.trb(0, 3).status, model::Status::NoData);
         QCOMPARE(store.trb(0, 4).status, model::Status::Ok);
-        QCOMPARE(store.trb(0, 7).status, model::Status::Ok);
-        // Khối 0x00 không bị tính là byte lỗi hay lỗi CRC (không làm nhiễu bộ đếm ở thanh trên).
+
+        rig.transport->inject(burst({}));                    // cả 8 TRB có số liệu
+        QCOMPARE(store.count(model::Status::Ok), 8);
+        rig.transport->inject(burst({3}));                   // 1 và 2 lần liên tiếp: chưa đủ ngưỡng
+        rig.transport->inject(burst({3}));
+        QCOMPARE(store.trb(0, 3).status, model::Status::Ok);
+        rig.transport->inject(burst({3}));                   // lần thứ 3 liên tiếp: mất kết nối, số liệu cuối còn nguyên
+        QCOMPARE(store.trb(0, 3).status, model::Status::Lost);
+        QCOMPARE(store.trb(0, 3).lastLive, model::Status::Ok);
+        QCOMPARE(store.trb(0, 4).status, model::Status::Ok);
+        QVERIFY(store.trb(0, 3).frames > 0);
+        rig.transport->inject(burst({}));                    // có tin lại: hồi phục
+        QCOMPARE(store.trb(0, 3).status, model::Status::Ok);
+        rig.transport->inject(burst({3}));                   // chuỗi liên tiếp phải tính lại từ đầu sau khi có tin
+        rig.transport->inject(burst({3}));
+        QCOMPARE(store.trb(0, 3).status, model::Status::Ok);
+
+        // Khung rỗng hợp lệ về địa chỉ nên không bị tính là byte lỗi hay lỗi CRC.
         core::FrameParser parser(&rig.registry);
-        int frames = 0;
-        parser.feed(burst, [&](const core::Frame &) { ++frames; });
-        QCOMPARE(frames, 6);
+        int frames = 0, empties = 0;
+        parser.feed(burst({3, 6}), [&](const core::Frame &f) { ++frames; empties += f.empty; });
+        QCOMPARE(frames, 8);
+        QCOMPARE(empties, 2);
         QCOMPARE(parser.stats().droppedBytes, quint64(0));
         QCOMPARE(parser.stats().crcErrors, quint64(0));
-        QCOMPARE(parser.stats().zeroFill, quint64(2 * trbmon::kLength));
+        // Khung giám sát thường bị sai CRC vẫn bị loại, không được lẫn với khung rỗng.
+        QByteArray bad = monitorFrame(0, 1, v);
+        bad[50] = char(bad.at(50) ^ 0x40);
+        int frames2 = 0;
+        core::FrameParser parser2(&rig.registry);
+        parser2.feed(bad, [&](const core::Frame &) { ++frames2; });
+        QCOMPARE(frames2, 0);
+        QCOMPARE(parser2.stats().crcErrors, quint64(1));
     }
 
     void powerGoodFailureCountsAsTrip()

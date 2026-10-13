@@ -42,6 +42,7 @@ public:
     void updateTrb(int mb, int trb, const QList<double> &values, const QByteArray &raw,
                    qint64 timestampMs, Status status, const QList<int> &alarms = {});
     void markStale(qint64 nowMs, int staleMs); // quá hạn -> Lost
+    void markSilent(int mb, int trb);          // Gateway báo thiết bị không phản hồi: Ok/Warning/Trip -> Lost (giữ số liệu cuối)
 
 signals:
     void trbStatusChanged(int mb, int trb, model::Status from, model::Status to);

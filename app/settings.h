@@ -4,7 +4,7 @@
 
 // Cấu hình đọc từ actl_tool.ini cạnh file chạy; thiếu khóa nào thì ghi giá trị mặc định ra file.
 struct Settings {
-    int mbCount, trbPerMb, staleMs;
+    int mbCount, trbPerMb, staleMs, emptyFramesToLost;
     QString monitorAddress;    // địa chỉ IP (hoặc tên máy) của Gateway; PC là TCP client
     quint16 monitorPort;
     QString monitorReplayFile; // khác rỗng: phát lại file hex thay cho TCP (để thử)
@@ -39,6 +39,7 @@ struct Settings {
         s.mbCount = get("system/mbCount", 20).toInt();
         s.trbPerMb = get("system/trbPerMb", 8).toInt();
         s.staleMs = get("system/staleMs", 3000).toInt();
+        s.emptyFramesToLost = get("system/emptyFramesToLost", 3).toInt();
         s.monitorAddress = get("monitor/gatewayAddress", "192.168.1.10").toString();
         s.monitorPort = quint16(get("monitor/gatewayPort", 5000).toUInt());
         s.monitorReplayFile = get("monitor/replayFile", "").toString();

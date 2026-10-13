@@ -25,6 +25,18 @@ void FrameParser::feed(const QByteArray &data, const std::function<void(const Fr
         const quint8 *f = d + pos;
         const int len = spec->length;
         bool ok = f[len - 2] == kTailer1 && f[len - 1] == kTailer2;
+        if (ok && spec->emptyFrom > 0) {
+            bool zeros = true;
+            for (int i = spec->emptyFrom; i < len - 2 && zeros; ++i) zeros = f[i] == 0;
+            if (zeros) {
+                ++m_stats.emptyFrames;
+                Frame fr{spec->cmd, m_buf.mid(pos, len), QDateTime::currentMSecsSinceEpoch()};
+                fr.empty = true;
+                onFrame(fr);
+                pos += len;
+                continue;
+            }
+        }
         if (ok && spec->checkCrc) {
             const quint16 recv = quint16(f[len - 4] << 8 | f[len - 3]);
             ok = recv == crc16(f + spec->crcStart, len - 4 - spec->crcStart);
