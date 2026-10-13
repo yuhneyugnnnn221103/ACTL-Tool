@@ -69,8 +69,8 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
 {
     m_mbBox = new QComboBox;
     m_trbBox = new QComboBox;
-    for (int i = 0; i < store->mbCount(); ++i) m_mbBox->addItem(QStringLiteral("MB%1").arg(i));
-    for (int i = 0; i < store->trbPerMb(); ++i) m_trbBox->addItem(QStringLiteral("TRB%1").arg(i));
+    for (int i = 0; i < store->mbCount(); ++i) m_mbBox->addItem(QStringLiteral("MB%1").arg(i + 1));
+    for (int i = 0; i < store->trbPerMb(); ++i) m_trbBox->addItem(QStringLiteral("TRB%1").arg(i + 1));
     auto *prev = new QPushButton(QStringLiteral("◀ Trước"));
     auto *next = new QPushButton(QStringLiteral("Sau ▶"));
     theme::setRole(prev, "secondary");
@@ -328,7 +328,7 @@ void TrbDetailPage::refresh()
     const auto debug = m_control->debugTrb();
     m_debugPill->setVisible(debug.has_value());
     if (debug)
-        m_debugPill->setPill(QStringLiteral("Debug: MB%1 / TRB%2").arg(debug->first).arg(debug->second),
+        m_debugPill->setPill(QStringLiteral("Debug: MB%1 / TRB%2").arg(debug->first + 1).arg(debug->second + 1),
                              OverviewGrid::statusColor(Status::Updating), Qt::white);
 
     auto val = [&](int idx) { return has ? QString::number(s.values.at(idx)) : kDash; };
@@ -413,7 +413,7 @@ void TrbDetailPage::sendControl()
         if (QMessageBox::question(this, QStringLiteral("Chế độ Debug"),
                 QStringLiteral("MB%1 / TRB%2 đang ở chế độ Debug. Chỉ một TRB được chạy Debug vì TRB Debug tự phát bản tin giám sát, "
                                "hai TRB sẽ tranh bus.\n\nĐưa MB%1 / TRB%2 về Normal (giữ nguyên PA và Start) rồi đặt MB%3 / TRB%4 sang Debug?")
-                    .arg(other.first).arg(other.second).arg(mb).arg(trb)) != QMessageBox::Yes) return;
+                    .arg(other.first + 1).arg(other.second + 1).arg(mb + 1).arg(trb + 1)) != QMessageBox::Yes) return;
         m_control->sendControlSwitchDebug(mb, trb, c);
     } else {
         m_control->sendControl(mb, trb, c);

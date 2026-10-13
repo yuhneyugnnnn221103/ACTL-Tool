@@ -87,7 +87,7 @@ QWidget *FirmwarePage::buildFpgaTab()
                              QStringLiteral("STAT"), QStringLiteral("BOOTSTS"), QStringLiteral("WBSTAR")}, total);
     for (int r = 0; r < total; ++r) {
         QTableWidgetItem *it = m_fpgaTable->item(r, 0);
-        it->setText(QStringLiteral("MB%1 / TRB%2").arg(r / perMb).arg(r % perMb));
+        it->setText(QStringLiteral("MB%1 / TRB%2").arg(r / perMb + 1).arg(r % perMb + 1));
         it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
         it->setCheckState(Qt::Checked);
     }
@@ -235,12 +235,12 @@ QWidget *FirmwarePage::buildFpgaTab()
     auto *mbLabel = new QLabel(QStringLiteral("Theo MB:"));
     mbRow->addWidget(mbLabel);
     for (int mb = 0; mb < m_ctx.store->mbCount(); ++mb) {
-        auto *b = button(QStringLiteral("MB%1").arg(mb), [=] {
+        auto *b = button(QStringLiteral("MB%1").arg(mb + 1), [=] {
             bool all = true;
             for (int t = 0; t < perMb; ++t) all = all && m_fpgaTable->item(mb * perMb + t, 0)->checkState() == Qt::Checked;
             setRows(mb * perMb, mb * perMb + perMb - 1, all ? 0 : 1);
         });
-        b->setToolTip(QStringLiteral("Chọn / bỏ chọn cả %1 TRB của MB%2").arg(perMb).arg(mb));
+        b->setToolTip(QStringLiteral("Chọn / bỏ chọn cả %1 TRB của MB%2").arg(perMb).arg(mb + 1));
         theme::setRole(b, "chip");
         mbRow->addWidget(b);
     }

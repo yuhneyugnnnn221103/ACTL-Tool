@@ -115,7 +115,7 @@ void TrbConfig::onRequestFinished(quint64 id, bool ok, const core::Frame &reply)
     if (!ok) { done(false, QStringLiteral("không trả lời")); return; }
     if (reply.at(trbcfg::kOffMb) != mb || reply.at(trbcfg::kOffTrb) != trb) {
         done(false, QStringLiteral("trả lời sai địa chỉ (MB%1 / TRB%2)")
-                        .arg(reply.at(trbcfg::kOffMb)).arg(reply.at(trbcfg::kOffTrb)));
+                        .arg(reply.at(trbcfg::kOffMb) + 1).arg(reply.at(trbcfg::kOffTrb) + 1));
         return;
     }
 

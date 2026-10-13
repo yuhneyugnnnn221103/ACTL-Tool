@@ -7,7 +7,7 @@ using namespace proto::trbctl;
 static QString target(int mb, int trb)
 {
     return mb == kBroadcast && trb == kBroadcast ? QStringLiteral("tất cả TRB")
-                                                 : QStringLiteral("MB%1 / TRB%2").arg(mb).arg(trb);
+                                                 : QStringLiteral("MB%1 / TRB%2").arg(mb + 1).arg(trb + 1);
 }
 
 TrbControl::TrbControl(core::Link *link, QObject *parent) : QObject(parent), m_link(link)

@@ -306,12 +306,12 @@ def decode_control(buf):
         if cmd2 == b"\xA2\xA2" and len(buf) >= 14:
             f = buf[:14]
             ctl = f[7]
-            out.append(f"điều khiển TRB MB{f[4]}/TRB{f[5]}: PA={f[6]:04b} start={ctl >> 1 & 1} clear={ctl & 1} "
+            out.append(f"điều khiển TRB MB{f[4] + 1}/TRB{f[5] + 1}: PA={f[6]:04b} start={ctl >> 1 & 1} clear={ctl & 1} "
                        f"beamsync={ctl >> 2 & 1} debug={ctl >> 4 & 1}" + (" (broadcast)" if f[4] == 0xFF else ""))
             buf = buf[14:]
         elif cmd2 == b"\x14\x14" and len(buf) >= 17:
             f = buf[:17]
-            out.append(f"beam MB{f[4]}/TRB{f[5]}: phaseTX={f[6]} phaseRX={f[7]} ampTX={f[8]} ampRX={f[9]} CH={f[10]:04b} ADAR={f[11]:08b}")
+            out.append(f"beam MB{f[4] + 1}/TRB{f[5] + 1}: phaseTX={f[6]} phaseRX={f[7]} ampTX={f[8]} ampRX={f[9]} CH={f[10]:04b} ADAR={f[11]:08b}")
             buf = buf[17:]
         elif cmd2 == b"\x01\x01" and len(buf) >= 13:
             f = buf[:13]

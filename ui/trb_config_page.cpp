@@ -58,11 +58,11 @@ QWidget *TrbConfigPage::buildContent()
     m_tree->setHeaderLabel(QStringLiteral("Thiết bị (đánh dấu = hàng loạt)"));
     m_tree->setFixedWidth(230);
     for (int mb = 0; mb < m_ctx.store->mbCount(); ++mb) {
-        auto *parent = new QTreeWidgetItem(m_tree, {QStringLiteral("MB%1").arg(mb)});
+        auto *parent = new QTreeWidgetItem(m_tree, {QStringLiteral("MB%1").arg(mb + 1)});
         parent->setFlags(parent->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsAutoTristate);
         parent->setCheckState(0, Qt::Unchecked);
         for (int trb = 0; trb < m_ctx.store->trbPerMb(); ++trb) {
-            auto *it = new QTreeWidgetItem(parent, {QStringLiteral("TRB%1").arg(trb)});
+            auto *it = new QTreeWidgetItem(parent, {QStringLiteral("TRB%1").arg(trb + 1)});
             it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
             it->setCheckState(0, Qt::Unchecked);
             it->setData(0, Qt::UserRole, mb);
@@ -147,7 +147,7 @@ QWidget *TrbConfigPage::buildContent()
             return;
         }
         if (QMessageBox::question(this, QStringLiteral("Ghi cấu hình"),
-                                  QStringLiteral("Ghi toàn bộ cột \"Giá trị mới\" xuống MB%1 / TRB%2?").arg(m_mb).arg(m_trb))
+                                  QStringLiteral("Ghi toàn bộ cột \"Giá trị mới\" xuống MB%1 / TRB%2?").arg(m_mb + 1).arg(m_trb + 1))
             != QMessageBox::Yes) return;
         if (!m_ctx.auth->unlock(this)) return; // chỉ hỏi mật khẩu khi thật sự gửi cấu hình xuống thiết bị
         setBusy(true);
@@ -164,7 +164,7 @@ QWidget *TrbConfigPage::buildContent()
     }));
     single->addWidget(button(QStringLiteral("Lưu file…"), [this] {
         const QString path = QFileDialog::getSaveFileName(this, QStringLiteral("Lưu file cấu hình"),
-                                                          QStringLiteral("trb_mb%1_trb%2.json").arg(m_mb).arg(m_trb), "JSON (*.json)");
+                                                          QStringLiteral("trb_mb%1_trb%2.json").arg(m_mb + 1).arg(m_trb + 1), "JSON (*.json)");
         QFile f(path);
         if (!path.isEmpty() && f.open(QIODevice::WriteOnly | QIODevice::Truncate))
             f.write(QJsonDocument(trbcfg::toJson(newValues())).toJson());
@@ -254,7 +254,7 @@ void TrbConfigPage::selectDevice(int mb, int trb)
 {
     m_mb = mb;
     m_trb = trb;
-    m_title->setText(QStringLiteral("<b>MB%1 / TRB%2</b>").arg(mb).arg(trb));
+    m_title->setText(QStringLiteral("<b>MB%1 / TRB%2</b>").arg(mb + 1).arg(trb + 1));
     showDeviceColumn();
     refreshDiff();
 }

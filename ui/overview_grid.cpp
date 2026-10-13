@@ -62,12 +62,12 @@ void OverviewGrid::paintEvent(QPaintEvent *)
     for (int mb = 0; mb < m_store->mbCount(); ++mb) {
         const QRectF c = cellRect(mb, 0);
         p.drawText(QRectF(c.left(), 0, c.width(), kTop - 4), Qt::AlignCenter,
-                   c.width() >= 44 ? QStringLiteral("MB%1").arg(mb) : QString::number(mb));
+                   c.width() >= 44 ? QStringLiteral("MB%1").arg(mb + 1) : QString::number(mb + 1));
     }
     for (int trb = 0; trb < m_store->trbPerMb(); ++trb) {
         const QRectF c = cellRect(0, trb);
         p.drawText(QRectF(0, c.top(), kLeft - 8, c.height()), Qt::AlignRight | Qt::AlignVCenter,
-                   QStringLiteral("TRB%1").arg(trb));
+                   QStringLiteral("TRB%1").arg(trb + 1));
     }
 
     for (int mb = 0; mb < m_store->mbCount(); ++mb) {

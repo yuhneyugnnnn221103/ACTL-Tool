@@ -263,7 +263,7 @@ private slots:
         control.sendControl(2, 4, c);
         QVERIFY(done.wait(1000));
         QCOMPARE(done.last().at(1).toBool(), true);
-        QVERIFY(done.last().at(0).toString().contains("MB2 / TRB4"));
+        QVERIFY(done.last().at(0).toString().contains("MB3 / TRB5"));
         QVERIFY(done.last().at(0).toString().contains("Start"));
         QCOMPARE(rig.transport->written.size(), 1);
         QCOMPARE(rig.transport->written.first(), trbctl::buildControl(2, 4, c));
@@ -988,7 +988,7 @@ private slots:
         QVERIFY(lines.at(0).startsWith("\xEF\xBB\xBF" "time,mb,trb,status,TRM1.I SEN1"));   // UTF-8 BOM cho Excel
         QVERIFY(lines.at(0).contains("TRB.V"));
         QCOMPARE(lines.size(), 4);                                // header, 2 dòng dữ liệu, dòng rỗng cuối
-        QVERIFY(lines.at(1).contains(",2,3,"));
+        QVERIFY(lines.at(1).contains(",3,4,"));          // mb, trb đếm từ 1 như giao diện
         QVERIFY(lines.at(1).contains(",123,"));
 
         const QStringList events = day.entryList({"events_*.csv"});

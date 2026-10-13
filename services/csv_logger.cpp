@@ -32,7 +32,7 @@ void CsvLogger::logTrb(int mb, int trb, const model::TrbState &s, bool force)
     last = s.lastSeenMs;
 
     QByteArray line = QDateTime::fromMSecsSinceEpoch(s.lastSeenMs).toString(kTimeFormat).toLatin1();
-    line += ',' + QByteArray::number(mb) + ',' + QByteArray::number(trb) + ',' + statusText(s.status).toUtf8();
+    line += ',' + QByteArray::number(mb + 1) + ',' + QByteArray::number(trb + 1) + ',' + statusText(s.status).toUtf8();
     for (double v : s.values) line += ',' + QByteArray::number(v, 'g', 10);
     write(m_trb, line);
 }

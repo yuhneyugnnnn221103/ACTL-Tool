@@ -38,21 +38,21 @@ void log(const QString &text)
 
 QString hex(const QByteArray &b) { return QString::fromLatin1(b.toHex(' ').toUpper()); }
 
-// "*" = mọi giá trị; trả về khoảng [lo, hi].
+// Số MB / TRB nhập vào đếm từ 1 (như trên giao diện); "*" = mọi giá trị. Trả về khoảng chỉ số từ 0 [lo, hi].
 bool range(const QString &s, int count, int &lo, int &hi)
 {
     if (s == "*") { lo = 0; hi = count - 1; return count > 0; }
     bool ok = false;
     const int v = s.toInt(&ok);
-    lo = hi = v;
-    return ok && v >= 0 && v < count;
+    lo = hi = v - 1;
+    return ok && v >= 1 && v <= count;
 }
 
 const char *kHelp =
     "Lệnh:\n"
     "  status                         thống kê\n"
     "  lost MB TRB | back MB TRB      TRB mất kết nối / trở lại (MB, TRB có thể là *)\n"
-    "  over MB TRB \"TÊN TRƯỜNG\" N     ép giá trị trường giám sát, ví dụ over 0 1 \"TRM1.I SEN2\" 2500\n"
+    "  over MB TRB \"TÊN TRƯỜNG\" N     ép giá trị trường giám sát, ví dụ over 1 2 \"TRM1.I SEN2\" 2500\n"
     "  normal MB TRB                  bỏ mọi giá trị ép, xóa trip, trở lại bình thường\n"
     "  trip MB TRB N BITS             đặt byte trip code N (1..16), BITS dạng số hoặc 0xNN\n"
     "  faults drop|corrupt PERCENT    bơm lỗi trả lời: bỏ hoặc sai CRC\n"
@@ -114,8 +114,8 @@ int main(int argc, char *argv[])
     auto forEach = [&](const QString &mbArg, const QString &trbArg, const std::function<void(sim::TrbModel *)> &fn) {
         int m0, m1, t0, t1;
         if (!range(mbArg, world.mbCount(), m0, m1) || !range(trbArg, world.trbPerMb(), t0, t1)) {
-            log("Địa chỉ không hợp lệ (MB 0.." + QString::number(world.mbCount() - 1) + ", TRB 0.."
-                + QString::number(world.trbPerMb() - 1) + ")");
+            log("Địa chỉ không hợp lệ (MB 1.." + QString::number(world.mbCount()) + ", TRB 1.."
+                + QString::number(world.trbPerMb()) + ")");
             return;
         }
         for (int mb = m0; mb <= m1; ++mb)

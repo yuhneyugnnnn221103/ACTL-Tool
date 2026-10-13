@@ -244,8 +244,8 @@ void SimPage::rebuildWorld()
     m_grid->setRowCount(m_mb->value());
     m_grid->setColumnCount(m_trbPerMb->value());
     QStringList cols, rows;
-    for (int t = 0; t < m_trbPerMb->value(); ++t) cols << QStringLiteral("TRB%1").arg(t);
-    for (int mb = 0; mb < m_mb->value(); ++mb) rows << QStringLiteral("MB%1").arg(mb);
+    for (int t = 0; t < m_trbPerMb->value(); ++t) cols << QStringLiteral("TRB%1").arg(t + 1);
+    for (int mb = 0; mb < m_mb->value(); ++mb) rows << QStringLiteral("MB%1").arg(mb + 1);
     m_grid->setHorizontalHeaderLabels(cols);
     m_grid->setVerticalHeaderLabels(rows);
     for (int r = 0; r < m_grid->rowCount(); ++r)

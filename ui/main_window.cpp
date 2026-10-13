@@ -89,7 +89,7 @@ EventKind kindOf(model::Status to)
 using model::Status;
 
 namespace {
-QString trbName(int mb, int trb) { return QStringLiteral("MB%1 / TRB%2").arg(mb).arg(trb); }
+QString trbName(int mb, int trb) { return QStringLiteral("MB%1 / TRB%2").arg(mb + 1).arg(trb + 1); }
 }
 
 MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
