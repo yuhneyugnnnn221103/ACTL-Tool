@@ -230,13 +230,13 @@ private slots:
     {
         namespace fo = proto::fpgaota;
         QCOMPARE(fo::versionFromFileName("C:/x/20261013.bin"), quint32(20261013));
-        QCOMPARE(fo::versionFromFileName("261013.bin"), quint32(20261013));
-        QCOMPARE(fo::versionFromFileName("20261313.bin"), quint32(0));   // tháng sai
+        QCOMPARE(fo::versionFromFileName("2026101302.bin"), quint32(2026101302)); // cùng ngày, thêm số thứ tự
         QCOMPARE(fo::versionFromFileName("v1.2.bin"), quint32(0));
+        QCOMPARE(fo::versionFromFileName("20261013_2.bin"), quint32(0));
+        QCOMPARE(fo::versionFromFileName("99999999999.bin"), quint32(0));          // quá 32 bit
         QCOMPARE(fo::versionBytes(20261013), QByteArray::fromHex("01352895"));
-        QCOMPARE(fo::versionValue(fo::versionBytes(20261013)), quint32(20261013));
-        QCOMPARE(fo::versionText(fo::versionBytes(20261013)), QString("2026-10-13"));
-        QCOMPARE(fo::versionText(fo::versionBytes(12345)), QString("12345"));
+        QCOMPARE(fo::versionValue(fo::versionBytes(2026101302)), quint32(2026101302));
+        QCOMPARE(fo::versionText(fo::versionBytes(20261013)), QString("20261013"));
         QCOMPARE(fo::versionText(QByteArray(4, '\0')), QString());
         QCOMPARE(fo::versionText(QByteArray(4, char(0xFF))), QString());
 

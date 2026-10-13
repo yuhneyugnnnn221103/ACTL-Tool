@@ -103,8 +103,8 @@ QWidget *FirmwarePage::buildFpgaTab()
         const quint32 v = proto::fpgaota::versionFromFileName(file->text());
         m_fpgaImage = d;
         m_fpgaVersion = proto::fpgaota::versionBytes(v);
-        fileInfo->setText(v ? fileInfo->text() + QStringLiteral(", version %1 (%2)").arg(v).arg(proto::fpgaota::versionText(m_fpgaVersion))
-                            : fileInfo->text() + QStringLiteral(", tên file không phải ngày YYYYMMDD: sẽ KHÔNG ghi version"));
+        fileInfo->setText(v ? fileInfo->text() + QStringLiteral(", version %1").arg(v)
+                            : fileInfo->text() + QStringLiteral(", tên file không phải số nguyên dương (≤ 4294967294): sẽ KHÔNG ghi version"));
     });
 
     m_fpgaBroadcast = new QRadioButton(QStringLiteral("Broadcast: nạp cho MỌI TRB trong hệ thống"));

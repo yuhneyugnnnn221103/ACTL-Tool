@@ -4,7 +4,7 @@
 //       CMD: 55 nạp gói, 66 xóa flash, 88 hỏi trạng thái, AA yêu cầu boot. Địa chỉ FF FF = broadcast.
 //   FPGA -> PC, 40 byte:  [AB CD][99 99][Ack][CODE][STAT 4B][BOOTSTS 4B][WBSTAR 4B][VERSION 4B][Dự phòng 14B][CRC][E1 E2]
 //       Khung trả lời KHÔNG mang địa chỉ: chỉ dùng được với câu hỏi gửi tới đúng một thiết bị.
-//   PC -> FPGA, 269 byte: ghi version code mới: [AB CD][44 44][MB][TRB][VERSION 4B big-endian = số YYYYMMDD][đệm 0xFF][CRC][E1 E2] (không có trả lời)
+//   PC -> FPGA, 269 byte: ghi version code mới: [AB CD][44 44][MB][TRB][VERSION 4B big-endian = số nguyên từ tên file][đệm 0xFF][CRC][E1 E2] (không có trả lời)
 #include "../core/frame.h"
 
 namespace proto::fpgaota {
@@ -33,12 +33,12 @@ QByteArray buildLoad(int mb, int trb, quint16 packetId, const QByteArray &chunk)
 QByteArray buildQuery(int mb, int trb);
 QByteArray buildBoot(int mb, int trb);
 QByteArray buildWriteVersion(int mb, int trb, const QByteArray &version); // version 4 byte
-// Version = ngày lấy từ tên file .bin (YYYYMMDD hoặc YYMMDD, bỏ đuôi), đổi ký tự số thành số nguyên (vd 20261013),
-// ghi 4 byte big-endian. versionFromFileName trả 0 nếu tên không phải ngày hợp lệ.
+// Version = tên file .bin (bỏ đuôi) toàn chữ số, đổi thành số nguyên (vd 20261013; cùng ngày thêm số thứ tự cuối: 2026101302),
+// ghi 4 byte big-endian. versionFromFileName trả 0 nếu tên không hợp lệ (có chữ, rỗng, quá 32 bit).
 quint32 versionFromFileName(const QString &fileName);
 QByteArray versionBytes(quint32 v);
 quint32 versionValue(const QByteArray &version);
-QString versionText(const QByteArray &version); // "yyyy-MM-dd" nếu là ngày hợp lệ, ngược lại số thập phân; rỗng nếu 0 hoặc 0xFFFFFFFF
+QString versionText(const QByteArray &version); // số thập phân; rỗng nếu 0 hoặc 0xFFFFFFFF
 Status parseStatus(const QByteArray &raw);
 QString errorText(quint8 code);
 

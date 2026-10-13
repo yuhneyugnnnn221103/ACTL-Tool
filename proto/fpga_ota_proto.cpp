@@ -1,5 +1,4 @@
 #include "fpga_ota_proto.h"
-#include <QDate>
 #include <QFileInfo>
 #include <QStringList>
 
@@ -35,18 +34,15 @@ QByteArray buildWriteVersion(int mb, int trb, const QByteArray &version)
     return f;
 }
 
-// Tên file là ngày nạp: YYYYMMDD (hoặc YYMMDD, hiểu là 20YY). Ký tự số đổi thành số nguyên rồi ghi 4 byte big-endian.
+// Tên file toàn chữ số (vd 20261013, hoặc 2026101302 nếu cùng ngày có nhiều bản): đổi thành số nguyên, 0 nếu không hợp lệ.
 quint32 versionFromFileName(const QString &fileName)
 {
+    bool ok = false;
     const QString name = QFileInfo(fileName).completeBaseName();
-    if (name.size() != 8 && name.size() != 6) return 0;
-    quint32 v = 0;
-    for (QChar c : name) {
+    const qulonglong v = name.toULongLong(&ok, 10);
+    for (QChar c : name)
         if (c < QLatin1Char('0') || c > QLatin1Char('9')) return 0;
-        v = v * 10 + quint32(c.unicode() - '0');
-    }
-    if (name.size() == 6) v += 20000000;
-    return QDate(int(v / 10000), int(v / 100 % 100), int(v % 100)).isValid() ? v : 0;
+    return ok && v > 0 && v < 0xFFFFFFFFull ? quint32(v) : 0;
 }
 
 QByteArray versionBytes(quint32 v)
@@ -67,9 +63,7 @@ quint32 versionValue(const QByteArray &version)
 QString versionText(const QByteArray &version)
 {
     const quint32 v = versionValue(version);
-    if (v == 0 || v == 0xFFFFFFFFu) return {};
-    const QDate d(int(v / 10000), int(v / 100 % 100), int(v % 100));
-    return d.isValid() ? d.toString(QStringLiteral("yyyy-MM-dd")) : QString::number(v);
+    return v == 0 || v == 0xFFFFFFFFu ? QString() : QString::number(v);
 }
 
 QByteArray buildLoad(int mb, int trb, quint16 packetId, const QByteArray &chunk)
