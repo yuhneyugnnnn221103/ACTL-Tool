@@ -1,8 +1,6 @@
-// actl_sim: chương trình giả lập TRB, cắm vào phía thiết bị của Gateway (COM RS485 hoặc Ethernet).
+// actl_sim_cli: bản dòng lệnh của giả lập TRB, cắm vào phía thiết bị của Gateway qua cổng COM RS485 (bản có giao diện là tab Giả lập trong ACTL Tool).
 #include "bus_port.h"
 #include "../core/serial_transport.h"
-#include "../core/tcp_client_transport.h"
-#include "../core/tcp_server_transport.h"
 #include "../proto/trb_monitor_proto.h"
 #include <QCommandLineParser>
 #include <QCoreApplication>
@@ -72,12 +70,10 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName("actl_sim");
 
     QCommandLineParser p;
-    p.setApplicationDescription("Giả lập TRB cắm vào phía thiết bị của Gateway (RS485 hoặc Ethernet).");
+    p.setApplicationDescription("Giả lập TRB cắm vào phía thiết bị của Gateway qua cổng COM RS485.");
     p.addHelpOption();
-    p.addOption({"serial", "Cổng COM nối tới Gateway, ví dụ COM5 hoặc /dev/ttyUSB0.", "port"});
+    p.addOption({"serial", "Cổng COM nối tới phía thiết bị của Gateway (bắt buộc), ví dụ COM5 hoặc /dev/ttyUSB0.", "port"});
     p.addOption({"baud", "Tốc độ baud (mặc định 1000000).", "baud", "1000000"});
-    p.addOption({"connect", "Nối tới Gateway qua TCP, dạng host:port.", "host:port"});
-    p.addOption({"listen", "Lắng nghe TCP để Gateway nối vào, dạng port.", "port"});
     p.addOption({"mb", "Số MB (mặc định 20).", "n", "20"});
     p.addOption({"trb-per-mb", "Số TRB mỗi MB (mặc định 8).", "n", "8"});
     p.addOption({"seed", "Hạt giống ngẫu nhiên, để lặp lại được.", "n", "1"});
@@ -89,10 +85,8 @@ int main(int argc, char *argv[])
     p.addOption({"hex", "In mọi khung nhận/gửi dạng hex."});
     p.process(app);
 
-    const int nSource = int(p.isSet("serial")) + int(p.isSet("connect")) + int(p.isSet("listen"));
-    if (nSource != 1) {
-        std::cerr << "Cần chọn đúng một cách nối tới Gateway: --serial COMx, --connect host:port hoặc --listen port.\n"
-                     "Ví dụ: actl_sim --listen 5000      hoặc      actl_sim --serial COM5 --baud 1000000\n\n";
+    if (!p.isSet("serial")) {
+        std::cerr << "Cần chỉ định cổng COM: --serial COMx.\nVí dụ: actl_sim_cli --serial COM5 --baud 1000000\n\n";
         std::cerr << p.helpText().toStdString();
         return 2;
     }
@@ -100,22 +94,7 @@ int main(int argc, char *argv[])
     sim::SimWorld world(p.value("mb").toInt(), p.value("trb-per-mb").toInt(), p.value("seed").toUInt());
     world.setDebugPeriodMs(p.value("debug-period").toInt());
 
-    core::Transport *transport = nullptr;
-    if (p.isSet("serial")) {
-        transport = new core::SerialTransport(p.value("serial"), p.value("baud").toInt());
-    } else if (p.isSet("connect")) {
-        const QString hp = p.value("connect");
-        const int colon = hp.lastIndexOf(':');
-        bool ok = false;
-        const int port = hp.mid(colon + 1).toInt(&ok);
-        if (colon <= 0 || !ok) { std::cerr << "--connect cần dạng host:port\n"; return 2; }
-        transport = new core::TcpClientTransport(hp.left(colon), quint16(port));
-    } else {
-        bool ok = false;
-        const int port = p.value("listen").toInt(&ok);
-        if (!ok) { std::cerr << "--listen cần số cổng\n"; return 2; }
-        transport = new core::TcpServerTransport(QHostAddress::Any, quint16(port));
-    }
+    core::Transport *transport = new core::SerialTransport(p.value("serial"), p.value("baud").toInt());
 
     sim::BusPort bus(transport, &world, !p.isSet("no-crc"), p.value("seed").toUInt());
     sim::Faults faults;

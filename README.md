@@ -124,7 +124,7 @@ services/  Mỗi chức năng một lớp: trb_monitor, trb_control, trb_config,
 model/     device_store (TRB), psu_store (PSU), thresholds
 proto/     Định nghĩa bản tin; field_table mô tả trường dùng chung cho
            giải mã, đóng gói, hiển thị, CSV và ngưỡng
-core/      transport (TCP client, TCP server, serial, phát lại file), frame_parser, link
+core/      transport (TCP client, serial, phát lại file), frame_parser, link
 app/       main, settings, context
 tests/     Test cho từng lớp, dùng transport và thiết bị giả lập
 ```
@@ -168,17 +168,15 @@ Gateway là TCP server, app là TCP client. Nhập IP và cổng của Gateway �
 
 Card mạng của PC cần cùng dải mạng với Gateway, ví dụ Gateway `192.168.1.10` thì PC đặt IP tĩnh `192.168.1.20`, mặt nạ `255.255.255.0` (cắm dây thẳng không cần gateway mặc định hay DNS). Kiểm tra bằng `ping 192.168.1.10`. App chỉ nối ra ngoài nên thường không bị tường lửa hỏi.
 
-## Giả lập TRB (`actl_sim`, `actl_sim_cli`)
+## Giả lập TRB (tab "Giả lập", `actl_sim_cli`)
 
-Chương trình riêng, cắm vào phía thiết bị của Gateway và đóng vai 20 MB × 8 TRB (xem `docs/simulator_design.md`). App không đổi.
+Giả lập đóng vai 20 MB × 8 TRB ở **phía thiết bị của Gateway**, nối qua một cổng COM RS485 (xem `docs/simulator_design.md`); không có kết nối Ethernet.
 
-- **`actl_sim`** (có giao diện): chọn cách nối (cổng COM RS485, Ethernet nối tới Gateway, hoặc Ethernet chờ Gateway nối vào), bấm "Bắt đầu". Lưới 20 × 8 cho thấy từng TRB (OK, Mất, Ép giá trị, Trip, Debug); kéo chuột hoặc bấm tiêu đề MB/TRB để chọn nhiều, rồi bấm "Mất kết nối", "Trở lại", "Bình thường", ép một trường giám sát để thử vượt ngưỡng, đặt trip code theo từng bit. Ô "Bơm lỗi đường truyền" chỉnh tỉ lệ bỏ trả lời, sai CRC và độ trễ ngay khi đang chạy. Cấu hình lần trước được nhớ trong `actl_sim.ini`.
-- **`actl_sim_cli`** (dòng lệnh, cho script và máy không có màn hình):
+- **Tab "Giả lập"** trong ACTL Tool: chọn cổng COM (khác cổng RS485 cấu hình ở thanh trên cùng) và baud, bấm "Bắt đầu". Mục điều hướng đổi thành "Giả lập (đang chạy)" để không nhầm với thiết bị thật. Lưới 20 × 8 cho thấy từng TRB (OK, Mất, Ép giá trị, Trip, Debug); kéo chuột hoặc bấm tiêu đề MB/TRB để chọn nhiều, rồi bấm "Mất kết nối", "Trở lại", "Bình thường", ép một trường giám sát để thử vượt ngưỡng, đặt trip code theo từng bit. Ô "Bơm lỗi đường truyền" chỉnh tỉ lệ bỏ trả lời, sai CRC và độ trễ ngay khi đang chạy. Cấu hình được nhớ trong `actl_tool.ini` (`sim/*`).
+- **`actl_sim_cli`** (dòng lệnh, cho script và máy không có màn hình), dùng chung mô hình với tab Giả lập:
 
 ```
-actl_sim_cli --serial COM5 --baud 1000000     # RS485
-actl_sim_cli --connect 192.168.1.10:5000      # nối tới Gateway qua TCP
-actl_sim_cli --listen 5000                    # hoặc cho Gateway nối vào
+actl_sim_cli --serial COM5 --baud 1000000
              [--mb 20 --trb-per-mb 8 --seed 1 --debug-period 1000 --drop 2 --corrupt 1 --delay 5..30 --hex]
 ```
 
@@ -196,7 +194,7 @@ Gateway hỏi `AB CD 11 11 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giá
 
 ## Việc còn lại
 
-- `actl_sim`: PSU, nạp FPGA/STM32, kịch bản JSON, cấu hình Ethernet (xem `docs/simulator_design.md`).
+- Giả lập: PSU, nạp FPGA/STM32, kịch bản JSON (xem `docs/simulator_design.md`).
 
 - PSU: ACK cho lệnh điều khiển, bảng trip code, công thức quy đổi và dấu của giá trị 3 byte, định dạng RTC (mili giây 1 byte), tách bit các thanh ghi XDP/ADS/INA.
 - ACK cho lệnh điều khiển TRB.

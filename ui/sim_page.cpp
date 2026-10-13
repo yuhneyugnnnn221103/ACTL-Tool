@@ -1,10 +1,9 @@
-#include "sim_window.h"
+#include "sim_page.h"
 #include "../core/serial_transport.h"
-#include "../core/tcp_client_transport.h"
-#include "../core/tcp_server_transport.h"
 #include "../proto/trb_monitor_proto.h"
-#include "../ui/status_pill.h"
-#include "../ui/theme.h"
+#include "status_pill.h"
+#include "log_filter.h"
+#include "theme.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -13,13 +12,12 @@
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
-#include <QLineEdit>
 #include <QPainter>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QRadioButton>
 #include <QSerialPortInfo>
 #include <QSettings>
+#include <QStyle>
 #include <QSpinBox>
 #include <QStyledItemDelegate>
 #include <QTableWidget>
@@ -27,10 +25,9 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
-namespace sim {
+namespace ui {
 
 using namespace proto;
-namespace theme = ui::theme;
 
 namespace {
 const QColor kOk(0x16, 0xA3, 0x4A), kLost(0x6B, 0x72, 0x80), kTrip(0xDC, 0x26, 0x26), kOver(0xF5, 0x9E, 0x0B),
@@ -62,17 +59,15 @@ QPushButton *button(const QString &text, QWidget *parent, const char *role = nul
 }
 }
 
-SimWindow::SimWindow()
+SimPage::SimPage(const AppContext &ctx, QWidget *parent) : QWidget(parent), m_ctx(ctx)
 {
-    setWindowTitle(QStringLiteral("ACTL Sim - giả lập TRB"));
     m_log = new QPlainTextEdit;
     m_log->setReadOnly(true);
     m_log->setMaximumBlockCount(3000);
     m_hex = new QCheckBox(QStringLiteral("Hiện bản tin hex"));
 
-    auto *root = new QWidget;
-    auto *l = new QVBoxLayout(root);
-    l->setContentsMargins(theme::kMargin, theme::kMargin, theme::kMargin, theme::kMargin);
+    auto *l = new QVBoxLayout(this);
+    l->setContentsMargins(0, 0, 0, 0);
     l->setSpacing(theme::kSpace);
     l->addWidget(buildConnection());
     auto *mid = new QHBoxLayout;
@@ -91,22 +86,20 @@ SimWindow::SimWindow()
     connect(clear, &QPushButton::clicked, m_log, &QPlainTextEdit::clear);
     logRow->addWidget(clear);
     l->addLayout(logRow);
-    m_log->setMinimumHeight(120);
-    m_log->setMaximumHeight(180);
+    m_log->setMinimumHeight(90);
+    m_log->setMaximumHeight(140);
     l->addWidget(m_log);
-    setCentralWidget(root);
 
     loadSettings();
     rebuildWorld();
     setRunningUi(false);
 
     auto *timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, &SimWindow::refresh);
+    connect(timer, &QTimer::timeout, this, &SimPage::refresh);
     timer->start(500);
-    resize(1180, 760);
 }
 
-SimWindow::~SimWindow()
+SimPage::~SimPage()
 {
     saveSettings();
     m_port.reset();
@@ -115,18 +108,14 @@ SimWindow::~SimWindow()
 
 // ---------------------------------------------------------------- kết nối
 
-QWidget *SimWindow::buildConnection()
+QWidget *SimPage::buildConnection()
 {
-    auto *box = new QGroupBox(QStringLiteral("Nối tới Gateway"));
+    auto *box = new QGroupBox(QStringLiteral("Cổng COM nối với phía thiết bị của Gateway (RS485)"));
     auto *l = new QHBoxLayout(box);
-
-    m_serial = new QRadioButton(QStringLiteral("Cổng COM (RS485)"));
-    m_connect = new QRadioButton(QStringLiteral("Ethernet: nối tới Gateway"));
-    m_listen = new QRadioButton(QStringLiteral("Ethernet: chờ Gateway nối vào"));
-    m_serial->setChecked(true);
 
     m_ports = new QComboBox;
     m_ports->setEditable(true);
+    m_ports->setToolTip(QStringLiteral("Cổng COM riêng cho giả lập, khác cổng RS485 cấu hình ở thanh trên cùng"));
     auto *refresh = button(QStringLiteral("↻"), this, "secondary");
     refresh->setToolTip(QStringLiteral("Quét lại danh sách cổng COM"));
     refresh->setMaximumWidth(36);
@@ -142,28 +131,13 @@ QWidget *SimWindow::buildConnection()
     m_baud->setEditable(true);
     for (const char *b : {"9600", "115200", "921600", "1000000", "2000000"}) m_baud->addItem(b);
     m_baud->setCurrentText("1000000");
-    m_host = new QLineEdit("192.168.1.10");
-    m_connectPort = new QSpinBox;
-    m_connectPort->setRange(1, 65535);
-    m_connectPort->setValue(5000);
-    m_listenPort = new QSpinBox;
-    m_listenPort->setRange(1, 65535);
-    m_listenPort->setValue(5000);
 
-    auto *form = new QGridLayout;
-    form->addWidget(m_serial, 0, 0);
-    form->addWidget(m_ports, 0, 1);
-    form->addWidget(refresh, 0, 2);
-    form->addWidget(new QLabel(QStringLiteral("Baud")), 0, 3);
-    form->addWidget(m_baud, 0, 4);
-    form->addWidget(m_connect, 1, 0);
-    form->addWidget(m_host, 1, 1);
-    form->addWidget(new QLabel(QStringLiteral("Cổng")), 1, 3);
-    form->addWidget(m_connectPort, 1, 4);
-    form->addWidget(m_listen, 2, 0);
-    form->addWidget(new QLabel(QStringLiteral("Cổng")), 2, 3);
-    form->addWidget(m_listenPort, 2, 4);
-    form->setColumnStretch(1, 1);
+    auto *form = new QFormLayout;
+    auto *portRow = new QHBoxLayout;
+    portRow->addWidget(m_ports, 1);
+    portRow->addWidget(refresh);
+    form->addRow(QStringLiteral("Cổng COM"), portRow);
+    form->addRow(QStringLiteral("Baud"), m_baud);
     l->addLayout(form, 1);
 
     m_mb = new QSpinBox;
@@ -184,8 +158,8 @@ QWidget *SimWindow::buildConnection()
     opt->addRow(QStringLiteral("TRB mỗi MB"), m_trbPerMb);
     opt->addRow(QStringLiteral("Chu kỳ debug"), m_debugPeriod);
     l->addLayout(opt);
-    connect(m_mb, QOverload<int>::of(&QSpinBox::valueChanged), this, &SimWindow::rebuildWorld);
-    connect(m_trbPerMb, QOverload<int>::of(&QSpinBox::valueChanged), this, &SimWindow::rebuildWorld);
+    connect(m_mb, QOverload<int>::of(&QSpinBox::valueChanged), this, &SimPage::rebuildWorld);
+    connect(m_trbPerMb, QOverload<int>::of(&QSpinBox::valueChanged), this, &SimPage::rebuildWorld);
     connect(m_debugPeriod, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int ms) {
         if (m_world) m_world->setDebugPeriodMs(ms);
     });
@@ -193,7 +167,7 @@ QWidget *SimWindow::buildConnection()
     auto *right = new QVBoxLayout;
     m_run = button(QStringLiteral("Bắt đầu"), this);
     m_run->setMinimumWidth(120);
-    connect(m_run, &QPushButton::clicked, this, &SimWindow::toggleRun);
+    connect(m_run, &QPushButton::clicked, this, &SimPage::toggleRun);
     m_pill = new ui::StatusPill;
     right->addWidget(m_run);
     right->addWidget(m_pill, 0, Qt::AlignHCenter);
@@ -202,49 +176,45 @@ QWidget *SimWindow::buildConnection()
     return box;
 }
 
-void SimWindow::setRunningUi(bool running)
+void SimPage::setRunningUi(bool running)
 {
-    for (QWidget *w : {static_cast<QWidget *>(m_serial), static_cast<QWidget *>(m_connect), static_cast<QWidget *>(m_listen),
-                       static_cast<QWidget *>(m_ports), static_cast<QWidget *>(m_baud), static_cast<QWidget *>(m_host),
-                       static_cast<QWidget *>(m_connectPort), static_cast<QWidget *>(m_listenPort),
-                       static_cast<QWidget *>(m_mb), static_cast<QWidget *>(m_trbPerMb)})
+    for (QWidget *w : {static_cast<QWidget *>(m_ports), static_cast<QWidget *>(m_baud), static_cast<QWidget *>(m_mb),
+                       static_cast<QWidget *>(m_trbPerMb)})
         w->setEnabled(!running);
     m_run->setText(running ? QStringLiteral("Dừng") : QStringLiteral("Bắt đầu"));
     theme::setRole(m_run, running ? "danger" : nullptr);
     m_run->style()->unpolish(m_run);
     m_run->style()->polish(m_run);
     if (!running) m_pill->setPill(QStringLiteral("Đang dừng"), kLost);
+    emit runningChanged(running);
 }
 
-void SimWindow::toggleRun()
+void SimPage::toggleRun()
 {
     if (m_port) stop(); else start();
 }
 
-void SimWindow::start()
+void SimPage::start()
 {
-    core::Transport *t = nullptr;
-    if (m_serial->isChecked()) {
-        const QString port = m_ports->currentText().trimmed();
-        if (port.isEmpty()) { log(QStringLiteral("Chưa chọn cổng COM")); return; }
-        t = new core::SerialTransport(port, m_baud->currentText().toInt());
-    } else if (m_connect->isChecked()) {
-        t = new core::TcpClientTransport(m_host->text().trimmed(), quint16(m_connectPort->value()));
-    } else {
-        t = new core::TcpServerTransport(QHostAddress::Any, quint16(m_listenPort->value()));
+    const QString port = m_ports->currentText().trimmed();
+    if (port.isEmpty()) { log(tagged(EventKind::Err, QStringLiteral("Chưa chọn cổng COM"))); return; }
+    if (m_ctx.serial && port.compare(m_ctx.settings.servicePort, Qt::CaseInsensitive) == 0 && m_ctx.serial->state() != core::Transport::State::Closed) {
+        log(tagged(EventKind::Err, QStringLiteral("%1 đang được dùng cho đường RS485 cấu hình của ACTL Tool; hãy chọn cổng COM khác").arg(port)));
+        return;
     }
+    core::Transport *t = new core::SerialTransport(port, m_baud->currentText().toInt());
     m_transport.reset(t);
-    m_port = std::make_unique<BusPort>(t, m_world.get());
-    connect(m_port.get(), &BusPort::message, this, [this](const QString &m) {
+    m_port = std::make_unique<sim::BusPort>(t, m_world.get());
+    connect(m_port.get(), &sim::BusPort::message, this, [this](const QString &m) {
         log(m);
         const auto st = m_transport ? m_transport->state() : core::Transport::State::Closed;
         if (st == core::Transport::State::Connected) m_pill->setPill(QStringLiteral("Đã kết nối"), kOk);
         else if (st == core::Transport::State::Waiting) m_pill->setPill(QStringLiteral("Chờ kết nối"), kOver);
     });
-    connect(m_port.get(), &BusPort::received, this, [this](const QByteArray &b) {
+    connect(m_port.get(), &sim::BusPort::received, this, [this](const QByteArray &b) {
         if (m_hex->isChecked()) log("RX " + QString::fromLatin1(b.toHex(' ').toUpper()));
     });
-    connect(m_port.get(), &BusPort::sent, this, [this](const QByteArray &b) {
+    connect(m_port.get(), &sim::BusPort::sent, this, [this](const QByteArray &b) {
         if (m_hex->isChecked()) log("TX " + QString::fromLatin1(b.left(24).toHex(' ').toUpper())
                                     + (b.size() > 24 ? QStringLiteral(" … (%1 byte)").arg(b.size()) : QString()));
     });
@@ -255,7 +225,7 @@ void SimWindow::start()
     m_port->open();
 }
 
-void SimWindow::stop()
+void SimPage::stop()
 {
     if (m_port) m_port->close();
     m_port.reset();
@@ -264,10 +234,10 @@ void SimWindow::stop()
     log(QStringLiteral("Đã dừng"));
 }
 
-void SimWindow::rebuildWorld()
+void SimPage::rebuildWorld()
 {
     if (m_port) return;     // spinbox bị khóa khi đang chạy
-    m_world = std::make_unique<SimWorld>(m_mb->value(), m_trbPerMb->value(), 1);
+    m_world = std::make_unique<sim::SimWorld>(m_mb->value(), m_trbPerMb->value(), 1);
     m_world->setDebugPeriodMs(m_debugPeriod->value());
 
     m_grid->clear();
@@ -289,7 +259,7 @@ void SimWindow::rebuildWorld()
 
 // ---------------------------------------------------------------- lưới TRB
 
-QWidget *SimWindow::buildGrid()
+QWidget *SimPage::buildGrid()
 {
     auto *box = new QGroupBox(QStringLiteral("TRB (kéo chuột hoặc bấm tiêu đề MB/TRB để chọn nhiều)"));
     auto *l = new QVBoxLayout(box);
@@ -303,7 +273,7 @@ QWidget *SimWindow::buildGrid()
     m_grid->setMinimumWidth(520);
     m_grid->setItemDelegate(new CellDelegate(m_grid));
     m_grid->setShowGrid(false);
-    connect(m_grid, &QTableWidget::itemSelectionChanged, this, &SimWindow::refresh);
+    connect(m_grid, &QTableWidget::itemSelectionChanged, this, &SimPage::refresh);
 
     auto *row = new QHBoxLayout;
     auto *all = button(QStringLiteral("Chọn tất cả"), this, "secondary");
@@ -328,12 +298,12 @@ QWidget *SimWindow::buildGrid()
     return box;
 }
 
-void SimWindow::refresh()
+void SimPage::refresh()
 {
     if (!m_world) return;
     for (int mb = 0; mb < m_world->mbCount(); ++mb)
         for (int t = 0; t < m_world->trbPerMb(); ++t) {
-            TrbModel *m = m_world->trb(mb, t);
+            sim::TrbModel *m = m_world->trb(mb, t);
             QTableWidgetItem *it = m_grid->item(mb, t);
             if (!it) continue;
             QColor c = kOk;
@@ -355,18 +325,18 @@ void SimWindow::refresh()
     m_stats->setText(txt);
 }
 
-void SimWindow::forSelected(const std::function<void(TrbModel *)> &fn)
+void SimPage::forSelected(const std::function<void(sim::TrbModel *)> &fn)
 {
     const auto items = m_grid->selectedItems();
     if (items.isEmpty()) { log(QStringLiteral("Chưa chọn TRB nào")); return; }
     for (QTableWidgetItem *it : items)
-        if (TrbModel *m = m_world->trb(it->row(), it->column())) fn(m);
+        if (sim::TrbModel *m = m_world->trb(it->row(), it->column())) fn(m);
     refresh();
 }
 
 // ---------------------------------------------------------------- thao tác
 
-QWidget *SimWindow::buildActions()
+QWidget *SimPage::buildActions()
 {
     auto *box = new QGroupBox(QStringLiteral("Thao tác với TRB đã chọn"));
     auto *l = new QVBoxLayout(box);
@@ -380,10 +350,10 @@ QWidget *SimWindow::buildActions()
     row->addWidget(back);
     row->addWidget(normal);
     l->addLayout(row);
-    connect(lost, &QPushButton::clicked, this, [this] { forSelected([](TrbModel *m) { m->setOnline(false); }); });
-    connect(back, &QPushButton::clicked, this, [this] { forSelected([](TrbModel *m) { m->setOnline(true); }); });
+    connect(lost, &QPushButton::clicked, this, [this] { forSelected([](sim::TrbModel *m) { m->setOnline(false); }); });
+    connect(back, &QPushButton::clicked, this, [this] { forSelected([](sim::TrbModel *m) { m->setOnline(true); }); });
     connect(normal, &QPushButton::clicked, this, [this] {
-        forSelected([](TrbModel *m) { m->setOnline(true); m->clearForced(); m->clearTrip(); });
+        forSelected([](sim::TrbModel *m) { m->setOnline(true); m->clearForced(); m->clearTrip(); });
     });
 
     l->addWidget(new QLabel(QStringLiteral("<b>Ép giá trị giám sát</b> (để thử cảnh báo vượt ngưỡng)")));
@@ -407,11 +377,11 @@ QWidget *SimWindow::buildActions()
     connect(force, &QPushButton::clicked, this, [this] {
         const int f = trbmon::table().indexOf({}, m_field->currentText());
         if (f < 0) { log(QStringLiteral("Không có trường \"%1\"").arg(m_field->currentText())); return; }
-        forSelected([f, this](TrbModel *m) { m->force(f, m_value->value()); });
+        forSelected([f, this](sim::TrbModel *m) { m->force(f, m_value->value()); });
     });
     connect(unforce, &QPushButton::clicked, this, [this] {
         const int f = trbmon::table().indexOf({}, m_field->currentText());
-        if (f >= 0) forSelected([f](TrbModel *m) { m->unforce(f); });
+        if (f >= 0) forSelected([f](sim::TrbModel *m) { m->unforce(f); });
     });
 
     l->addWidget(new QLabel(QStringLiteral("<b>Trip code</b>")));
@@ -444,13 +414,13 @@ QWidget *SimWindow::buildActions()
         quint8 v = 0;
         for (int b = 0; b < 8; ++b) v |= quint8(m_tripBits[b]->isChecked() << b);
         const int i = m_tripIndex->currentIndex();
-        forSelected([i, v](TrbModel *m) { m->setTrip(i, v); });
+        forSelected([i, v](sim::TrbModel *m) { m->setTrip(i, v); });
     });
-    connect(clearTrip, &QPushButton::clicked, this, [this] { forSelected([](TrbModel *m) { m->clearTrip(); }); });
+    connect(clearTrip, &QPushButton::clicked, this, [this] { forSelected([](sim::TrbModel *m) { m->clearTrip(); }); });
     return box;
 }
 
-QWidget *SimWindow::buildFaults()
+QWidget *SimPage::buildFaults()
 {
     auto *box = new QGroupBox(QStringLiteral("Bơm lỗi đường truyền"));
     auto *form = new QFormLayout(box);
@@ -474,10 +444,10 @@ QWidget *SimWindow::buildFaults()
     return box;
 }
 
-void SimWindow::applyFaults()
+void SimPage::applyFaults()
 {
     if (!m_port) return;
-    Faults f;
+    sim::Faults f;
     f.dropPercent = m_drop->value();
     f.corruptPercent = m_corrupt->value();
     f.delayMinMs = m_delayMin->value();
@@ -485,40 +455,31 @@ void SimWindow::applyFaults()
     m_port->setFaults(f);
 }
 
-void SimWindow::log(const QString &text)
+void SimPage::log(const QString &text)
 {
     m_log->appendPlainText(QTime::currentTime().toString("HH:mm:ss.zzz") + "  " + text);
 }
 
 // ---------------------------------------------------------------- lưu cấu hình
 
-void SimWindow::loadSettings()
+void SimPage::loadSettings()
 {
-    QSettings s("actl_sim.ini", QSettings::IniFormat);
-    const int mode = s.value("mode", 0).toInt();
-    (mode == 1 ? m_connect : mode == 2 ? m_listen : m_serial)->setChecked(true);
-    m_ports->setCurrentText(s.value("serial/port", m_ports->currentText()).toString());
-    m_baud->setCurrentText(s.value("serial/baud", "1000000").toString());
-    m_host->setText(s.value("tcp/host", "192.168.1.10").toString());
-    m_connectPort->setValue(s.value("tcp/connectPort", 5000).toInt());
-    m_listenPort->setValue(s.value("tcp/listenPort", 5000).toInt());
-    m_mb->setValue(s.value("world/mb", 20).toInt());
-    m_trbPerMb->setValue(s.value("world/trbPerMb", 8).toInt());
-    m_debugPeriod->setValue(s.value("world/debugPeriodMs", 1000).toInt());
+    QSettings s(Settings::iniPath(), QSettings::IniFormat);
+    m_ports->setCurrentText(s.value("sim/port", m_ports->currentText()).toString());
+    m_baud->setCurrentText(s.value("sim/baud", "1000000").toString());
+    m_mb->setValue(s.value("sim/mb", 20).toInt());
+    m_trbPerMb->setValue(s.value("sim/trbPerMb", 8).toInt());
+    m_debugPeriod->setValue(s.value("sim/debugPeriodMs", 1000).toInt());
 }
 
-void SimWindow::saveSettings() const
+void SimPage::saveSettings() const
 {
-    QSettings s("actl_sim.ini", QSettings::IniFormat);
-    s.setValue("mode", m_connect->isChecked() ? 1 : m_listen->isChecked() ? 2 : 0);
-    s.setValue("serial/port", m_ports->currentText());
-    s.setValue("serial/baud", m_baud->currentText());
-    s.setValue("tcp/host", m_host->text());
-    s.setValue("tcp/connectPort", m_connectPort->value());
-    s.setValue("tcp/listenPort", m_listenPort->value());
-    s.setValue("world/mb", m_mb->value());
-    s.setValue("world/trbPerMb", m_trbPerMb->value());
-    s.setValue("world/debugPeriodMs", m_debugPeriod->value());
+    QSettings s(Settings::iniPath(), QSettings::IniFormat);
+    s.setValue("sim/port", m_ports->currentText());
+    s.setValue("sim/baud", m_baud->currentText());
+    s.setValue("sim/mb", m_mb->value());
+    s.setValue("sim/trbPerMb", m_trbPerMb->value());
+    s.setValue("sim/debugPeriodMs", m_debugPeriod->value());
 }
 
-} // namespace sim
+} // namespace ui

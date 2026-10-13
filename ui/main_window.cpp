@@ -5,6 +5,7 @@
 #include "psu_config_page.h"
 #include "psu_grid.h"
 #include "psu_page.h"
+#include "sim_page.h"
 #include "status_pill.h"
 #include "theme.h"
 #include "time_text.h"
@@ -96,7 +97,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
 {
     setWindowTitle(QStringLiteral("ACTL Tool"));
     // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
-    m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware};
+    m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogSystem};
 
     // Điều hướng trái + các trang.
     m_nav = new QListWidget;
@@ -115,6 +116,13 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     m_pages->addWidget(new PsuConfigPage(ctx));
     m_nav->addItem(QStringLiteral("Nạp code"));
     m_pages->addWidget(new FirmwarePage(ctx));
+    m_nav->addItem(QStringLiteral("Giả lập"));
+    auto *simPage = new SimPage(ctx);
+    m_pages->addWidget(simPage);
+    const int simRow = m_nav->count() - 1;
+    connect(simPage, &SimPage::runningChanged, this, [this, simRow](bool on) {   // nhắc đang giả lập để không nhầm với thiết bị thật
+        m_nav->item(simRow)->setText(on ? QStringLiteral("Giả lập (đang chạy)") : QStringLiteral("Giả lập"));
+    });
     connect(m_nav, &QListWidget::currentRowChanged, m_pages, &QStackedWidget::setCurrentIndex);
     connect(m_nav, &QListWidget::currentRowChanged, this, [this] { refilterLogs(); });
     m_nav->setCurrentRow(0);

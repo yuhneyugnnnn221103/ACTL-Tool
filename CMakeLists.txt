@@ -12,6 +12,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets SerialPort Network)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets SerialPort Network)
 
+# Mô hình TRB giả lập: dùng cho tab Giả lập trong app, actl_sim_cli và test.
+set(SIM_SOURCES
+    sim/trb_model.h sim/trb_model.cpp
+    sim/sim_world.h sim/sim_world.cpp
+    sim/bus_port.h sim/bus_port.cpp
+)
+
 set(PROJECT_SOURCES
         main.cpp app/settings.h app/context.h
         ui/auth.h ui/auth.cpp
@@ -28,6 +35,8 @@ set(PROJECT_SOURCES
         ui/bit_cells.h ui/bit_cells.cpp
         resources.qrc
         ui/psu_grid.h ui/psu_grid.cpp
+        ui/sim_page.h ui/sim_page.cpp
+        ${SIM_SOURCES}
         ui/psu_config_page.h ui/psu_config_page.cpp
 
 
@@ -41,7 +50,6 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         core/frame_parser.h core/frame_parser.cpp
         core/transport.h
         core/serial_transport.h core/serial_transport.cpp
-        core/tcp_server_transport.h core/tcp_server_transport.cpp
         core/tcp_client_transport.h core/tcp_client_transport.cpp
         core/replay_transport.h core/replay_transport.cpp
         core/link.h core/link.cpp
@@ -114,27 +122,16 @@ if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(ACTL_Tool)
 endif()
 
-# Chương trình giả lập TRB cắm vào phía thiết bị của Gateway (xem docs/simulator_design.md).
-set(SIM_SOURCES
-    sim/trb_model.h sim/trb_model.cpp
-    sim/sim_world.h sim/sim_world.cpp
-    sim/bus_port.h sim/bus_port.cpp
-)
+# Giả lập TRB cắm vào phía thiết bị của Gateway qua RS485 (xem docs/simulator_design.md).
 set(SIM_CORE_FILES
-    core/transport.h core/serial_transport.h core/tcp_server_transport.h core/tcp_client_transport.h
+    core/transport.h core/serial_transport.h
     core/frame.cpp core/frame_parser.cpp
-    core/serial_transport.cpp core/tcp_server_transport.cpp core/tcp_client_transport.cpp
+    core/serial_transport.cpp
     proto/field_table.cpp proto/trb_monitor_proto.cpp proto/trb_control_proto.cpp proto/trb_config_proto.cpp
 )
-# Bản dòng lệnh: actl_sim_cli --listen 5000
+# Bản dòng lệnh (không cần giao diện): actl_sim_cli --serial COM5. Bản có giao diện là tab Giả lập trong ACTL_Tool.
 add_executable(actl_sim_cli sim/main_sim.cpp ${SIM_SOURCES} ${SIM_CORE_FILES})
-target_link_libraries(actl_sim_cli PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::SerialPort
-    Qt${QT_VERSION_MAJOR}::Network)
-# Bản có giao diện: dùng chung giao diện/style với app chính
-add_executable(actl_sim WIN32 sim/main_gui.cpp sim/sim_window.h sim/sim_window.cpp ${SIM_SOURCES} ${SIM_CORE_FILES}
-    ui/theme.cpp ui/status_pill.cpp model/device_store.cpp resources.qrc)
-target_link_libraries(actl_sim PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::SerialPort
-    Qt${QT_VERSION_MAJOR}::Network)
+target_link_libraries(actl_sim_cli PRIVATE Qt${QT_VERSION_MAJOR}::Core Qt${QT_VERSION_MAJOR}::SerialPort)
 
 # Test (cần Qt Test): ctest --test-dir build
 find_package(Qt${QT_VERSION_MAJOR} QUIET COMPONENTS Test)

@@ -1,5 +1,7 @@
 # Thiết kế module giả lập TRB/PSU
 
+Cập nhật: giả lập đã được tích hợp thành tab "Giả lập" trong ACTL Tool (kèm bản dòng lệnh `actl_sim_cli`), chỉ kết nối qua cổng COM RS485, không còn Ethernet.
+
 Trạng thái: **giai đoạn 1 (TRB) đã làm xong**: `actl_sim` giám sát, điều khiển, beam, cấu hình TRB, debug tự gửi, bơm lỗi đường truyền. PSU, nạp FPGA/STM32 và kịch bản JSON chưa làm. Điểm còn thiếu thông tin nằm ở mục 9.
 
 ## 1. Mục tiêu và vị trí
