@@ -975,14 +975,20 @@ private slots:
             logger.logTrb(2, 3, s, false);
             s.lastSeenMs += 2000;
             logger.logTrb(2, 3, s, true);                         // ép ghi (đổi trạng thái)
+            logger.logTrb(0, 1, s, true);                         // TRB khác: file riêng
+            model::PsuState p;
+            p.lastSeenMs = s.lastSeenMs;
+            p.values = zeros(proto::trbmon::table().fields().size());
+            logger.logPsu(2, p, true);
             logger.logEvent(QStringLiteral("sự kiện \"thử\""));
             logger.flush();
         }
 
         const QDir day(dir.path() + "/" + QDate::currentDate().toString(Qt::ISODate));
-        const QStringList trbFiles = day.entryList({"trb_*.csv"});
+        QCOMPARE(QDir(day.filePath("trb")).entryList({"*.csv"}).size(), 2);   // mỗi TRB một file
+        const QStringList trbFiles = QDir(day.filePath("trb")).entryList({"MB03_TRB04_*.csv"});
         QCOMPARE(trbFiles.size(), 1);
-        QFile f(day.filePath(trbFiles.first()));
+        QFile f(day.filePath("trb/" + trbFiles.first()));
         QVERIFY(f.open(QIODevice::ReadOnly));
         const QList<QByteArray> lines = f.readAll().split('\n');
         QVERIFY(lines.at(0).startsWith("\xEF\xBB\xBF" "time,mb,trb,status,TRM1.I SEN1"));   // UTF-8 BOM cho Excel
@@ -990,6 +996,8 @@ private slots:
         QCOMPARE(lines.size(), 4);                                // header, 2 dòng dữ liệu, dòng rỗng cuối
         QVERIFY(lines.at(1).contains(",3,4,"));          // mb, trb đếm từ 1 như giao diện
         QVERIFY(lines.at(1).contains(",123,"));
+
+        QCOMPARE(QDir(day.filePath("psu")).entryList({"PSU2_*.csv"}).size(), 1);
 
         const QStringList events = day.entryList({"events_*.csv"});
         QCOMPARE(events.size(), 1);

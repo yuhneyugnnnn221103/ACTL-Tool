@@ -12,12 +12,10 @@ CsvLogger::CsvLogger(const QString &dir, int periodMs, qint64 maxFileBytes, cons
 {
     QStringList cols{"time", "mb", "trb", "status"};
     for (const proto::Field &f : trbTable->fields()) cols << f.name;
-    m_trb.prefix = QStringLiteral("trb");
-    m_trb.header = cols.join(',');
+    m_trbHeader = cols.join(',');
     QStringList psuCols{"time", "addr", "status"};
     for (const proto::Field &f : psuTable->fields()) psuCols << f.name;
-    m_psu.prefix = QStringLiteral("psu");
-    m_psu.header = psuCols.join(',');
+    m_psuHeader = psuCols.join(',');
     m_events.prefix = QStringLiteral("events");
     m_events.header = QStringLiteral("time,event");
 
@@ -34,7 +32,13 @@ void CsvLogger::logTrb(int mb, int trb, const model::TrbState &s, bool force)
     QByteArray line = QDateTime::fromMSecsSinceEpoch(s.lastSeenMs).toString(kTimeFormat).toLatin1();
     line += ',' + QByteArray::number(mb + 1) + ',' + QByteArray::number(trb + 1) + ',' + statusText(s.status).toUtf8();
     for (double v : s.values) line += ',' + QByteArray::number(v, 'g', 10);
-    write(m_trb, line);
+    Stream &st = m_trb[mb << 8 | trb];
+    if (st.prefix.isEmpty()) {
+        st.folder = QStringLiteral("trb");
+        st.prefix = QStringLiteral("MB%1_TRB%2").arg(mb + 1, 2, 10, QLatin1Char('0')).arg(trb + 1, 2, 10, QLatin1Char('0'));
+        st.header = m_trbHeader;
+    }
+    write(st, line);
 }
 
 void CsvLogger::logPsu(int addr, const model::PsuState &s, bool force)
@@ -46,7 +50,13 @@ void CsvLogger::logPsu(int addr, const model::PsuState &s, bool force)
     QByteArray line = QDateTime::fromMSecsSinceEpoch(s.lastSeenMs).toString(kTimeFormat).toLatin1();
     line += ',' + QByteArray::number(addr) + ',' + statusText(s.status).toUtf8();
     for (double v : s.values) line += ',' + QByteArray::number(v, 'g', 10);
-    write(m_psu, line);
+    Stream &st = m_psu[addr];
+    if (st.prefix.isEmpty()) {
+        st.folder = QStringLiteral("psu");
+        st.prefix = QStringLiteral("PSU%1").arg(addr);
+        st.header = m_psuHeader;
+    }
+    write(st, line);
 }
 
 void CsvLogger::logEvent(const QString &text)
@@ -56,10 +66,16 @@ void CsvLogger::logEvent(const QString &text)
     write(m_events, QDateTime::currentDateTime().toString(kTimeFormat).toLatin1() + ",\"" + quoted.toUtf8() + '"');
 }
 
+void CsvLogger::flushAll(std::map<int, Stream> &streams)
+{
+    for (auto &kv : streams)
+        if (kv.second.file.isOpen()) kv.second.file.flush();
+}
+
 void CsvLogger::flush()
 {
-    if (m_trb.file.isOpen()) m_trb.file.flush();
-    if (m_psu.file.isOpen()) m_psu.file.flush();
+    flushAll(m_trb);
+    flushAll(m_psu);
     if (m_events.file.isOpen()) m_events.file.flush();
 }
 
@@ -70,7 +86,7 @@ bool CsvLogger::write(Stream &s, const QByteArray &line)
         s.file.close();
         s.date = today;
         const QString day = today.toString(Qt::ISODate);
-        const QString folder = m_dir + '/' + day;
+        const QString folder = s.folder.isEmpty() ? m_dir + '/' + day : m_dir + '/' + day + '/' + s.folder;
         QDir().mkpath(folder);
         // Phần đầu tiên chưa đầy sẽ được ghi tiếp (kể cả sau khi khởi động lại app).
         for (int part = 1;; ++part) {
