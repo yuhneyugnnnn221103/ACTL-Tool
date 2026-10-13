@@ -394,18 +394,18 @@ QWidget *MainWindow::buildLogPanel()
     cl->addWidget(m_hexEnable);
     if (m_ctx.logger) {
         services::CsvLogger *logger = m_ctx.logger;
-        auto *state = new QLabel;
-        auto *toggle = new QPushButton;
+        auto *toggle = new QPushButton(QStringLiteral("Ghi log"));
         auto *schedule = new QPushButton(QStringLiteral("Hẹn giờ…"));
         theme::setRole(schedule, "secondary");
-        auto refresh = [=] {
+        auto refresh = [=] { // không ghi: nút không màu; đang ghi: nền xanh. Giờ hẹn xem ở chú thích.
             const QString fmt = QStringLiteral("HH:mm:ss dd/MM");
-            QString t = logger->recording() ? QStringLiteral("● Đang ghi log") : QStringLiteral("○ Không ghi log");
-            if (logger->startAt().isValid()) t += QStringLiteral(" · bắt đầu %1").arg(logger->startAt().toString(fmt));
-            if (logger->stopAt().isValid()) t += QStringLiteral(" · dừng %1").arg(logger->stopAt().toString(fmt));
-            state->setText(t);
-            toggle->setText(logger->recording() ? QStringLiteral("Dừng ghi") : QStringLiteral("Bắt đầu ghi"));
-            theme::setRole(toggle, logger->recording() ? "danger" : "secondary");
+            QStringList tip{logger->recording() ? QStringLiteral("Đang ghi log. Bấm để dừng.") : QStringLiteral("Không ghi log. Bấm để bắt đầu.")};
+            if (logger->startAt().isValid()) tip << QStringLiteral("Hẹn bắt đầu: %1").arg(logger->startAt().toString(fmt));
+            if (logger->stopAt().isValid()) tip << QStringLiteral("Hẹn dừng: %1").arg(logger->stopAt().toString(fmt));
+            toggle->setToolTip(tip.join('\n'));
+            theme::setRole(toggle, logger->recording() ? "recording" : "secondary");
+            toggle->style()->unpolish(toggle);   // đổi role lúc chạy cần áp lại stylesheet
+            toggle->style()->polish(toggle);
         };
         connect(logger, &services::CsvLogger::recordingChanged, this, refresh);
         connect(logger, &services::CsvLogger::scheduleChanged, this, refresh);
@@ -415,7 +415,6 @@ QWidget *MainWindow::buildLogPanel()
         });
         connect(schedule, &QPushButton::clicked, this, [=] { editLogSchedule(); });
         refresh();
-        cl->addWidget(state);
         cl->addWidget(toggle);
         cl->addWidget(schedule);
 

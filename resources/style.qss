@@ -67,6 +67,10 @@ QPushButton[role="chip"]:hover { background: @accentSoft@; border-color: @accent
 QPushButton[role="chip"]:pressed { background: @border@; }
 QPushButton[role="chip"]:disabled { color: @disabledText@; }
 
+QPushButton[role="recording"] { background: #7db93b; color: white; border-color: #7db93b; }
+QPushButton[role="recording"]:hover { background: #6aa32e; border-color: #6aa32e; color: white; }
+QPushButton[role="recording"]:pressed { background: #5a8f27; }
+
 QPushButton[role="danger"] { background: @danger@; color: white; }
 QPushButton[role="danger"]:hover { background: @dangerHover@; }
 QPushButton[role="danger"]:pressed { background: @dangerPressed@; }
