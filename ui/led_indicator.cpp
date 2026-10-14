@@ -24,7 +24,7 @@ void LedIndicator::setState(State s, const QString &toolTip)
 
 QSize LedIndicator::sizeHint() const
 {
-    return {qMax(34, fontMetrics().horizontalAdvance(m_caption) + 8), kDiameter + kGap + fontMetrics().height() + 4};
+    return {qMax(44, fontMetrics().horizontalAdvance(m_caption) + 8), kDiameter + kGap + fontMetrics().height() + 4};
 }
 
 void LedIndicator::paintEvent(QPaintEvent *)

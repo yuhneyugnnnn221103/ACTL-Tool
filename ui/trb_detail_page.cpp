@@ -11,6 +11,7 @@
 #include <QDialog>
 #include <QDateTime>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHeaderView>
 #include <QLabel>
@@ -43,8 +44,7 @@ QGroupBox *ledGroup(const QString &title, const QStringList &captions, QList<Led
     auto *g = new QGroupBox(title);
     g->setProperty("compact", true);   // đệm trên/dưới nhỏ hơn thẻ thường
     auto *l = new QHBoxLayout(g);
-    l->setSpacing(0);
-    l->setContentsMargins(4, 0, 4, 0);
+    l->setSpacing(theme::kSpace);
     // Khoảng giãn bằng nhau ở hai lề và giữa các đèn: đèn cách đều, cân hai bên.
     l->addStretch(1);
     for (const QString &c : captions) {
@@ -87,6 +87,13 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     }
     m_debugPill = new StatusPill;
     m_debugPill->hide();
+    // Bản tin lỗi: nằm cùng hàng với ô chọn MB/TRB và trạng thái, căn phải; bấm để xem số bản tin từng loại.
+    auto *errLabel = new QLabel(QStringLiteral("Bản tin lỗi"));
+    theme::setRole(errLabel, "title");
+    m_errButton = new QPushButton(kDash);
+    theme::setRole(m_errButton, "secondary");
+    m_errButton->setToolTip(QStringLiteral("Tổng số bản tin lỗi (cộng %1 loại). Bấm để xem số bản tin từng loại.").arg(trbmon::kNumErr));
+    connect(m_errButton, &QPushButton::clicked, this, &TrbDetailPage::showErrors);
     m_status = new QLabel;
     theme::setRole(m_status, "muted");
 
@@ -98,6 +105,8 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     head->addSpacing(12);
     head->addLayout(pillBox);
     head->addWidget(m_status, 1);
+    head->addWidget(errLabel);
+    head->addWidget(m_errButton);
     head->addWidget(m_debugPill);
 
     auto *body = new QHBoxLayout;
@@ -165,58 +174,50 @@ QWidget *TrbDetailPage::buildMonitor()
                                            << QStringLiteral("Dòng LNA"), 16)));
 
     // Thẻ số liệu một dòng: tên bên trái, giá trị bên phải, thấp hơn thẻ có tiêu đề.
-    auto cardRow = [](const QStringList &names, QList<QLabel *> &labels) {
-        auto *row = new QHBoxLayout;
-        row->setSpacing(theme::kSpace);
-        for (const QString &name : names) {
-            auto *card = new QFrame;
-            card->setProperty("card", true);
-            card->setFixedHeight(kCardHeight);   // mọi hàng thẻ số liệu cao bằng nhau
-            auto *cl = new QHBoxLayout(card);
-            cl->setContentsMargins(12, 2, 12, 2);
-            auto *title = new QLabel(name);
-            theme::setRole(title, "title");        // tên in đậm, giá trị in thường, cùng cỡ chữ
-            auto *v = new QLabel(kDash);
-            v->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-            labels << v;
-            cl->addWidget(title);
-            cl->addStretch(1);
-            cl->addWidget(v);
-            row->addWidget(card, 1);
-        }
-        return row;
+    auto makeCard = [](const QString &name, QList<QLabel *> &labels) {
+        auto *card = new QFrame;
+        card->setProperty("card", true);
+        card->setFixedHeight(kCardHeight);   // mọi thẻ số liệu cao bằng nhau
+        auto *cl = new QHBoxLayout(card);
+        cl->setContentsMargins(12, 2, 12, 2);
+        auto *title = new QLabel(name);
+        theme::setRole(title, "title");        // tên in đậm, giá trị in thường, cùng cỡ chữ
+        auto *v = new QLabel(kDash);
+        v->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        labels << v;
+        cl->addWidget(title);
+        cl->addStretch(1);
+        cl->addWidget(v);
+        return card;
     };
-    auto *metrics = cardRow({QStringLiteral("Điện áp TRB"), QStringLiteral("Dòng điện TRB"),
-                             QStringLiteral("Nhiệt độ power TRB"), QStringLiteral("Nhiệt độ MCU"),
-                             QStringLiteral("Độ ẩm power")}, m_metrics);
-    // Xung TXEN / BEAMSYNC: số thô, thứ tự PERIOD rồi PULSE của từng tín hiệu.
-    auto *pulses = cardRow({QStringLiteral("Period TXEN"), QStringLiteral("Pulse TXEN"),
-                            QStringLiteral("Period BEAMSYNC"), QStringLiteral("Pulse BEAMSYNC")}, m_rawMetrics);
+    auto *metrics = new QHBoxLayout;
+    metrics->setSpacing(theme::kSpace);
+    for (const QString &name : {QStringLiteral("Điện áp TRB"), QStringLiteral("Dòng điện TRB"),
+                                QStringLiteral("Nhiệt độ power TRB"), QStringLiteral("Nhiệt độ MCU"),
+                                QStringLiteral("Độ ẩm power")})
+        metrics->addWidget(makeCard(name, m_metrics), 1);
+    // Xung TXEN / BEAMSYNC: số thô, lưới 2x2 (hàng TXEN, hàng BEAMSYNC; cột Period, cột Pulse).
+    auto *pulses = new QGridLayout;
+    pulses->setSpacing(theme::kSpace);
+    pulses->addWidget(makeCard(QStringLiteral("Period TXEN"), m_rawMetrics), 0, 0);
+    pulses->addWidget(makeCard(QStringLiteral("Pulse TXEN"), m_rawMetrics), 0, 1);
+    pulses->addWidget(makeCard(QStringLiteral("Period BEAMSYNC"), m_rawMetrics), 1, 0);
+    pulses->addWidget(makeCard(QStringLiteral("Pulse BEAMSYNC"), m_rawMetrics), 1, 1);
 
     // Đèn trạng thái ADAR, PG, PA đặt trên cùng, to và có nhãn để nhìn là biết ngay.
     auto *leds = new QHBoxLayout;
     leds->setSpacing(theme::kSpace);
-    leds->addWidget(ledGroup(QStringLiteral("ADAR"), numbered(QStringLiteral("%1"), 8), m_ledAdar), 8);
-    leds->addWidget(ledGroup(QStringLiteral("PG"), numbered(QStringLiteral("TRM%1"), 4), m_ledPg), 4);
-    leds->addWidget(ledGroup(QStringLiteral("PA"), numbered(QStringLiteral("TRM%1"), 4), m_ledPa), 4);
+    leds->addWidget(ledGroup(QStringLiteral("ADAR"), numbered(QStringLiteral("ADAR%1"), 8), m_ledAdar), 2);
+    leds->addWidget(ledGroup(QStringLiteral("PG"), numbered(QStringLiteral("TRM%1"), 4), m_ledPg), 1);
+    leds->addWidget(ledGroup(QStringLiteral("PA"), numbered(QStringLiteral("TRM%1"), 4), m_ledPa), 1);
 
-    // INIT DATA: 6 ô tương ứng 6 bit (0 xám, 1 xanh), cùng hàng với ADAR, PG, PA.
+    // Hàng kế: INIT DATA (6 ô ứng 6 bit, 0 xám, 1 xanh) bên trái, lưới 2x2 Period/Pulse bên phải.
     QStringList initNames;
     for (const trbmon::InitBit &b : trbmon::kInitBits) initNames << QString::fromLatin1(b.name);
-    leds->addWidget(ledGroup(QStringLiteral("INIT DATA"), initNames, m_ledInit), 6);
-
-    // Bản tin lỗi: một mục nhỏ căn phải phía trên thẻ PA; bấm để xem số bản tin từng loại.
-    auto *errRow = new QHBoxLayout;
-    errRow->addStretch(1);
-    auto *errLabel = new QLabel(QStringLiteral("Bản tin lỗi"));
-    theme::setRole(errLabel, "title");
-    m_errButton = new QPushButton(kDash);
-    theme::setRole(m_errButton, "secondary");
-    m_errButton->setFixedHeight(26);
-    m_errButton->setToolTip(QStringLiteral("Tổng số bản tin lỗi (cộng %1 loại). Bấm để xem số bản tin từng loại.").arg(trbmon::kNumErr));
-    connect(m_errButton, &QPushButton::clicked, this, &TrbDetailPage::showErrors);
-    errRow->addWidget(errLabel);
-    errRow->addWidget(m_errButton);
+    auto *leds2 = new QHBoxLayout;
+    leds2->setSpacing(theme::kSpace);
+    leds2->addWidget(ledGroup(QStringLiteral("INIT DATA"), initNames, m_ledInit), 3);
+    leds2->addLayout(pulses, 2);
 
     // Hàng "Trạng thái": một thẻ thấp, các nhãn TRM xếp sát nhau từ trái (hiện là mã thô State, sau này parse thành chữ).
     auto *state = new QFrame;
@@ -253,11 +254,10 @@ QWidget *TrbDetailPage::buildMonitor()
     auto *l = new QVBoxLayout(w);
     l->setContentsMargins(0, 0, 0, 0);
     l->setSpacing(theme::kSpace);
-    l->addLayout(errRow);
     l->addLayout(leds);
+    l->addLayout(leds2);
     l->addLayout(tables, 1);
     l->addLayout(metrics);
-    l->addLayout(pulses);
     l->addWidget(state);
     l->addWidget(trip);
     return w;
