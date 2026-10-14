@@ -56,8 +56,9 @@ TripKind tripKind(int i)
 {
     const bool isMin = i >= 9 && i <= 14;
     const int base = isMin ? i - 9 : i;                    // 0..5 cho cả hai nhóm
-    if (i == 6) return {2, false, 0};
-    if (i == 7 || i == 8 || i == 15) return {-1, false, 0};
+    if (i == 6) return {2, false, 0};                      // Trip 7: System 1
+    if (i == 8) return {2, false, 1};                      // Trip 9: System 2
+    if (i == 7 || i == 15) return {-1, false, 0};
     return {base < 4 ? 0 : 1, isMin, base < 4 ? base : base - 4};
 }
 }
@@ -69,7 +70,7 @@ QString tripName(int i)
     switch (k.kind) {
     case 0:  return QStringLiteral("%1 I SEN TRM%2").arg(lim).arg(k.index + 1);
     case 1:  return QStringLiteral("%1 PA TRM%2-%3").arg(lim).arg(k.index * 2 + 1).arg(k.index * 2 + 2);
-    case 2:  return QStringLiteral("System");
+    case 2:  return QStringLiteral("System %1").arg(k.index + 1);
     default: return QStringLiteral("Dự phòng");
     }
 }
@@ -81,9 +82,12 @@ QString tripBitName(int i, int bit)
     case 0:  return QStringLiteral("TRM%1 I SEN%2").arg(k.index + 1).arg(bit + 1);
     case 1:  return QStringLiteral("TRM%1 PA%2").arg(k.index * 2 + 1 + bit / 4).arg(bit % 4 + 1);
     case 2: {
-        static const char *const kSystem[] = {"TRM temp max", "TRM temp min", "V TRB trip max", "V TRB trip min",
-                                              "I TRB trip max", "I TRB trip min"};
-        return bit < 6 ? QString::fromLatin1(kSystem[bit]) : QString();   // bit 6, 7 chưa dùng
+        static const char *const kSystem1[] = {"TRM temp max", "TRM temp min", "V TRB trip max", "V TRB trip min",
+                                               "I TRB trip max", "I TRB trip min"};
+        static const char *const kSystem2[] = {"Pulse TXEN trip max", "Pulse TXEN trip min", "Period BSYNC trip max", "Period BSYNC trip min",
+                                               "Pulse BSYNC trip max", "Pulse BSYNC trip min", "Period TXEN trip max", "Period TXEN trip min"};
+        if (k.index == 0) return bit < 6 ? QString::fromLatin1(kSystem1[bit]) : QString();   // System 1: bit 6, 7 chưa dùng
+        return QString::fromLatin1(kSystem2[bit]);
     }
     default: return {};
     }

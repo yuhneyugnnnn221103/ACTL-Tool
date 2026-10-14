@@ -38,9 +38,10 @@ inline int pgFaultBits(double pgByte) { return ~int(pgByte) & kPgMask; }
 // Ý nghĩa 16 byte trip code (i = 0..15 ứng với Trip 1..16):
 //   Trip 1-4   vượt max I_SEN1..8 của TRM1..4 (bit 0 = I_SEN1 ... bit 7 = I_SEN8)
 //   Trip 5, 6  vượt max dòng PA: Trip 5 = TRM1 và TRM2, Trip 6 = TRM3 và TRM4 (bit 0-3 = PA1-4 của TRM lẻ, bit 4-7 = PA1-4 của TRM chẵn)
-//   Trip 7     system: bit 0 TRM temp max, 1 TRM temp min, 2 V TRB max, 3 V TRB min, 4 I TRB max, 5 I TRB min (6, 7 chưa dùng)
+//   Trip 7     System 1: bit 0 TRM temp max, 1 TRM temp min, 2 V TRB max, 3 V TRB min, 4 I TRB max, 5 I TRB min (6, 7 chưa dùng)
+//   Trip 9     System 2: bit 0 Pulse TXEN max, 1 Pulse TXEN min, 2 Period BSYNC max, 3 Period BSYNC min, 4 Pulse BSYNC max, 5 Pulse BSYNC min, 6 Period TXEN max, 7 Period TXEN min
 //   Trip 10-15 như Trip 1-6 nhưng dưới min
-//   Trip 8, 9, 16 dự phòng
+//   Trip 8, 16 dự phòng
 QString tripName(int i);                 // tên ngắn, ví dụ "Max I_SEN TRM1"
 QString tripBitName(int i, int bit);     // ý nghĩa một bit, ví dụ "TRM2 PA3"; rỗng nếu dự phòng
 

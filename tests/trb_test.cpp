@@ -194,8 +194,8 @@ private slots:
         QCOMPARE(trbmon::tripBitName(4, 7), QStringLiteral("TRM2 PA4"));
         QCOMPARE(trbmon::tripName(5), QStringLiteral("Max PA TRM3-4"));
         QCOMPARE(trbmon::tripBitName(5, 5), QStringLiteral("TRM4 PA2"));
-        // Trip 7: system
-        QCOMPARE(trbmon::tripName(6), QStringLiteral("System"));
+        // Trip 7: System 1
+        QCOMPARE(trbmon::tripName(6), QStringLiteral("System 1"));
         QCOMPARE(trbmon::tripBitName(6, 0), QStringLiteral("TRM temp max"));
         QCOMPARE(trbmon::tripBitName(6, 1), QStringLiteral("TRM temp min"));
         QCOMPARE(trbmon::tripBitName(6, 2), QStringLiteral("V TRB trip max"));
@@ -203,6 +203,11 @@ private slots:
         QCOMPARE(trbmon::tripBitName(6, 4), QStringLiteral("I TRB trip max"));
         QCOMPARE(trbmon::tripBitName(6, 5), QStringLiteral("I TRB trip min"));
         QVERIFY(trbmon::tripBitName(6, 6).isEmpty() && trbmon::tripBitName(6, 7).isEmpty());
+        // Trip 9: System 2 (xung TXEN / BSYNC)
+        QCOMPARE(trbmon::tripName(8), QStringLiteral("System 2"));
+        const char *const sys2[] = {"Pulse TXEN trip max", "Pulse TXEN trip min", "Period BSYNC trip max", "Period BSYNC trip min",
+                                    "Pulse BSYNC trip max", "Pulse BSYNC trip min", "Period TXEN trip max", "Period TXEN trip min"};
+        for (int b = 0; b < 8; ++b) QCOMPARE(trbmon::tripBitName(8, b), QString::fromLatin1(sys2[b]));
         // Trip 10-15: như 1-6 nhưng dưới min
         QCOMPARE(trbmon::tripName(9), QStringLiteral("Min I SEN TRM1"));
         QCOMPARE(trbmon::tripName(12), QStringLiteral("Min I SEN TRM4"));
@@ -210,15 +215,15 @@ private slots:
         QCOMPARE(trbmon::tripName(13), QStringLiteral("Min PA TRM1-2"));
         QCOMPARE(trbmon::tripName(14), QStringLiteral("Min PA TRM3-4"));
         QCOMPARE(trbmon::tripBitName(14, 6), QStringLiteral("TRM4 PA3"));
-        // Trip 8, 9, 16 dự phòng
-        for (int i : {7, 8, 15}) {
+        // Trip 8, 16 dự phòng
+        for (int i : {7, 15}) {
             QCOMPARE(trbmon::tripName(i), QStringLiteral("Dự phòng"));
             QVERIFY(trbmon::tripBitName(i, 0).isEmpty());
         }
-        QSet<QString> names;                                    // 13 trip có nghĩa, tên không trùng nhau
+        QSet<QString> names;                                    // 14 trip có nghĩa, tên không trùng nhau
         for (int i = 0; i < trbmon::kNumTrip; ++i)
             if (trbmon::tripName(i) != QStringLiteral("Dự phòng")) names.insert(trbmon::tripName(i));
-        QCOMPARE(names.size(), 13);
+        QCOMPARE(names.size(), 14);
     }
 
     // ---------- Khung điều khiển ----------
