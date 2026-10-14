@@ -8,6 +8,7 @@
 #include "../proto/trb_monitor_proto.h"
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDialog>
 #include <QDateTime>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -154,25 +155,32 @@ QWidget *TrbDetailPage::buildMonitor()
                                            << QStringLiteral("Dòng LNA"), 16)));
 
     // Thẻ số liệu một dòng: tên bên trái, giá trị bên phải, thấp hơn thẻ có tiêu đề.
-    auto *metrics = new QHBoxLayout;
-    metrics->setSpacing(theme::kSpace);
-    for (const QString &name : {QStringLiteral("Điện áp TRB"), QStringLiteral("Dòng điện TRB"),
-                                QStringLiteral("Nhiệt độ power TRB"), QStringLiteral("Nhiệt độ MCU"),
-                                QStringLiteral("Độ ẩm power")}) {
-        auto *card = new QFrame;
-        card->setProperty("card", true);
-        auto *row = new QHBoxLayout(card);
-        row->setContentsMargins(12, 2, 12, 2);
-        auto *title = new QLabel(name);
-        theme::setRole(title, "title");        // tên in đậm, giá trị in thường, cùng cỡ chữ
-        auto *v = new QLabel(kDash);
-        v->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        m_metrics << v;
-        row->addWidget(title);
-        row->addStretch(1);
-        row->addWidget(v);
-        metrics->addWidget(card, 1);
-    }
+    auto cardRow = [](const QStringList &names, QList<QLabel *> &labels) {
+        auto *row = new QHBoxLayout;
+        row->setSpacing(theme::kSpace);
+        for (const QString &name : names) {
+            auto *card = new QFrame;
+            card->setProperty("card", true);
+            auto *cl = new QHBoxLayout(card);
+            cl->setContentsMargins(12, 2, 12, 2);
+            auto *title = new QLabel(name);
+            theme::setRole(title, "title");        // tên in đậm, giá trị in thường, cùng cỡ chữ
+            auto *v = new QLabel(kDash);
+            v->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            labels << v;
+            cl->addWidget(title);
+            cl->addStretch(1);
+            cl->addWidget(v);
+            row->addWidget(card, 1);
+        }
+        return row;
+    };
+    auto *metrics = cardRow({QStringLiteral("Điện áp TRB"), QStringLiteral("Dòng điện TRB"),
+                             QStringLiteral("Nhiệt độ power TRB"), QStringLiteral("Nhiệt độ MCU"),
+                             QStringLiteral("Độ ẩm power")}, m_metrics);
+    // Xung TXEN / BEAMSYNC: số thô, thứ tự PERIOD rồi PULSE của từng tín hiệu.
+    auto *pulses = cardRow({QStringLiteral("Period TXEN"), QStringLiteral("Pulse TXEN"),
+                            QStringLiteral("Period BEAMSYNC"), QStringLiteral("Pulse BEAMSYNC")}, m_rawMetrics);
 
     // Đèn trạng thái ADAR, PG, PA đặt trên cùng, to và có nhãn để nhìn là biết ngay.
     auto *leds = new QHBoxLayout;
@@ -180,6 +188,23 @@ QWidget *TrbDetailPage::buildMonitor()
     leds->addWidget(ledGroup(QStringLiteral("ADAR"), numbered(QStringLiteral("ADAR%1"), 8), m_ledAdar), 2);
     leds->addWidget(ledGroup(QStringLiteral("PG"), numbered(QStringLiteral("TRM%1"), 4), m_ledPg), 1);
     leds->addWidget(ledGroup(QStringLiteral("PA"), numbered(QStringLiteral("TRM%1"), 4), m_ledPa), 1);
+
+    // INIT DATA: 6 ô tương ứng 6 bit (0 xám, 1 xanh) và tổng bản tin lỗi (bấm để xem từng loại).
+    QStringList initNames;
+    for (const trbmon::InitBit &b : trbmon::kInitBits) initNames << QString::fromLatin1(b.name);
+    auto *init = ledGroup(QStringLiteral("INIT DATA"), initNames, m_ledInit);
+    auto *errors = new QGroupBox(QStringLiteral("Bản tin lỗi"));
+    errors->setProperty("compact", true);
+    auto *errLayout = new QHBoxLayout(errors);
+    m_errButton = new QPushButton(kDash);
+    theme::setRole(m_errButton, "secondary");
+    m_errButton->setToolTip(QStringLiteral("Tổng số bản tin lỗi (cộng %1 loại). Bấm để xem số bản tin từng loại.").arg(trbmon::kNumErr));
+    connect(m_errButton, &QPushButton::clicked, this, &TrbDetailPage::showErrors);
+    errLayout->addWidget(m_errButton);
+    auto *leds2 = new QHBoxLayout;
+    leds2->setSpacing(theme::kSpace);
+    leds2->addWidget(init, 3);
+    leds2->addWidget(errors, 1);
 
     // Hàng "Trạng thái" riêng: hiện chuỗi text (hiện là mã thô State của 4 TRM, sau này parse thành chữ).
     auto *state = new QGroupBox(QStringLiteral("Trạng thái"));
@@ -213,8 +238,10 @@ QWidget *TrbDetailPage::buildMonitor()
     l->setContentsMargins(0, 0, 0, 0);
     l->setSpacing(theme::kSpace);
     l->addLayout(leds);
+    l->addLayout(leds2);
     l->addLayout(tables, 1);
     l->addLayout(metrics);
+    l->addLayout(pulses);
     l->addWidget(state);
     l->addWidget(trip);
     return w;
@@ -375,9 +402,74 @@ void TrbDetailPage::refresh()
     setLeds(m_ledAdar, trbmon::kIdxInitAdar, Led::Fault, QStringLiteral("ADAR"));
     setLeds(m_ledPg, trbmon::kIdxPg, Led::Fault, QStringLiteral("PG TRM"));
     setLeds(m_ledPa, trbmon::kIdxPa, Led::Idle, QStringLiteral("PA TRM")); // PA tắt là trạng thái Stop bình thường
+    for (int i = 0; i < trbmon::kNumInitBits; ++i) {   // INIT DATA: 1 = xanh, 0 = xám
+        const int bit = trbmon::kInitBits[i].bit;
+        const bool on = bits(trbmon::kIdxInitData) >> bit & 1;
+        m_ledInit[i]->setState(!has ? Led::Unknown : on ? Led::On : Led::Idle,
+                               !has ? QString() : QStringLiteral("%1 (bit %2) = %3").arg(QLatin1String(trbmon::kInitBits[i].name)).arg(bit).arg(on ? 1 : 0));
+    }
+    const int rawIdx[] = {trbmon::kIdxPeriodTxen, trbmon::kIdxPulseTxen, trbmon::kIdxPeriodBeamsync, trbmon::kIdxPulseBeamsync};
+    for (int i = 0; i < m_rawMetrics.size(); ++i) m_rawMetrics[i]->setText(val(rawIdx[i]));
+    refreshErrors();
     for (int i = 0; i < m_stateLabels.size(); ++i)
         m_stateLabels[i]->setText(QStringLiteral("TRM%1: %2").arg(i + 1).arg(val(trbmon::kIdxState0 + i)));
     for (int i = 0; i < m_trip.size(); ++i) m_trip[i]->setValue(bits(trbmon::kIdxTrip0 + i), has);
+}
+
+// Tổng bản tin lỗi trên nút; tooltip liệt kê các loại khác 0.
+void TrbDetailPage::refreshErrors()
+{
+    const model::TrbState &s = m_store->trb(m_mb, m_trb);
+    const bool has = s.frames > 0;
+    qint64 total = 0;
+    QStringList nonZero;
+    for (int i = 0; i < trbmon::kNumErr; ++i) {
+        const int n = has ? int(s.values.at(trbmon::kIdxErr0 + i)) : 0;
+        total += n;
+        if (n) nonZero << QStringLiteral("%1: %2").arg(trbmon::errName(i)).arg(n);
+        if (m_errTable) {
+            QTableWidgetItem *it = m_errTable->item(i, 1);
+            it->setText(has ? QString::number(n) : kDash);
+            const bool bad = n > 0;
+            it->setBackground(bad ? QBrush(QColor(0xEF9F27)) : QBrush());
+            QFont f = it->font();
+            f.setBold(bad);
+            it->setFont(f);
+            m_errTable->item(i, 0)->setFont(f);
+        }
+    }
+    m_errButton->setText(has ? QStringLiteral("Tổng: %1  ▸").arg(total) : kDash);
+    m_errButton->setToolTip(!has ? QStringLiteral("Chưa có dữ liệu")
+                            : nonZero.isEmpty() ? QStringLiteral("Không có bản tin lỗi. Bấm để xem từng loại.")
+                                                : nonZero.join(QLatin1Char('\n')));
+    if (m_errDialog) m_errDialog->setWindowTitle(QStringLiteral("Bản tin lỗi · MB%1 / TRB%2 · tổng %3").arg(m_mb + 1).arg(m_trb + 1).arg(has ? QString::number(total) : kDash));
+}
+
+// Cửa sổ nhỏ không chặn thao tác, tự cập nhật theo TRB đang xem.
+void TrbDetailPage::showErrors()
+{
+    if (!m_errDialog) {
+        m_errDialog = new QDialog(this);
+        m_errTable = new QTableWidget(trbmon::kNumErr, 2, m_errDialog);
+        m_errTable->setHorizontalHeaderLabels({QStringLiteral("Loại bản tin lỗi"), QStringLiteral("Số bản tin")});
+        m_errTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        m_errTable->setAlternatingRowColors(true);
+        m_errTable->setSelectionMode(QAbstractItemView::NoSelection);
+        m_errTable->verticalHeader()->hide();
+        m_errTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+        for (int i = 0; i < trbmon::kNumErr; ++i) {
+            m_errTable->setItem(i, 0, new QTableWidgetItem(QStringLiteral("%1. %2").arg(i + 1).arg(trbmon::errName(i))));
+            auto *n = new QTableWidgetItem(kDash);
+            n->setTextAlignment(Qt::AlignCenter);
+            m_errTable->setItem(i, 1, n);
+        }
+        auto *l = new QVBoxLayout(m_errDialog);
+        l->addWidget(m_errTable);
+        m_errDialog->resize(380, 30 * trbmon::kNumErr + 90);
+    }
+    refreshErrors();
+    m_errDialog->show();
+    m_errDialog->raise();
 }
 
 bool TrbDetailPage::confirmTarget(int &mb, int &trb)

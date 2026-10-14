@@ -111,8 +111,10 @@ private slots:
         auto first = [&](int idx) { return t.fields().at(idx).offset + 1; };
         QCOMPARE(t.fields().at(trbmon::kIdxErr0).name, QStringLiteral("BẢN TIN LỖI 1"));
         QCOMPARE(first(trbmon::kIdxErr0), 241);
-        QCOMPARE(first(trbmon::kIdxErr0 + trbmon::kNumErr - 1), 264);
-        QCOMPARE(t.fields().at(trbmon::kIdxErr0 + trbmon::kNumErr - 1).name, QStringLiteral("BẢN TIN LỖI 24"));
+        QCOMPARE(trbmon::kNumErr, 12);
+        QCOMPARE(t.fields().at(trbmon::kIdxErr0).size, 2);                                  // mỗi bộ đếm 2 byte
+        QCOMPARE(first(trbmon::kIdxErr0 + trbmon::kNumErr - 1), 263);                       // bộ đếm cuối chiếm byte 263-264
+        QCOMPARE(t.fields().at(trbmon::kIdxErr0 + trbmon::kNumErr - 1).name, QStringLiteral("BẢN TIN LỖI 12"));
         QCOMPARE(first(trbmon::kIdxPeriodTxen), 265);
         QCOMPARE(t.fields().at(trbmon::kIdxPeriodTxen).size, 3);
         QCOMPARE(first(trbmon::kIdxPulseTxen), 268);

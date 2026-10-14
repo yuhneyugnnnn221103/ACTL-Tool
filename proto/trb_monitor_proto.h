@@ -17,13 +17,19 @@ constexpr int kIdxTrip0 = kIdxTrbV + 3;
 constexpr int kIdxState0 = kIdxTrip0 + kNumTrip;
 constexpr int kIdxInitAdar = kIdxState0 + kNumTrm, kIdxPa = kIdxInitAdar + 1, kIdxPg = kIdxInitAdar + 2;
 constexpr int kIdxMcuTemp = kIdxInitAdar + 3, kIdxHumidity = kIdxInitAdar + 4;
-// Sau độ ẩm power: INIT DATA (1 byte), rồi 24 byte "bản tin lỗi", PERIOD/PULSE của TXEN và BEAMSYNC, 32 byte dự phòng, CRC, E1 E2.
-constexpr int kNumErr = 24;
+// Sau độ ẩm power: INIT DATA (1 byte), rồi 12 bộ đếm "bản tin lỗi" (mỗi bộ 2 byte, đếm số bản tin lỗi từng loại), PERIOD/PULSE của TXEN và BEAMSYNC, 32 byte dự phòng, CRC, E1 E2.
+constexpr int kNumErr = 12;
 constexpr int kIdxInitData = kIdxHumidity + 1;
 constexpr int kIdxErr0 = kIdxInitData + 1;
 constexpr int kIdxPeriodTxen = kIdxErr0 + kNumErr, kIdxPulseTxen = kIdxPeriodTxen + 1;
 constexpr int kIdxPeriodBeamsync = kIdxPulseTxen + 1, kIdxPulseBeamsync = kIdxPeriodBeamsync + 1;
 constexpr int kNumFields = kIdxPulseBeamsync + 1;
+
+// INIT DATA: mỗi bit 1 = bước khởi tạo đã xong. Bit 3 chưa dùng. Thứ tự hiển thị: kInitBits[0..5].
+struct InitBit { int bit; const char *name; };
+constexpr InitBit kInitBits[] = {{0, "eMMC Init"}, {1, "DDR3 Calib"}, {2, "eMMC Config"}, {4, "Array Calib"}, {5, "Amp Calib"}, {6, "LUT"}};
+constexpr int kNumInitBits = 6;
+QString errName(int i);                  // tên loại bản tin lỗi i (0..11); chưa có tên thì "Loại lỗi i+1"
 
 // PG (Power Good): bit i = TRM(i+1), 1 = nguồn tốt. Bit 0 trong 4 bit thấp là lỗi và được coi như một trip.
 constexpr int kPgMask = 0x0F;

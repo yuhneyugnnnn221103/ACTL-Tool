@@ -33,6 +33,7 @@ QList<double> TrbModel::sample()
     v[trbmon::kIdxTrbTemp] = 40;
     v[trbmon::kIdxMcuTemp] = 50;
     v[trbmon::kIdxHumidity] = 40;
+    v[trbmon::kIdxInitData] = 0x77;             // bit 0,1,2,4,5,6: các bước khởi tạo đã xong
     v[trbmon::kIdxPeriodTxen] = 1000;           // giá trị mẫu cho các trường chu kỳ / độ rộng xung
     v[trbmon::kIdxPulseTxen] = 100;
     v[trbmon::kIdxPeriodBeamsync] = 2000;

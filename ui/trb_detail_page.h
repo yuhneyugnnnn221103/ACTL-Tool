@@ -5,6 +5,8 @@
 #include <QWidget>
 
 class QCheckBox;
+class QDialog;
+class QPushButton;
 class QComboBox;
 class QLabel;
 class QSpinBox;
@@ -51,10 +53,15 @@ private:
     QLabel *m_status;
     struct Table { QTableWidget *w; int firstField; };
     QList<Table> m_tables;
-    QList<QLabel *> m_metrics;
+    QList<QLabel *> m_metrics, m_rawMetrics;   // m_rawMetrics: PERIOD/PULSE TXEN, BEAMSYNC (số thô, không có ngưỡng)
     QList<QLabel *> m_stateLabels;   // 4 nhãn trạng thái TRM1..4
     QList<BitCells *> m_trip;
-    QList<LedIndicator *> m_ledAdar, m_ledPg, m_ledPa;
+    QList<LedIndicator *> m_ledAdar, m_ledPg, m_ledPa, m_ledInit;
+    QPushButton *m_errButton = nullptr;   // tổng bản tin lỗi; bấm để xem từng loại
+    QDialog *m_errDialog = nullptr;
+    QTableWidget *m_errTable = nullptr;
+    void showErrors();
+    void refreshErrors();
     QCheckBox *m_pa[4], *m_start, *m_clearTrip, *m_beamSync, *m_adar[8], *m_ch[4];
     QSpinBox *m_phaseTx, *m_phaseRx, *m_ampTx, *m_ampRx;
 };

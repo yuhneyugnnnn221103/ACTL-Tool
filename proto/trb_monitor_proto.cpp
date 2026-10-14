@@ -38,7 +38,7 @@ static FieldTable build()
     u16(QStringLiteral("TEMP MCU"));
     u16(QStringLiteral("HUMIDITY POWER"));
     u8(QStringLiteral("INIT DATA"));                       // byte 240 (đếm từ 1)
-    for (int i = 1; i <= kNumErr; ++i) u8(QStringLiteral("BẢN TIN LỖI %1").arg(i));
+    for (int i = 1; i <= kNumErr; ++i) u16(QStringLiteral("BẢN TIN LỖI %1").arg(i));   // 12 x 2 byte = 24 byte (241..264)
     u24(QStringLiteral("PERIOD TXEN"));
     u16(QStringLiteral("PULSE TXEN"));
     u24(QStringLiteral("PERIOD BEAMSYNC"));
@@ -46,6 +46,8 @@ static FieldTable build()
     Q_ASSERT(t.size() == kNumFields && off == kLength - 4 - 32);   // còn 32 byte dự phòng, CRC, E1 E2
     return t;
 }
+
+QString errName(int i) { return QStringLiteral("Loại lỗi %1").arg(i + 1); }
 
 namespace {
 // Trip i (0..15) -> {loại, chỉ số trong loại}. Loại: 0 I_SEN, 1 PA, 2 system, -1 dự phòng.
