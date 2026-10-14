@@ -12,7 +12,8 @@ enum LogGroup {
     LogPsuMonitor = 4,
     LogPsuConfig = 8,
     LogFirmware = 16,       // nạp FPGA và STM32
-    LogAll = 31
+    LogBeam = 32,           // điều khiển beam qua Ethernet
+    LogAll = 63
 };
 
 // Mã loại sự kiện đặt ở đầu mỗi dòng trong khung Sự kiện, ví dụ "[TRIP] MB0 / TRB3: Trip".

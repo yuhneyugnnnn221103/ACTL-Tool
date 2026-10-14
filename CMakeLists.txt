@@ -60,6 +60,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         proto/trb_config_proto.h proto/trb_config_proto.cpp
         services/trb_config.h services/trb_config.cpp
         proto/fpga_ota_proto.h proto/fpga_ota_proto.cpp
+        proto/beam_eth_proto.h proto/beam_eth_proto.cpp
+        ui/beam_eth_page.h ui/beam_eth_page.cpp
         services/fpga_ota.h services/fpga_ota.cpp
         proto/stm_ota_proto.h proto/stm_ota_proto.cpp
         services/stm_ota.h services/stm_ota.cpp
@@ -144,7 +146,7 @@ if(Qt${QT_VERSION_MAJOR}Test_FOUND)
         core/frame.cpp core/frame_parser.cpp core/link.cpp
         proto/field_table.cpp
         proto/trb_monitor_proto.cpp proto/trb_control_proto.cpp proto/trb_config_proto.cpp
-        proto/fpga_ota_proto.cpp proto/stm_ota_proto.cpp
+        proto/fpga_ota_proto.cpp proto/stm_ota_proto.cpp proto/beam_eth_proto.cpp
         proto/psu_monitor_proto.cpp proto/psu_control_proto.cpp proto/psu_config_proto.cpp
         model/device_store.cpp model/psu_store.cpp model/thresholds.cpp
         services/alarm_engine.cpp services/csv_logger.cpp

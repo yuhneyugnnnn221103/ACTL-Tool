@@ -1,6 +1,7 @@
 #include "main_window.h"
 #include "overview_grid.h"
 #include "auth.h"
+#include "beam_eth_page.h"
 #include "firmware_page.h"
 #include "psu_config_page.h"
 #include "psu_grid.h"
@@ -102,7 +103,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
 {
     setWindowTitle(QStringLiteral("ACTL Tool"));
     // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
-    m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogSystem};
+    m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogBeam, LogSystem};
 
     // Điều hướng trái + các trang.
     m_nav = new QListWidget;
@@ -121,6 +122,10 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     m_pages->addWidget(new PsuConfigPage(ctx));
     m_nav->addItem(QStringLiteral("Nạp code"));
     m_pages->addWidget(new FirmwarePage(ctx));
+    m_nav->addItem(QStringLiteral("Beam Ethernet"));
+    auto *beamPage = new BeamEthPage(ctx);
+    m_pages->addWidget(beamPage);
+    connect(beamPage, &BeamEthPage::logEvent, this, [this](const QString &text) { logEvent(text, LogBeam); });
     m_nav->addItem(QStringLiteral("Giả lập"));
     auto *simPage = new SimPage(ctx);
     m_pages->addWidget(simPage);

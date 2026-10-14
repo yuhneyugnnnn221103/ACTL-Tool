@@ -6,6 +6,7 @@
 #include "../model/thresholds.h"
 #include "../proto/trb_config_proto.h"
 #include "../proto/trb_control_proto.h"
+#include "../proto/beam_eth_proto.h"
 #include "../proto/trb_monitor_proto.h"
 #include "../services/alarm_engine.h"
 #include "../services/csv_logger.h"
@@ -246,6 +247,41 @@ private slots:
         for (int i = 0; i < trbmon::kNumTrip; ++i)
             if (trbmon::tripName(i) != QStringLiteral("Dự phòng")) names.insert(trbmon::tripName(i));
         QCOMPARE(names.size(), 14);
+    }
+
+    // ---------- Beam Ethernet ----------
+    void beamEthFrame()
+    {
+        namespace be = proto::beameth;
+        be::Params p;
+        p.esp = 12.3;           // x10 = 123 = 0x007B
+        p.beta = -4.5;          // x10 = -45 = 0xFFD3 (bù 2)
+        p.freqMhz = 2400;       // 0x0960
+        p.modeValue = 5;
+        p.mode = be::ModeSel::A1;   // byte 10 = 0x10
+        const QByteArray f = be::buildFrame(p);
+        QCOMPARE(f.size(), 14);
+        QCOMPARE(f.left(10).toHex(), QByteArray("abcd" "007b" "ffd3" "0960" "0510"));
+        QCOMPARE(f.right(2).toHex(), QByteArray("efff"));              // đuôi EF FF
+        // CRC16 tính từ ESP tới hết MODE (byte 3..10), big-endian
+        const quint16 crc = core::crc16(reinterpret_cast<const quint8 *>(f.constData()) + 2, 8);
+        QCOMPARE(quint8(f[10]), quint8(crc >> 8));
+        QCOMPARE(quint8(f[11]), quint8(crc & 0xFF));
+
+        QCOMPARE(be::modeByte(be::ModeSel::A0), quint8(0x01));
+        QCOMPARE(be::modeByte(be::ModeSel::A1), quint8(0x10));
+        QCOMPARE(be::modeByte(be::ModeSel::A2), quint8(0x11));
+        QCOMPARE(be::toTenths(0.3), qint16(3));                          // 0.3 x 10 = 3.0000000000000004 vẫn ra 3
+        QCOMPARE(be::toTenths(-3276.8), qint16(-32768));
+        QCOMPARE(be::toTenths(3276.7), qint16(32767));
+
+        p.esp = 4000;           // vượt giới hạn 16 bit có dấu chia 10
+        QVERIFY(!be::validate(p).isEmpty());
+        QVERIFY(be::buildFrame(p).isEmpty());
+        p.esp = 0; p.freqMhz = 70000;
+        QVERIFY(!be::validate(p).isEmpty());
+        p.freqMhz = 0; p.modeValue = 256;
+        QVERIFY(!be::validate(p).isEmpty());
     }
 
     // ---------- Khung điều khiển ----------
