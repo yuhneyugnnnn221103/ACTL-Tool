@@ -42,7 +42,7 @@ QByteArray buildFrame(const Params &p)
     QByteArray f(kLength, 0);
     f[0] = char(core::kHeader1);
     f[1] = char(core::kHeader2);
-    auto put16 = [&](int off, quint16 v) { f[off] = char(v >> 8); f[off + 1] = char(v & 0xFF); };
+    auto put16 = [&](int off, quint16 v) { f[off] = char(v & 0xFF); f[off + 1] = char(v >> 8); };   // little endian: byte thấp trước
     put16(2, quint16(toTenths(p.esp)));          // số có dấu: ép về quint16 giữ nguyên bit bù 2
     put16(4, quint16(toTenths(p.beta)));
     put16(6, quint16(p.freqMhz));

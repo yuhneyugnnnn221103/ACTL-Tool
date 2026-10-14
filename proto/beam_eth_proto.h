@@ -1,10 +1,11 @@
 #pragma once
 // Điều khiển beam qua đường Ethernet riêng (chỉ gửi, không có trả lời), 14 byte:
 //   [AB CD][ESP 2B][BETA 2B][FREQ 2B][MODE 2B][CRC 2B][EF FF]      (byte đếm từ 1: ESP 3-4, BETA 5-6, FREQ 7-8, MODE 9-10, CRC 11-12)
-//   ESP, BETA: số có dấu bù 2, 1 chữ số sau dấu phẩy, gửi giá trị x 10 (big-endian)
-//   FREQ: số nguyên MHz (big-endian, không dấu)
+//   Riêng khung này gửi little endian (byte thấp trước) cho mọi trường 2 byte, kể cả CRC.
+//   ESP, BETA: số có dấu bù 2, 1 chữ số sau dấu phẩy, gửi giá trị x 10
+//   FREQ: số nguyên MHz (không dấu)
 //   MODE: byte 9 = số nguyên 0..255; byte 10 = A0 -> 0x01, A1 -> 0x10, A2 -> 0x11
-//   CRC16-CCITT-FALSE tính từ ESP tới hết MODE (byte 3..10), big-endian. Đuôi khung là EF FF (khác E1 E2 của các khung khác).
+//   CRC16-CCITT-FALSE tính từ ESP tới hết MODE (byte 3..10), ghi byte thấp trước. Đuôi khung là EF FF (khác E1 E2 của các khung khác).
 #include <QByteArray>
 #include <QString>
 

@@ -254,19 +254,19 @@ private slots:
     {
         namespace be = proto::beameth;
         be::Params p;
-        p.esp = 12.3;           // x10 = 123 = 0x007B
-        p.beta = -4.5;          // x10 = -45 = 0xFFD3 (bù 2)
-        p.freqMhz = 2400;       // 0x0960
+        p.esp = 12.3;           // x10 = 123 = 0x007B, gửi byte thấp trước: 7B 00
+        p.beta = -4.5;          // x10 = -45 = 0xFFD3 (bù 2): D3 FF
+        p.freqMhz = 2400;       // 0x0960: 60 09
         p.modeValue = 5;
         p.mode = be::ModeSel::A1;   // byte 10 = 0x10
         const QByteArray f = be::buildFrame(p);
         QCOMPARE(f.size(), 14);
-        QCOMPARE(f.left(10).toHex(), QByteArray("abcd" "007b" "ffd3" "0960" "0510"));
+        QCOMPARE(f.left(10).toHex(), QByteArray("abcd" "7b00" "d3ff" "6009" "0510"));
         QCOMPARE(f.right(2).toHex(), QByteArray("efff"));              // đuôi EF FF
-        // CRC16 tính từ ESP tới hết MODE (byte 3..10), big-endian
+        // CRC16 tính từ ESP tới hết MODE (byte 3..10), ghi byte thấp trước
         const quint16 crc = core::crc16(reinterpret_cast<const quint8 *>(f.constData()) + 2, 8);
-        QCOMPARE(quint8(f[10]), quint8(crc >> 8));
-        QCOMPARE(quint8(f[11]), quint8(crc & 0xFF));
+        QCOMPARE(quint8(f[10]), quint8(crc & 0xFF));
+        QCOMPARE(quint8(f[11]), quint8(crc >> 8));
 
         QCOMPARE(be::modeByte(be::ModeSel::A0), quint8(0x01));
         QCOMPARE(be::modeByte(be::ModeSel::A1), quint8(0x10));
