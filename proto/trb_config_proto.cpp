@@ -55,9 +55,13 @@ static FieldTable build()
                           "TEMP_OFFSET_POWER", "TEMP_OFFSET_MCU"})
         add("GENERAL", n, 2);
 
-    add("DEBUG", "PULSE_TR_DEBUG", 2);
-    add("DEBUG", "PERIOD_TR_DEBUG", 4);
-    Q_ASSERT(off == kLength - 4 - 37);
+    // Nhóm DEBUG cũ đã gộp vào GENERAL, cùng các trường chu kỳ / độ rộng xung mới.
+    add("GENERAL", "PULSE_TR_DEBUG", 2);
+    add("GENERAL", "PERIOD_TR_DEBUG", 4);
+    add("GENERAL", "PULSE_TR_MIN", 2);
+    add("GENERAL", "PERIOD_TR_MIN", 4);
+    add("GENERAL", "PERIOD_TR_MAX", 4);
+    Q_ASSERT(off == kLength - 4 - 27);
     return t;
 }
 
@@ -112,7 +116,9 @@ void fromJson(const QJsonObject &json, QList<double> &values)
 {
     for (int i = 0; i < table().size(); ++i) {
         const Field &f = table().fields().at(i);
-        const QJsonValue v = json.value(f.group).toObject().value(f.name);
+        QJsonValue v = json.value(f.group).toObject().value(f.name);
+        if (v.isUndefined() && f.group == QLatin1String("GENERAL"))   // file cũ: PULSE/PERIOD_TR_DEBUG nằm trong nhóm DEBUG
+            v = json.value(QStringLiteral("DEBUG")).toObject().value(f.name);
         const double max = f.size >= 4 ? 4294967295.0 : double((1u << (8 * f.size)) - 1);
         if (v.isDouble() && v.toDouble() >= 0 && v.toDouble() <= max) values[i] = v.toDouble();
     }

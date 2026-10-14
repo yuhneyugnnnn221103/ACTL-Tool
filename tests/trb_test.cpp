@@ -130,7 +130,7 @@ private slots:
         const FieldTable &t = trbcfg::table();
         int end = 6;
         for (const Field &f : t.fields()) { QCOMPARE(f.offset, end); end += f.size; }
-        QCOMPARE(end, trbcfg::kLength - 4 - 37);
+        QCOMPARE(end, trbcfg::kLength - 4 - 27);
         QCOMPARE(t.fields().at(t.indexOf("CAL", "dy")).offset, 6);
         QCOMPARE(t.fields().at(t.indexOf("ADAR 1", "CONFIG_RESET")).offset, 6 + 9);
         QCOMPARE(t.fields().at(t.indexOf("ADAR 2", "CONFIG_RESET")).offset, 6 + 9 + 25);
@@ -138,7 +138,29 @@ private slots:
         QCOMPARE(t.fields().at(t.indexOf("TRM 1", "I_SEN_1_MAX")).offset, 6 + 9 + 8 * 25 + 28);
         QCOMPARE(t.fields().at(t.indexOf("TRM 2", "I_SEN_1_MAX")).offset, 6 + 9 + 8 * 25 + 28 + 48);
         QCOMPARE(t.fields().at(t.indexOf("GENERAL", "TEMP_TRB_MAX")).offset, 6 + 9 + 8 * 25 + 28 + 4 * 48);
-        QCOMPARE(t.fields().at(t.indexOf("DEBUG", "PERIOD_TR_DEBUG")).size, 4);
+        // DEBUG đã gộp vào GENERAL; PULSE_TR_MIN, PERIOD_TR_MIN, PERIOD_TR_MAX nối ngay sau PERIOD_TR_DEBUG
+        QCOMPARE(t.indexOf("DEBUG", "PERIOD_TR_DEBUG"), -1);
+        const int dbg = t.indexOf("GENERAL", "PERIOD_TR_DEBUG");
+        QCOMPARE(t.fields().at(dbg).size, 4);
+        QCOMPARE(t.indexOf("GENERAL", "PULSE_TR_DEBUG") + 1, dbg);
+        QCOMPARE(t.indexOf("GENERAL", "PULSE_TR_MIN"), dbg + 1);
+        QCOMPARE(t.fields().at(dbg + 1).size, 2);
+        QCOMPARE(t.indexOf("GENERAL", "PERIOD_TR_MIN"), dbg + 2);
+        QCOMPARE(t.fields().at(dbg + 2).size, 4);
+        QCOMPARE(t.indexOf("GENERAL", "PERIOD_TR_MAX"), dbg + 3);
+        QCOMPARE(t.fields().at(dbg + 3).size, 4);
+        QCOMPARE(t.fields().at(dbg + 3).offset + 4, trbcfg::kLength - 4 - 27);   // GENERAL kết thúc, còn 27 byte dự phòng
+        QCOMPARE(trbcfg::kLength, 520);
+    }
+
+    void configJsonOldDebugGroupStillLoads()
+    {
+        QJsonObject old;
+        old.insert("DEBUG", QJsonObject{{"PULSE_TR_DEBUG", 7}, {"PERIOD_TR_DEBUG", 900000}});
+        QList<double> v = zeros(trbcfg::table().size());
+        trbcfg::fromJson(old, v);
+        QCOMPARE(v.at(trbcfg::table().indexOf("GENERAL", "PULSE_TR_DEBUG")), 7.0);
+        QCOMPARE(v.at(trbcfg::table().indexOf("GENERAL", "PERIOD_TR_DEBUG")), 900000.0);
     }
 
     void thresholdMapPointsAtRealFields()
@@ -798,7 +820,7 @@ private slots:
         QList<double> v = zeros(trbcfg::table().size());
         v[trbcfg::table().indexOf("GENERAL", "TEMP_MCU_MAX")] = 1234;
         v[trbcfg::table().indexOf("ADAR 3", "LDO")] = 200;
-        v[trbcfg::table().indexOf("DEBUG", "PERIOD_TR_DEBUG")] = 4000000000.0;
+        v[trbcfg::table().indexOf("GENERAL", "PERIOD_TR_DEBUG")] = 4000000000.0;
         const QJsonObject json = trbcfg::toJson(v);
         QCOMPARE(json.value("GENERAL").toObject().value("TEMP_MCU_MAX").toInt(), 1234);
 

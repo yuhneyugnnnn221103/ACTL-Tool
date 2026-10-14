@@ -1,6 +1,6 @@
 #pragma once
 // Cấu hình TRB qua RS485 (theo gsdk_protocol.h), CRC phủ từ byte địa chỉ:
-//   Ghi      A1 A1, 520 byte: [AB CD][A1 A1][MB][TRB][CAL 9][ADAR 8x25][LUT 28][TRM 4x48][GENERAL 38][DEBUG 6][Dự phòng 37][CRC][E1 E2]
+//   Ghi      A1 A1, 520 byte: [AB CD][A1 A1][MB][TRB][CAL 9][ADAR 8x25][LUT 28][TRM 4x48][GENERAL 48][Dự phòng 27][CRC][E1 E2]
 //   Hỏi      A3 A3, 10 byte:  [AB CD][A3 A3][MB][TRB][CRC][E1 E2]
 //   Trả lời  A4 A4, 520 byte: giống khung ghi, chỉ khác CMD
 #include "../core/frame.h"
