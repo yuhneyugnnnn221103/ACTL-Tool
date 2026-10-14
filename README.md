@@ -77,9 +77,9 @@ Các file nằm cạnh file chạy và được tạo ở lần chạy đầu.
 | `thresholds.json` | Ngưỡng min/max theo từng TRB, tự cập nhật mỗi lần đọc cấu hình |
 | `psu_thresholds.json` | Như trên, theo địa chỉ PSU |
 | `psu_default_config.json` | Tùy chọn: cấu hình mặc định PSU, cùng định dạng file "Lưu file…" của trang Cấu hình PSU |
-| `logs/yyyy-MM-dd/trb/MB03_TRB05_<phiên>.csv` | Số liệu giám sát, mỗi TRB một file riêng (MB, TRB đếm từ 1), mặc định mỗi bản tin nhận được ghi một dòng (`log/minIntervalMs` = 0); `<phiên>` là giờ bắt đầu lần ghi (`yyyyMMdd-HHmmss`), mỗi lần bấm "Ghi log", hẹn giờ hoặc mở app là một bộ file mới. File chỉ được tạo khi TRB có dữ liệu |
-| `logs/yyyy-MM-dd/psu/PSU2_<phiên>.csv` | Số liệu giám sát PSU, mỗi PSU một file, cùng chu kỳ ghi |
-| `logs/yyyy-MM-dd/events_*.csv` | Sự kiện |
+| `logs/<phiên>/trb/MB03_TRB05.csv` | Số liệu giám sát, mỗi TRB một file riêng (MB, TRB đếm từ 1), mặc định mỗi bản tin nhận được ghi một dòng (`log/minIntervalMs` = 0); `<phiên>` là thư mục đặt tên theo giờ bắt đầu lần ghi (`yyyy-MM-dd_HH-mm-ss`), mỗi lần bấm "Ghi log", hẹn giờ hoặc mở app là một thư mục mới chứa đủ log TRB, PSU và sự kiện của lần đó. File chỉ được tạo khi TRB có dữ liệu |
+| `logs/<phiên>/psu/PSU2.csv` | Số liệu giám sát PSU, mỗi PSU một file, cùng chu kỳ ghi |
+| `logs/<phiên>/events.csv` | Sự kiện |
 
 Các khóa hay dùng trong `actl_tool.ini`:
 

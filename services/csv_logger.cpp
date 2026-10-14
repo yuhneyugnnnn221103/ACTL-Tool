@@ -28,7 +28,7 @@ CsvLogger::CsvLogger(const QString &dir, int periodMs, qint64 maxFileBytes, cons
 
 void CsvLogger::newSession()
 {
-    const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"));
+    const QString stamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd_HH-mm-ss"));
     m_sessionDup = stamp == m_lastStamp ? m_sessionDup + 1 : 0;   // hai lần bắt đầu trong cùng một giây
     m_lastStamp = stamp;
     m_session = m_sessionDup ? QStringLiteral("%1-%2").arg(stamp).arg(m_sessionDup + 1) : stamp;
@@ -141,16 +141,13 @@ void CsvLogger::flush()
 
 bool CsvLogger::write(Stream &s, const QByteArray &line)
 {
-    const QDate today = QDate::currentDate();
-    if (!s.file.isOpen() || s.date != today || s.file.size() >= m_maxFileBytes) {
+    if (!s.file.isOpen() || s.file.size() >= m_maxFileBytes) {
         s.file.close();
-        s.date = today;
-        const QString day = today.toString(Qt::ISODate);
-        const QString folder = s.folder.isEmpty() ? m_dir + '/' + day : m_dir + '/' + day + '/' + s.folder;
+        // Mỗi lần ghi một thư mục riêng; thư mục con trb/psu nằm trong đó.
+        const QString folder = s.folder.isEmpty() ? m_dir + '/' + m_session : m_dir + '/' + m_session + '/' + s.folder;
         QDir().mkpath(folder);
-        // Phần đầu tiên chưa đầy sẽ được ghi tiếp (kể cả sau khi khởi động lại app).
         for (int part = 1;; ++part) {
-            s.file.setFileName(QStringLiteral("%1/%2_%3%4.csv").arg(folder, s.prefix, m_session,
+            s.file.setFileName(QStringLiteral("%1/%2%3.csv").arg(folder, s.prefix,
                                part == 1 ? QString() : QStringLiteral("_%1").arg(part, 2, 10, QLatin1Char('0'))));
             if (s.file.size() < m_maxFileBytes) break;
         }

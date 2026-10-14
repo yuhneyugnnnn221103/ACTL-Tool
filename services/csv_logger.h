@@ -1,11 +1,11 @@
 #pragma once
 // Ghi log CSV (UTF-8 có BOM để Excel đọc đúng tiếng Việt):
-//   <dir>/yyyy-MM-dd/trb/MB03_TRB05_<phiên>[_NN].csv   mỗi TRB một file, một dòng = một bản tin giám sát (MB, TRB đếm từ 1)
-//   <dir>/yyyy-MM-dd/psu/PSU2_<phiên>[_NN].csv         mỗi PSU một file
-//   <dir>/yyyy-MM-dd/events_<phiên>[_NN].csv           một dòng = một sự kiện (chung)
-// <phiên> = giờ bắt đầu lần ghi (yyyyMMdd-HHmmss): mỗi lần bắt đầu ghi (mở app, bấm nút, hẹn giờ) là một bộ file mới,
-// nên các lần ghi không nối vào nhau. File của thiết bị chỉ được tạo khi thiết bị có dữ liệu.
-// Sang ngày mới hoặc file vượt maxFileBytes thì mở file tiếp theo.
+//   <dir>/<phiên>/trb/MB03_TRB05[_NN].csv   mỗi TRB một file, một dòng = một bản tin giám sát (MB, TRB đếm từ 1)
+//   <dir>/<phiên>/psu/PSU2[_NN].csv         mỗi PSU một file
+//   <dir>/<phiên>/events.csv                một dòng = một sự kiện (chung)
+// <phiên> = giờ bắt đầu lần ghi (yyyy-MM-dd_HH-mm-ss): mỗi lần bắt đầu ghi (mở app, bấm nút, hẹn giờ) là một thư mục mới
+// chứa đủ log của lần đó, các lần ghi không nối vào nhau. File của thiết bị chỉ được tạo khi thiết bị có dữ liệu.
+// File vượt maxFileBytes thì mở file tiếp theo (_02, _03...) trong cùng thư mục.
 #include "../model/device_store.h"
 #include "../model/psu_store.h"
 #include "../proto/field_table.h"
@@ -46,7 +46,7 @@ signals:
     void errorOccurred(const QString &message);
 
 private:
-    struct Stream { QString folder, prefix, header; QFile file; QDate date; };
+    struct Stream { QString folder, prefix, header; QFile file; };
     bool write(Stream &s, const QByteArray &line);
     static void closeAll(std::map<int, Stream> &streams);
     static void flushAll(std::map<int, Stream> &streams);

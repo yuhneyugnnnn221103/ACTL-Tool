@@ -967,13 +967,18 @@ private slots:
         model::TrbState s;
         s.lastSeenMs = 1'700'000'000'000;
         s.values = zeros(trbmon::kNumFields);
-        const QDir day(dir.path() + "/" + QDate::currentDate().toString(Qt::ISODate));
-        auto files = [&] {
+        auto sessions = [&] {   // mỗi lần ghi một thư mục
             logger.flush();
-            return QDir(day.filePath("trb")).entryList({"MB01_TRB01_*.csv"}, QDir::Files, QDir::Name);
+            return QDir(dir.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
         };
-        auto lines = [&](const QString &name) {   // gồm dòng tiêu đề
-            QFile f(day.filePath("trb/" + name));
+        auto files = [&] {      // đường dẫn tương đối của file MB01/TRB01 ở mọi lần ghi
+            QStringList l;
+            for (const QString &d : sessions())
+                for (const QString &f : QDir(dir.path() + "/" + d + "/trb").entryList({"MB01_TRB01.csv"}, QDir::Files)) l << d + "/trb/" + f;
+            return l;
+        };
+        auto lines = [&](const QString &rel) {   // gồm dòng tiêu đề
+            QFile f(dir.path() + "/" + rel);
             return f.open(QIODevice::ReadOnly) ? f.readAll().count('\n') : 0;
         };
         auto rows = [&] { return files().isEmpty() ? 0 : lines(files().first()); };
@@ -1034,9 +1039,11 @@ private slots:
             logger.flush();
         }
 
-        const QDir day(dir.path() + "/" + QDate::currentDate().toString(Qt::ISODate));
+        const QStringList sessionDirs = QDir(dir.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+        QCOMPARE(sessionDirs.size(), 1);                          // một lần ghi = một thư mục
+        const QDir day(dir.path() + "/" + sessionDirs.first());
         QCOMPARE(QDir(day.filePath("trb")).entryList({"*.csv"}).size(), 2);   // mỗi TRB một file
-        const QStringList trbFiles = QDir(day.filePath("trb")).entryList({"MB03_TRB04_*.csv"});
+        const QStringList trbFiles = QDir(day.filePath("trb")).entryList({"MB03_TRB04*.csv"});
         QCOMPARE(trbFiles.size(), 1);
         QFile f(day.filePath("trb/" + trbFiles.first()));
         QVERIFY(f.open(QIODevice::ReadOnly));
@@ -1047,9 +1054,9 @@ private slots:
         QVERIFY(lines.at(1).contains(",3,4,"));          // mb, trb đếm từ 1 như giao diện
         QVERIFY(lines.at(1).contains(",123,"));
 
-        QCOMPARE(QDir(day.filePath("psu")).entryList({"PSU2_*.csv"}).size(), 1);
+        QCOMPARE(QDir(day.filePath("psu")).entryList({"PSU2*.csv"}).size(), 1);
 
-        const QStringList events = day.entryList({"events_*.csv"});
+        const QStringList events = day.entryList({"events*.csv"});
         QCOMPARE(events.size(), 1);
         QFile e(day.filePath(events.first()));
         QVERIFY(e.open(QIODevice::ReadOnly));
