@@ -268,6 +268,49 @@ private slots:
         QCOMPARE(quint8(w[266]), quint8(crc & 0xFF));
     }
 
+    // Nạp code: các gói đi liên tiếp, chỉ hỏi 0x88 sau gói cuối (cả broadcast lẫn gửi riêng).
+    void fpgaLoadQueriesOnlyAfterLastPacket_data()
+    {
+        QTest::addColumn<bool>("broadcast");
+        QTest::newRow("broadcast") << true;
+        QTest::newRow("unicast") << false;
+    }
+
+    void fpgaLoadQueriesOnlyAfterLastPacket()
+    {
+        QFETCH(bool, broadcast);
+        namespace fo = proto::fpgaota;
+        core::FrameRegistry registry;
+        services::FpgaOta::registerFrames(registry);
+        auto *tp = new FakeTransport;
+        core::Link link("service", tp, &registry);
+        link.start();
+        QByteArray status(40, '\0');                          // trả lời 99 99 mọi lệnh hỏi 0x88
+        status[2] = status[3] = char(0x99);
+        status[38] = char(0xE1); status[39] = char(0xE2);
+        core::seal(status, 4);
+        tp->onWrite = [&](const QByteArray &d) { if (d.size() == 269 && quint8(d[2]) == 0x88) tp->injectLater(status); };
+
+        services::FpgaOta ota(&link);
+        ota.setNodes({{0, 0}, {0, 1}});
+        ota.checkOnline();
+        QTRY_VERIFY(!ota.busy());
+        QCOMPARE(ota.nodes().size(), 2);
+
+        services::FpgaOta::Options o;
+        o.broadcast = broadcast;
+        o.packetGapMs = 0;
+        tp->written.clear();
+        ota.load(QByteArray(256 * 3 - 10, 'x'), o);              // 3 gói
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
+
+        QList<quint8> cmds;                                      // chuỗi lệnh đã gửi
+        for (const QByteArray &d : tp->written) cmds << quint8(d[2]);
+        const int loads = broadcast ? 3 : 6;                     // gửi riêng: 3 gói x 2 TRB
+        QCOMPARE(cmds.mid(0, loads), QList<quint8>(loads, 0x55));   // toàn bộ gói đi trước, không xen lệnh hỏi
+        QCOMPARE(cmds.mid(loads), (QList<quint8>{0x88, 0x88}));     // rồi mới hỏi từng TRB
+    }
+
     void allFramesCanBeRegistered()
     {
         core::FrameRegistry registry;

@@ -144,11 +144,12 @@ void FpgaOta::load(const QByteArray &firmware, const Options &options)
     loadPacket();
 }
 
+// Gửi liên tục từng gói, chỉ nghỉ packetGapMs giữa các gói; không hỏi trạng thái giữa chừng.
+// Lỗi ghi flash chỉ được phát hiện ở lượt hỏi 0x88 sau gói cuối.
 void FpgaOta::loadPacket()
 {
     emit progress(m_packet, m_totalPackets);
     if (m_packet >= m_totalPackets) {
-        // Hết gói: hỏi lại mọi TRB một lượt để lấy mã lỗi ghi flash.
         m_phase = Phase::PostCheck;
         emit phaseChanged(QStringLiteral("Hỏi trạng thái sau khi nạp"));
         m_node = -1;
@@ -156,35 +157,19 @@ void FpgaOta::loadPacket()
         return;
     }
     if (m_packet == 0) emit phaseChanged(QStringLiteral("Đang nạp %1 gói").arg(m_totalPackets));
+    m_phase = Phase::Load;
+    const QByteArray chunk = m_firmware.mid(m_packet * fpgaota::kChunk, fpgaota::kChunk);
     if (m_opt.broadcast) {
-        m_phase = Phase::LoadBroadcast;
-        send(fpgaota::buildLoad(kBroadcast, kBroadcast, quint16(m_packet), m_firmware.mid(m_packet * fpgaota::kChunk, fpgaota::kChunk)),
-             m_opt.packetGapMs, true);
-    } else {
-        m_phase = Phase::LoadNode;
-        m_node = -1;
-        loadNextNode();
-    }
-}
-
-void FpgaOta::sendPacketTo(const Node &n)
-{
-    send(fpgaota::buildLoad(n.dev.first, n.dev.second, quint16(m_packet), m_firmware.mid(m_packet * fpgaota::kChunk, fpgaota::kChunk)),
-         m_opt.packetGapMs, false);
-}
-
-// Xử lý gói hiện tại cho thiết bị kế tiếp: (gửi riêng nếu không broadcast) rồi hỏi trạng thái.
-void FpgaOta::loadNextNode()
-{
-    if (!nextNode(true)) {
-        if (countUsable() == 0) { finish(QStringLiteral("Mọi TRB đều lỗi, dừng nạp ở gói %1").arg(m_packet)); return; }
-        ++m_packet;
-        loadPacket();
+        send(fpgaota::buildLoad(kBroadcast, kBroadcast, quint16(m_packet), chunk), m_opt.packetGapMs, true);
         return;
     }
-    m_tries = 0;
-    if (!m_opt.broadcast) sendPacketTo(m_nodes.at(m_node));
-    query();
+    int last = -1;                                   // gửi riêng: cùng một gói lần lượt tới từng TRB còn dùng được
+    for (int i = 0; i < m_nodes.size(); ++i) if (usable(m_nodes.at(i))) last = i;
+    for (int i = 0; i < m_nodes.size(); ++i) {
+        const Node &n = m_nodes.at(i);
+        if (!usable(n)) continue;
+        send(fpgaota::buildLoad(n.dev.first, n.dev.second, quint16(m_packet), chunk), m_opt.packetGapMs, i == last);
+    }
 }
 
 // ---- Bước 4: boot ----
@@ -223,7 +208,7 @@ void FpgaOta::onRequestFinished(quint64 id, bool ok, const core::Frame &reply)
     if (m_cancel) { finish(QStringLiteral("Đã hủy")); return; }
 
     fpgaota::Status st;
-    if (ok && m_phase != Phase::LoadBroadcast) {
+    if (ok && m_phase != Phase::Load) {
         st = fpgaota::parseStatus(reply.raw);
         m_nodes[m_node].status = st;
     }
@@ -238,19 +223,9 @@ void FpgaOta::onRequestFinished(quint64 id, bool ok, const core::Frame &reply)
         finish(QStringLiteral("%1 / %2 TRB trực tuyến").arg(countUsable()).arg(m_nodes.size()));
         break;
 
-    case Phase::LoadBroadcast:
-        if (m_opt.perPacketCheck) { m_phase = Phase::LoadNode; m_node = -1; loadNextNode(); }
-        else { ++m_packet; loadPacket(); }
-        break;
-
-    case Phase::LoadNode:
-        if (ok && (st.code & (fpgaota::ErrFlashWrite | fpgaota::ErrFlashErase))) {
-            failNode(QStringLiteral("Gói %1: %2").arg(m_packet).arg(fpgaota::errorText(st.code)));
-        } else if (!ok || (st.code & fpgaota::ErrUartFrame)) {
-            if (++m_tries <= kMaxTries) { sendPacketTo(m_nodes.at(m_node)); query(); break; } // gửi lại riêng cho TRB này
-            failNode(QStringLiteral("Gói %1 lỗi sau %2 lần gửi lại").arg(m_packet).arg(kMaxTries));
-        }
-        loadNextNode();
+    case Phase::Load:
+        ++m_packet;
+        loadPacket();
         break;
 
     case Phase::PostCheck:

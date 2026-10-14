@@ -108,10 +108,8 @@ QWidget *FirmwarePage::buildFpgaTab()
     });
 
     m_fpgaBroadcast = new QRadioButton(QStringLiteral("Broadcast: nạp cho MỌI TRB trong hệ thống"));
-    auto *unicast = new QRadioButton(QStringLiteral("Gửi riêng: chỉ các TRB được đánh dấu (kiểm tra từng gói)"));
+    auto *unicast = new QRadioButton(QStringLiteral("Gửi riêng: chỉ các TRB được đánh dấu"));
     m_fpgaBroadcast->setChecked(true);
-    m_fpgaPerPacket = new QCheckBox(QStringLiteral("Khi broadcast, hỏi trạng thái mọi TRB sau từng gói (rất chậm)"));
-    connect(m_fpgaBroadcast, &QRadioButton::toggled, m_fpgaPerPacket, &QCheckBox::setEnabled);
     m_fpgaEraseMin = new QSpinBox;
     m_fpgaEraseMin->setRange(0, 30);
     m_fpgaEraseMin->setValue(m_ctx.settings.fpgaEraseWaitSec / 60);
@@ -198,7 +196,6 @@ QWidget *FirmwarePage::buildFpgaTab()
     form->addRow(QStringLiteral("Bitstream"), fileRow);
     form->addRow(QStringLiteral("Chế độ"), m_fpgaBroadcast);
     form->addRow(QString(), unicast);
-    form->addRow(QString(), m_fpgaPerPacket);
     form->addRow(QStringLiteral("Chờ sau khi xóa flash"), m_fpgaEraseMin);
     form->addRow(QStringLiteral("Nghỉ giữa các gói"), m_fpgaGap);
     auto *buttons = new QHBoxLayout;
@@ -294,7 +291,6 @@ FpgaOta::Options FirmwarePage::fpgaOptions() const
 {
     FpgaOta::Options o;
     o.broadcast = m_fpgaBroadcast->isChecked();
-    o.perPacketCheck = m_fpgaPerPacket->isChecked();
     o.eraseWaitSec = m_fpgaEraseMin->value() * 60;
     o.packetGapMs = m_fpgaGap->value();
     o.bootWaitMs = m_ctx.settings.fpgaBootWaitMs;

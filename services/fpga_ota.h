@@ -8,7 +8,8 @@ namespace services {
 // Nạp bitstream cho FPGA trên TRB. Bốn bước do người dùng bấm lần lượt:
 //   1. checkOnline()   hỏi trạng thái từng TRB
 //   2. erase()         xóa flash rồi chờ
-//   3. load()          gửi các gói, hỏi lại từng TRB; nếu không lỗi thì ghi version mới (0x44) rồi đọc lại
+//   3. load()          gửi liên tục mọi gói (không hỏi giữa chừng), sau gói cuối mới hỏi 0x88 từng TRB;
+//                      nếu không lỗi thì ghi version mới (0x44) rồi đọc lại
 //   4. bootAndVerify() yêu cầu boot rồi hỏi lại từng TRB
 class FpgaOta : public QObject {
     Q_OBJECT
@@ -23,7 +24,6 @@ public:
     };
     struct Options {
         bool broadcast = true;        // true: gửi FF/FF tới MỌI TRB; false: gửi riêng cho từng TRB trong danh sách
-        bool perPacketCheck = false;  // chỉ có nghĩa khi broadcast; chế độ gửi riêng luôn kiểm tra từng gói
         int eraseWaitSec = 420;
         int packetGapMs = 5;          // nghỉ sau mỗi gói để FPGA kịp ghi flash
         int bootWaitMs = 3000;
@@ -52,7 +52,7 @@ signals:
     void finished(const QString &summary);
 
 private:
-    enum class Phase { Idle, Online, EraseWait, LoadBroadcast, LoadNode, PostCheck, WriteVersion, BootWait, Verify };
+    enum class Phase { Idle, Online, EraseWait, Load, PostCheck, WriteVersion, BootWait, Verify };
     static constexpr int kMaxTries = 3;
 
     bool usable(const Node &n) const { return n.online && !n.failed; }
@@ -62,8 +62,6 @@ private:
     void failNode(const QString &note);
     bool writeVersions();
     void loadPacket();
-    void loadNextNode();
-    void sendPacketTo(const Node &n);
     void finish(const QString &summary);
     void onRequestFinished(quint64 id, bool ok, const core::Frame &reply);
     int countUsable() const;
@@ -74,7 +72,7 @@ private:
     QByteArray m_firmware;
     Phase m_phase = Phase::Idle;
     quint64 m_waitId = 0;
-    int m_node = -1, m_packet = 0, m_totalPackets = 0, m_tries = 0, m_countdown = 0;
+    int m_node = -1, m_packet = 0, m_totalPackets = 0, m_countdown = 0;
     bool m_cancel = false, m_erased = false;
     QTimer m_timer;
 };

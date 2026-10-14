@@ -33,7 +33,6 @@ private:
 
     QTableWidget *m_fpgaTable;
     QRadioButton *m_fpgaBroadcast;
-    QCheckBox *m_fpgaPerPacket;
     QSpinBox *m_fpgaEraseMin, *m_fpgaGap;
     QLabel *m_fpgaPhase;
     QProgressBar *m_fpgaProgress;
