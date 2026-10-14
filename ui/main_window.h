@@ -34,6 +34,9 @@ private:
     QWidget *buildTopBar();
     QWidget *buildOverviewPage();
     QWidget *buildLogPanel();
+    void watchBeam();
+    void toggleBeam();
+    void showConnBox();
     void watchLink(core::Link *link, const QString &title, StatusPill *pill, QPushButton *button);
     void toggleTcp();
     void toggleSerial();
@@ -54,7 +57,13 @@ private:
     QSpinBox *m_tcpPort;
     QComboBox *m_comPort, *m_comBaud;
     QPushButton *m_tcpButton, *m_comButton;
-    StatusPill *m_tcpPill, *m_comPill;
+    StatusPill *m_tcpPill, *m_comPill, *m_beamPill, *m_sparePill;   // dải tổng quan 4 cổng (luôn hiện)
+    QWidget *m_connBox[3] = {};          // ô kết nối theo trang: giám sát (Ethernet), cấu hình (RS485), beam (Ethernet)
+    QLineEdit *m_beamAddress;
+    QSpinBox *m_beamPort;
+    QPushButton *m_beamButton;
+    core::Transport::State m_beamState = core::Transport::State::Closed;
+    QList<int> m_pageConn;               // ô kết nối của từng trang, -1 = không có
     QLabel *m_rxErrLabel;
     StatusPill *m_counterPills[5];
     core::Transport::State m_tcpState = core::Transport::State::Closed, m_comState = core::Transport::State::Closed;

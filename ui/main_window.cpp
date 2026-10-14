@@ -103,6 +103,8 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
 {
     setWindowTitle(QStringLiteral("ACTL Tool"));
     // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
+    // Ô kết nối hiện theo trang: 0 giám sát (Ethernet), 1 cấu hình/nạp code (RS485), 2 beam (Ethernet), -1 không có.
+    m_pageConn = {0, 0, 1, 0, 1, 1, 2, -1};
     m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogBeam, LogSystem};
 
     // Điều hướng trái + các trang.
@@ -198,6 +200,8 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     layout->addWidget(buildTopBar());
     layout->addWidget(split, 1);
     setCentralWidget(central);
+    connect(m_nav, &QListWidget::currentRowChanged, this, [this] { showConnBox(); });
+    showConnBox();   // thanh trên cùng đã dựng xong
 
     connect(m_store, &model::DeviceStore::trbStatusChanged, this,
             [this](int mb, int trb, Status from, Status to) {
@@ -211,6 +215,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
 
     watchLink(ctx.monitorLink, QStringLiteral("Giám sát (TCP)"), m_tcpPill, m_tcpButton);
     watchLink(ctx.serviceLink, QStringLiteral("Cấu hình (RS485)"), m_comPill, m_comButton);
+    watchBeam();
     connect(ctx.monitorLink, &core::Link::rxErrorsChanged, this, [this](quint64 crc, quint64 dropped) {
         m_rxErrLabel->setText(QStringLiteral("Lỗi CRC: %1 · Byte bỏ qua: %2").arg(crc).arg(dropped));
     });
@@ -228,7 +233,16 @@ QWidget *MainWindow::buildTopBar()
     auto *l = new QHBoxLayout(bar);
     l->setContentsMargins(0, 0, 0, 0);
 
-    // Đường giám sát: PC là TCP client, nối tới Gateway (TCP server).
+    auto box = [&](int index) {          // mỗi đường một ô; chỉ ô của trang đang mở được hiện
+        auto *w = new QWidget;
+        auto *bl = new QHBoxLayout(w);
+        bl->setContentsMargins(0, 0, 0, 0);
+        m_connBox[index] = w;
+        l->addWidget(w);
+        return bl;
+    };
+
+    // Giám sát (Tổng quan, Chi tiết TRB, PSU): PC là TCP client, nối tới Gateway (TCP server).
     m_tcpAddress = new QLineEdit(cfg.monitorAddress);
     m_tcpAddress->setFixedWidth(120);
     m_tcpAddress->setToolTip(QStringLiteral("Địa chỉ IP của Gateway (cùng dải mạng với PC, ví dụ 192.168.1.10)"));
@@ -237,17 +251,23 @@ QWidget *MainWindow::buildTopBar()
     m_tcpPort->setRange(1, 65535);
     m_tcpPort->setValue(cfg.monitorPort);
     m_tcpButton = new QPushButton;
-    m_tcpPill = new StatusPill;
     connect(m_tcpButton, &QPushButton::clicked, this, &MainWindow::toggleTcp);
-    l->addWidget(m_tcpPill);
-    if (m_ctx.tcp) {
-        l->addWidget(m_tcpAddress);
-        l->addWidget(m_tcpPort);
-        l->addWidget(m_tcpButton);
+    m_rxErrLabel = new QLabel(QStringLiteral("Lỗi CRC: 0 · Byte bỏ qua: 0"));
+    {
+        auto *bl = box(0);
+        bl->addWidget(new QLabel(QStringLiteral("Giám sát (Ethernet):")));
+        if (m_ctx.tcp) {
+            bl->addWidget(m_tcpAddress);
+            bl->addWidget(m_tcpPort);
+            bl->addWidget(m_tcpButton);
+        } else {
+            bl->addWidget(new QLabel(QStringLiteral("đang phát lại file hex")));
+        }
+        bl->addSpacing(8);
+        bl->addWidget(m_rxErrLabel);
     }
-    l->addSpacing(16);
 
-    // Đường cấu hình/nạp code: cổng COM (RS485).
+    // Cấu hình và nạp code: cổng COM (RS485).
     m_comPort = new QComboBox;
     m_comPort->setMinimumWidth(90);
     m_comBaud = new QComboBox;
@@ -259,25 +279,93 @@ QWidget *MainWindow::buildTopBar()
     theme::setRole(rescan, "secondary");
     rescan->setToolTip(QStringLiteral("Quét lại cổng COM"));
     m_comButton = new QPushButton;
-    m_comPill = new StatusPill;
     connect(rescan, &QPushButton::clicked, this, &MainWindow::refreshPorts);
     connect(m_comButton, &QPushButton::clicked, this, &MainWindow::toggleSerial);
     refreshPorts();
-    l->addWidget(m_comPill);
-    l->addWidget(m_comPort);
-    l->addWidget(rescan);
-    l->addWidget(m_comBaud);
-    l->addWidget(m_comButton);
-    l->addSpacing(16);
+    {
+        auto *bl = box(1);
+        bl->addWidget(new QLabel(QStringLiteral("Cấu hình / nạp code (RS485):")));
+        bl->addWidget(m_comPort);
+        bl->addWidget(rescan);
+        bl->addWidget(m_comBaud);
+        bl->addWidget(m_comButton);
+    }
 
-    m_rxErrLabel = new QLabel(QStringLiteral("Lỗi CRC: 0 · Byte bỏ qua: 0"));
-    l->addWidget(m_rxErrLabel);
+    // Beam Ethernet: PC là TCP client, nối tới thiết bị beam.
+    m_beamAddress = new QLineEdit(cfg.beamAddress);
+    m_beamAddress->setFixedWidth(120);
+    m_beamAddress->setPlaceholderText(QStringLiteral("IP thiết bị beam"));
+    m_beamPort = new QSpinBox;
+    m_beamPort->setRange(1, 65535);
+    m_beamPort->setValue(cfg.beamPort);
+    m_beamButton = new QPushButton;
+    connect(m_beamButton, &QPushButton::clicked, this, &MainWindow::toggleBeam);
+    {
+        auto *bl = box(2);
+        bl->addWidget(new QLabel(QStringLiteral("Beam (Ethernet):")));
+        bl->addWidget(m_beamAddress);
+        bl->addWidget(m_beamPort);
+        bl->addWidget(m_beamButton);
+    }
     l->addStretch(1);
+
     for (StatusPill *&pill : m_counterPills) {
         pill = new StatusPill;
         l->addWidget(pill);
     }
+
+    // Dải tổng quan các cổng (luôn hiện): 2 Ethernet + 2 RS485. Rê chuột để xem chi tiết.
+    l->addSpacing(12);
+    m_tcpPill = new StatusPill;
+    m_beamPill = new StatusPill;
+    m_comPill = new StatusPill;
+    m_sparePill = new StatusPill;
+    m_sparePill->setPill(theme::statusMark(Status::NoData) + QStringLiteral("RS485 #2"), theme::statusColor(Status::NoData), theme::statusTextColor(Status::NoData));
+    m_sparePill->setToolTip(QStringLiteral("RS485 #2: dành cho chức năng chưa bổ sung"));
+    for (StatusPill *p : {m_tcpPill, m_beamPill, m_comPill, m_sparePill}) l->addWidget(p);
     return bar;
+}
+
+// Hiện đúng ô kết nối của trang đang mở.
+void MainWindow::showConnBox()
+{
+    const int page = m_nav ? m_nav->currentRow() : 0;
+    const int which = page >= 0 && page < m_pageConn.size() ? m_pageConn.at(page) : -1;
+    for (int i = 0; i < 3; ++i) m_connBox[i]->setVisible(i == which);
+}
+
+// Đường beam Ethernet: trạng thái trên dải tổng quan, nút, sự kiện.
+void MainWindow::watchBeam()
+{
+    using S = core::Transport::State;
+    auto show = [this](S s) {
+        m_beamState = s;
+        const QString state = s == S::Connected ? QStringLiteral("đã kết nối") : s == S::Waiting ? QStringLiteral("đang nối thiết bị") : QStringLiteral("đóng");
+        const Status look = s == S::Connected ? Status::Ok : s == S::Waiting ? Status::Warning : Status::Lost;
+        m_beamPill->setPill(theme::statusMark(look) + QStringLiteral(" Beam (ETH)"), theme::statusColor(look), theme::statusTextColor(look));
+        m_beamPill->setToolTip(QStringLiteral("Beam (Ethernet): ") + state);
+        m_beamButton->setText(s == S::Closed ? QStringLiteral("Kết nối") : QStringLiteral("Ngắt"));
+        m_beamAddress->setEnabled(s == S::Closed);
+        m_beamPort->setEnabled(s == S::Closed);
+        return QStringLiteral("Beam (Ethernet): ") + state;
+    };
+    show(S::Closed);
+    connect(m_ctx.beamLink, &core::Link::stateChanged, this, [=](S s) { logEvent(tagged(EventKind::Net, show(s)), LogBeam); });
+    connect(m_ctx.beamLink, &core::Link::errorOccurred, this,
+            [=](const QString &m) { logEvent(tagged(EventKind::Err, QStringLiteral("Lỗi Beam (Ethernet): %1").arg(m)), LogBeam); });
+}
+
+void MainWindow::toggleBeam()
+{
+    core::Link *link = m_ctx.beamLink;
+    if (m_beamState != core::Transport::State::Closed) { QMetaObject::invokeMethod(link, &core::Link::stop); return; }
+    const QString host = m_beamAddress->text().trimmed();
+    if (host.isEmpty()) { logEvent(tagged(EventKind::Err, QStringLiteral("Chưa nhập địa chỉ IP của thiết bị beam")), LogBeam); return; }
+    const quint16 port = quint16(m_beamPort->value());
+    Settings::save("beam/address", host);
+    Settings::save("beam/port", port);
+    core::TcpClientTransport *t = m_ctx.beamTcp;
+    QMetaObject::invokeMethod(link, [=] { t->configure(host, port); link->start(); });
 }
 
 // Theo dõi một link: nhãn trạng thái, chữ trên nút, sự kiện, hex thô.
@@ -290,8 +378,9 @@ void MainWindow::watchLink(core::Link *link, const QString &title, StatusPill *p
         const QString state = s == S::Connected ? QStringLiteral("đã kết nối")
                             : s == S::Waiting   ? (isTcp ? QStringLiteral("đang nối Gateway") : QStringLiteral("chờ")) : QStringLiteral("đóng");
         const Status look = s == S::Connected ? Status::Ok : s == S::Waiting ? Status::Warning : Status::Lost;
-        pillLabel->setPill(theme::statusMark(look) + QLatin1Char(' ') + title + QStringLiteral(": ") + state,
+        pillLabel->setPill(theme::statusMark(look) + QLatin1Char(' ') + (isTcp ? QStringLiteral("Giám sát (ETH)") : QStringLiteral("Cấu hình (485)")),
                            theme::statusColor(look), theme::statusTextColor(look));
+        pillLabel->setToolTip(title + QStringLiteral(": ") + state);
         button->setText(s == S::Closed ? (isTcp ? QStringLiteral("Kết nối") : QStringLiteral("Mở")) : (isTcp ? QStringLiteral("Ngắt") : QStringLiteral("Đóng")));
         m_tcpAddress->setEnabled(m_tcpState == S::Closed);
         m_tcpPort->setEnabled(m_tcpState == S::Closed);

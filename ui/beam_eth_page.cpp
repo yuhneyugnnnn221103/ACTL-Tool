@@ -1,6 +1,5 @@
 #include "beam_eth_page.h"
 #include "log_filter.h"
-#include "status_pill.h"
 #include "theme.h"
 #include <QButtonGroup>
 #include <QDoubleSpinBox>
@@ -33,24 +32,6 @@ QDoubleSpinBox *angleBox()
 
 BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(parent), m_ctx(ctx)
 {
-    // Kết nối: PC là TCP client, nối tới thiết bị beam.
-    m_pill = new StatusPill;
-    m_address = new QLineEdit(ctx.settings.beamAddress);
-    m_address->setFixedWidth(140);
-    m_address->setPlaceholderText(QStringLiteral("IP thiết bị beam"));
-    m_port = new QSpinBox;
-    m_port->setRange(1, 65535);
-    m_port->setValue(ctx.settings.beamPort);
-    m_connect = new QPushButton;
-    connect(m_connect, &QPushButton::clicked, this, &BeamEthPage::toggleConnection);
-    auto *conn = new QGroupBox(QStringLiteral("Kết nối Ethernet"));
-    auto *cl = new QHBoxLayout(conn);
-    cl->addWidget(m_pill);
-    cl->addWidget(m_address);
-    cl->addWidget(m_port);
-    cl->addWidget(m_connect);
-    cl->addStretch(1);
-
     // Tham số bản tin.
     m_esp = angleBox();
     m_beta = angleBox();
@@ -99,7 +80,9 @@ BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(paren
     connect(m_send, &QPushButton::clicked, this, &BeamEthPage::send);
 
     auto *l = new QVBoxLayout(this);
-    l->addWidget(conn);
+    m_hint = new QLabel(QStringLiteral("Chưa kết nối đường Beam (Ethernet): nhập IP, cổng và bấm Kết nối ở thanh trên cùng."));
+    theme::setRole(m_hint, "muted");
+    l->addWidget(m_hint);
     l->addWidget(form);
     l->addWidget(new QLabel(QStringLiteral("Bản tin sẽ gửi (hex):")));
     l->addWidget(m_preview);
@@ -110,9 +93,6 @@ BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(paren
     for (QSpinBox *b : {m_freq, m_modeValue}) connect(b, &QSpinBox::valueChanged, this, &BeamEthPage::updatePreview);
     connect(m_mode, &QButtonGroup::idClicked, this, &BeamEthPage::updatePreview);
     connect(ctx.beamLink, &core::Link::stateChanged, this, &BeamEthPage::showState);
-    connect(ctx.beamLink, &core::Link::errorOccurred, this, [this](const QString &m) {
-        emit logEvent(tagged(EventKind::Err, QStringLiteral("Lỗi Beam Ethernet: %1").arg(m)));
-    });
     showState(State::Closed);
     updatePreview();
 }
@@ -136,29 +116,8 @@ void BeamEthPage::updatePreview()
 
 void BeamEthPage::showState(State s)
 {
-    m_state = s;
-    const model::Status look = s == State::Connected ? model::Status::Ok : s == State::Waiting ? model::Status::Warning : model::Status::Lost;
-    const QString text = s == State::Connected ? QStringLiteral("đã kết nối") : s == State::Waiting ? QStringLiteral("đang nối thiết bị") : QStringLiteral("đóng");
-    m_pill->setPill(theme::statusMark(look) + QLatin1Char(' ') + QStringLiteral("Beam (Ethernet): ") + text,
-                    theme::statusColor(look), theme::statusTextColor(look));
-    m_connect->setText(s == State::Closed ? QStringLiteral("Kết nối") : QStringLiteral("Ngắt"));
-    m_address->setEnabled(s == State::Closed);
-    m_port->setEnabled(s == State::Closed);
     m_send->setEnabled(s == State::Connected);
-    emit logEvent(tagged(EventKind::Net, QStringLiteral("Beam (Ethernet): ") + text));
-}
-
-void BeamEthPage::toggleConnection()
-{
-    core::Link *link = m_ctx.beamLink;
-    if (m_state != State::Closed) { QMetaObject::invokeMethod(link, &core::Link::stop); return; }
-    const QString host = m_address->text().trimmed();
-    if (host.isEmpty()) { emit logEvent(tagged(EventKind::Err, QStringLiteral("Chưa nhập địa chỉ IP của thiết bị beam"))); return; }
-    const quint16 port = quint16(m_port->value());
-    Settings::save("beam/address", host);
-    Settings::save("beam/port", port);
-    core::TcpClientTransport *t = m_ctx.beamTcp;
-    QMetaObject::invokeMethod(link, [=] { t->configure(host, port); link->start(); });
+    m_hint->setVisible(s != State::Connected);
 }
 
 void BeamEthPage::send()
