@@ -16,6 +16,7 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSpinBox>
 #include <QStandardItemModel>
 #include <QTableWidget>
@@ -27,6 +28,7 @@ using model::Status;
 
 namespace {
 const QString kDash = QStringLiteral("--");
+constexpr int kCardHeight = 32, kTableRowHeight = 28;
 
 QStringList numbered(const QString &fmt, int n)
 {
@@ -41,7 +43,8 @@ QGroupBox *ledGroup(const QString &title, const QStringList &captions, QList<Led
     auto *g = new QGroupBox(title);
     g->setProperty("compact", true);   // đệm trên/dưới nhỏ hơn thẻ thường
     auto *l = new QHBoxLayout(g);
-    l->setSpacing(theme::kSpace);
+    l->setSpacing(0);
+    l->setContentsMargins(4, 0, 4, 0);
     // Khoảng giãn bằng nhau ở hai lề và giữa các đèn: đèn cách đều, cân hai bên.
     l->addStretch(1);
     for (const QString &c : captions) {
@@ -98,7 +101,14 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     head->addWidget(m_debugPill);
 
     auto *body = new QHBoxLayout;
-    body->addWidget(buildMonitor(), 1);
+    // Cửa sổ thấp thì cuộn thay vì ép các bảng thấp lại làm mất dòng cuối.
+    auto *scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+        scroll->setWidget(buildMonitor());
+    scroll->widget()->setObjectName(QStringLiteral("monitorPane"));
+    scroll->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; } #monitorPane { background: transparent; }"));
+    body->addWidget(scroll, 1);
     body->addWidget(buildControl());
 
     auto *layout = new QVBoxLayout(this);
@@ -124,8 +134,8 @@ QTableWidget *TrbDetailPage::makeTable(const QStringList &rows, int firstField)
     t->setSelectionMode(QAbstractItemView::NoSelection);
     t->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     t->verticalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    t->verticalHeader()->setMinimumSectionSize(24);
-    t->setMinimumHeight(qMax(32, t->horizontalHeader()->sizeHint().height()) + rows.size() * 24 + 20);   // header chưa áp QSS nên lấy tối thiểu 32px
+    t->verticalHeader()->setMinimumSectionSize(kTableRowHeight);
+    t->setMinimumHeight(qMax(32, t->horizontalHeader()->sizeHint().height()) + rows.size() * kTableRowHeight + 24);   // header chưa áp QSS nên lấy tối thiểu 32px
     for (int r = 0; r < rows.size(); ++r) {
         for (int c = 0; c < trbmon::kNumTrm; ++c) {
             auto *it = new QTableWidgetItem(kDash);
@@ -161,6 +171,7 @@ QWidget *TrbDetailPage::buildMonitor()
         for (const QString &name : names) {
             auto *card = new QFrame;
             card->setProperty("card", true);
+            card->setFixedHeight(kCardHeight);   // mọi hàng thẻ số liệu cao bằng nhau
             auto *cl = new QHBoxLayout(card);
             cl->setContentsMargins(12, 2, 12, 2);
             auto *title = new QLabel(name);
@@ -185,40 +196,45 @@ QWidget *TrbDetailPage::buildMonitor()
     // Đèn trạng thái ADAR, PG, PA đặt trên cùng, to và có nhãn để nhìn là biết ngay.
     auto *leds = new QHBoxLayout;
     leds->setSpacing(theme::kSpace);
-    leds->addWidget(ledGroup(QStringLiteral("ADAR"), numbered(QStringLiteral("ADAR%1"), 8), m_ledAdar), 2);
-    leds->addWidget(ledGroup(QStringLiteral("PG"), numbered(QStringLiteral("TRM%1"), 4), m_ledPg), 1);
-    leds->addWidget(ledGroup(QStringLiteral("PA"), numbered(QStringLiteral("TRM%1"), 4), m_ledPa), 1);
+    leds->addWidget(ledGroup(QStringLiteral("ADAR"), numbered(QStringLiteral("%1"), 8), m_ledAdar), 8);
+    leds->addWidget(ledGroup(QStringLiteral("PG"), numbered(QStringLiteral("TRM%1"), 4), m_ledPg), 4);
+    leds->addWidget(ledGroup(QStringLiteral("PA"), numbered(QStringLiteral("TRM%1"), 4), m_ledPa), 4);
 
-    // INIT DATA: 6 ô tương ứng 6 bit (0 xám, 1 xanh) và tổng bản tin lỗi (bấm để xem từng loại).
+    // INIT DATA: 6 ô tương ứng 6 bit (0 xám, 1 xanh), cùng hàng với ADAR, PG, PA.
     QStringList initNames;
     for (const trbmon::InitBit &b : trbmon::kInitBits) initNames << QString::fromLatin1(b.name);
-    auto *init = ledGroup(QStringLiteral("INIT DATA"), initNames, m_ledInit);
-    auto *errors = new QGroupBox(QStringLiteral("Bản tin lỗi"));
-    errors->setProperty("compact", true);
-    auto *errLayout = new QHBoxLayout(errors);
+    leds->addWidget(ledGroup(QStringLiteral("INIT DATA"), initNames, m_ledInit), 6);
+
+    // Bản tin lỗi: một mục nhỏ căn phải phía trên thẻ PA; bấm để xem số bản tin từng loại.
+    auto *errRow = new QHBoxLayout;
+    errRow->addStretch(1);
+    auto *errLabel = new QLabel(QStringLiteral("Bản tin lỗi"));
+    theme::setRole(errLabel, "title");
     m_errButton = new QPushButton(kDash);
     theme::setRole(m_errButton, "secondary");
+    m_errButton->setFixedHeight(26);
     m_errButton->setToolTip(QStringLiteral("Tổng số bản tin lỗi (cộng %1 loại). Bấm để xem số bản tin từng loại.").arg(trbmon::kNumErr));
     connect(m_errButton, &QPushButton::clicked, this, &TrbDetailPage::showErrors);
-    errLayout->addWidget(m_errButton);
-    auto *leds2 = new QHBoxLayout;
-    leds2->setSpacing(theme::kSpace);
-    leds2->addWidget(init, 3);
-    leds2->addWidget(errors, 1);
+    errRow->addWidget(errLabel);
+    errRow->addWidget(m_errButton);
 
-    // Hàng "Trạng thái" riêng: hiện chuỗi text (hiện là mã thô State của 4 TRM, sau này parse thành chữ).
-    auto *state = new QGroupBox(QStringLiteral("Trạng thái"));
-    state->setProperty("compact", true);
+    // Hàng "Trạng thái": một thẻ thấp, các nhãn TRM xếp sát nhau từ trái (hiện là mã thô State, sau này parse thành chữ).
+    auto *state = new QFrame;
+    state->setProperty("card", true);
+    state->setFixedHeight(kCardHeight);
     auto *stateLayout = new QHBoxLayout(state);
-    // Khoảng giãn bằng nhau ở hai lề và giữa 4 nhãn TRM: nhãn cách đều, cân hai bên.
-    stateLayout->addStretch(1);
+    stateLayout->setContentsMargins(12, 2, 12, 2);
+    stateLayout->setSpacing(24);
+    auto *stateTitle = new QLabel(QStringLiteral("Trạng thái"));
+    theme::setRole(stateTitle, "title");
+    stateLayout->addWidget(stateTitle);
     for (int i = 0; i < trbmon::kNumTrm; ++i) {
         auto *label = new QLabel(kDash);
         label->setTextInteractionFlags(Qt::TextSelectableByMouse);
         m_stateLabels << label;
         stateLayout->addWidget(label);
-        stateLayout->addStretch(1);
     }
+    stateLayout->addStretch(1);
 
     // Mỗi trip code là một byte, hiện thành 8 ô bit (bit 0 ... bit 7, LSB ở trái), bit 1 tô đỏ.
     auto *trip = new QGroupBox(QStringLiteral("Trip code"));
@@ -237,8 +253,8 @@ QWidget *TrbDetailPage::buildMonitor()
     auto *l = new QVBoxLayout(w);
     l->setContentsMargins(0, 0, 0, 0);
     l->setSpacing(theme::kSpace);
+    l->addLayout(errRow);
     l->addLayout(leds);
-    l->addLayout(leds2);
     l->addLayout(tables, 1);
     l->addLayout(metrics);
     l->addLayout(pulses);
