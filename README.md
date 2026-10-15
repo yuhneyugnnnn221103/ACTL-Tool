@@ -87,19 +87,6 @@ Các file nằm cạnh file chạy và được tạo ở lần chạy đầu.
 
 Các khóa hay dùng trong `actl_tool.ini`:
 
-| Khóa | Mặc định | Ý nghĩa |
-|---|---|---|
-| `monitor/gatewayAddress`, `monitor/gatewayPort` | `192.168.1.10`, `5000` | Địa chỉ IP và cổng TCP của Gateway (Gateway là server, app là client) |
-| `monitor/replayFile` | rỗng | Phát lại file hex thay cho TCP để thử không cần phần cứng |
-| `service/port`, `service/baud` | rỗng, `1000000` | Cổng COM RS485 |
-| `system/staleMs` | `3000` | Quá thời gian này không có bản tin thì coi là mất kết nối |
-| `trb/checkCrc` | `true` | Kiểm tra CRC bản tin giám sát và cấu hình TRB |
-| `log/autoStart` | `true` | `false`: mở app ở trạng thái chưa ghi log, bấm "Bắt đầu ghi" hoặc hẹn giờ mới ghi |
-| `log/minIntervalMs`, `log/maxFileMb` | `0`, `100` | Khoảng ms tối thiểu giữa hai dòng log của một thiết bị (0 = ghi mọi bản tin) và cỡ file log tối đa (MB) |
-| `fpgaOta/eraseWaitSec` | `420` | Thời gian chờ sau khi xóa flash FPGA |
-| `psu/firstAddr`, `psu/count` | `1`, `5` | Dải địa chỉ PSU |
-| `psu/checkCrc` | `true` | Kiểm tra CRC bản tin giám sát và cấu hình PSU |
-| `auth/lockMinutes` | `10` | Tự khóa chế độ kỹ sư sau thời gian không thao tác |
 
 ## Giả lập bản tin để thử giao diện
 
@@ -142,33 +129,6 @@ Mở rộng:
 - **Thêm cổng**: tạo một transport và một `Link` trong `app/main.cpp`.
 - **Thêm chức năng**: viết một service, đăng ký các CMD nhận của nó vào `FrameRegistry`, thêm một trang trong `ui/`.
 - **Thêm trường vào bản tin**: thêm một dòng trong bảng trường ở `proto/`.
-
-## Khung bản tin
-
-PSU: giám sát (`81`) và điều khiển (`01`) đi qua TCP như TRB; cấu hình (`03`, `04`, `82`) đi qua RS485. PC không phát bản tin hỏi giám sát `02`. Khi ghi cấu hình, Config Mask luôn gửi `FFFF`.
-
-Mọi bản tin có dạng `AB CD | CMD | địa chỉ | dữ liệu | CRC16 | E1 E2`, độ dài cố định theo CMD, CRC16-CCITT-FALSE, số nhiều byte theo big-endian.
-
-| Bản tin | CMD | Độ dài | CRC tính từ byte |
-|---|---|---|---|
-| Giám sát TRB | `11 11` | 310 | 4 |
-| Điều khiển TRB | `A2 A2` | 14 | 4 |
-| Beam TRB | `14 14` | 17 | 4 |
-| Ghi cấu hình TRB | `A1 A1` | 520 | 4 |
-| Hỏi / trả lời cấu hình TRB | `A3 A3` / `A4 A4` | 10 / 520 | 4 |
-| Beam Ethernet (đường riêng, chỉ gửi) | `AB CD` (không CMD) | 14 | 2 (đuôi `EF FF`) |
-| Nạp FPGA: nạp, xóa, hỏi, boot | `55`, `66`, `88`, `AA` (lặp 2 byte) | 269 | 4 |
-| Trạng thái nạp FPGA (kèm version 4 byte sau WBSTAR) | `99 99` | 40 | 4 |
-| Ghi version code cho TRB (không có trả lời) | `44 44` | 269 | 4 |
-| Nạp STM32: BEGIN, DATA, END, COMMIT, INFO | `90 90`, `91 91`, `92 92`, `93 93`, `95 95` | 21, 269, 9, 9, 9 | 2 |
-| Điều khiển PSU | `01 01` | 13 | 2 |
-| Hỏi cấu hình PSU | `03 03` | 13 | 2 |
-| Ghi cấu hình PSU | `04 04` | 915 | 2 |
-| Giám sát PSU | `81 81` | 266 | 2 |
-| Trả lời cấu hình PSU | `82 82` | 915 | 2 |
-| ACK nạp STM32 | `94 94` | 17 | 2 |
-
-Mọi CMD đều 2 byte, mã lặp hai lần (`11 11`, `A1 A1`, `81 81`...). Bản tin TRB dùng địa chỉ 2 byte (MB, TRB) và CRC từ byte địa chỉ; bản tin PSU và nạp STM32 dùng địa chỉ 1 byte và CRC từ byte CMD. Trong ACK nạp STM32, trường `ack_cmd` vẫn là mã 1 byte (ví dụ `92`). `FrameRegistry` vẫn hỗ trợ CMD 1 byte nhưng từ chối đăng ký nếu một CMD 1 byte trùng byte đầu của một CMD 2 byte.
 
 ## Kết nối mạng với Gateway
 
