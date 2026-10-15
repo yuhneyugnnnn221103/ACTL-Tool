@@ -47,7 +47,14 @@ static FieldTable build()
     return t;
 }
 
-QString errName(int i) { return QStringLiteral("Loại lỗi %1").arg(i + 1); }
+QString errName(int i)
+{
+    static const char *const kNames[kNumErr] = {
+        "Bản tin Beam", "Bản tin Calib PG", "Bản tin Config ADAR", "Bản tin ghi LUT", "Bản tin Control", "Bản tin tra LUT",
+        "Bản tin dịch pha/biên", "Bản tin ghi calib toàn mảng", "Bản tin kiểm tra calib toàn mảng", "Bản tin ghi config",
+        "Bản tin hỏi cấu hình", "Bản tin hỏi giám sát"};
+    return i >= 0 && i < kNumErr ? QString::fromUtf8(kNames[i]) : QStringLiteral("Loại lỗi %1").arg(i + 1);
+}
 
 namespace {
 // Trip i (0..15) -> {loại, chỉ số trong loại}. Loại: 0 I_SEN, 1 PA, 2 system, -1 dự phòng.

@@ -104,7 +104,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     : QMainWindow(parent), m_ctx(ctx), m_store(ctx.store)
 {
     setWindowTitle(QStringLiteral("ACTL Tool"));
-    setMinimumSize(1000, 560);   // đặt sẵn để layout không tự nới cửa sổ quá màn hình; trang nào lớn hơn thì cuộn
+    setMinimumSize(1100, 560);   // đặt sẵn để layout không tự nới cửa sổ quá màn hình; trang nào lớn hơn thì cuộn
     // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
     // Ô kết nối hiện theo trang: 0 giám sát (Ethernet), 1 cấu hình/nạp code (RS485), 2 beam (Ethernet), -1 không có.
     m_pageConn = {0, 0, 1, 0, 1, 1, 2, -1};
@@ -229,7 +229,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     watchLink(ctx.serviceLink, QStringLiteral("Cấu hình (RS485)"), m_comPill, m_comButton);
     watchBeam();
     connect(ctx.monitorLink, &core::Link::rxErrorsChanged, this, [this](quint64 crc, quint64 dropped) {
-        m_rxErrLabel->setText(QStringLiteral("Lỗi CRC: %1 · Byte bỏ qua: %2").arg(crc).arg(dropped));
+        m_rxErrText = QStringLiteral("Lỗi CRC: %1 · Byte bỏ qua: %2").arg(crc).arg(dropped);
     });
 
     auto *timer = new QTimer(this);
@@ -242,13 +242,14 @@ QWidget *MainWindow::buildTopBar()
 {
     const Settings &cfg = m_ctx.settings;
     auto *bar = new QWidget;
-    auto *rows = new QVBoxLayout(bar);       // hai hàng để thanh trên cùng không rộng quá màn hình
-    rows->setContentsMargins(0, 0, 0, 0);
-    rows->setSpacing(theme::kSpace);
-    auto *l = new QHBoxLayout;               // hàng 1: kết nối của trang đang mở + dải tổng quan cổng
-    auto *l2 = new QHBoxLayout;              // hàng 2: bộ đếm trạng thái + lỗi CRC
-    rows->addLayout(l);
-    rows->addLayout(l2);
+    auto *l = new QHBoxLayout(bar);          // một hàng: thẻ đường kết nối, ô kết nối của trang, bộ đếm trạng thái
+    l->setContentsMargins(0, 0, 0, 0);
+
+    // Thẻ cho đường của trang đang mở nằm đầu hàng, bên trái ô kết nối; bấm thì thả ra trạng thái đủ 4 đường (2 Ethernet + 2 RS485).
+    m_connPill = new StatusPill;
+    m_connPill->setClickable(true);
+    l->addWidget(m_connPill);
+    connect(m_connPill, &StatusPill::clicked, this, &MainWindow::showConnPopup);
 
     auto box = [&](int index) {          // mỗi đường một ô; chỉ ô của trang đang mở được hiện
         auto *w = new QWidget;
@@ -269,10 +270,8 @@ QWidget *MainWindow::buildTopBar()
     m_tcpPort->setValue(cfg.monitorPort);
     m_tcpButton = new QPushButton;
     connect(m_tcpButton, &QPushButton::clicked, this, &MainWindow::toggleTcp);
-    m_rxErrLabel = new QLabel(QStringLiteral("Lỗi CRC: 0 · Byte bỏ qua: 0"));
     {
         auto *bl = box(0);
-        bl->addWidget(new QLabel(QStringLiteral("Giám sát (Ethernet):")));
         if (m_ctx.tcp) {
             bl->addWidget(m_tcpAddress);
             bl->addWidget(m_tcpPort);
@@ -299,7 +298,6 @@ QWidget *MainWindow::buildTopBar()
     refreshPorts();
     {
         auto *bl = box(1);
-        bl->addWidget(new QLabel(QStringLiteral("Cấu hình / nạp code (RS485):")));
         bl->addWidget(m_comPort);
         bl->addWidget(rescan);
         bl->addWidget(m_comBaud);
@@ -317,7 +315,6 @@ QWidget *MainWindow::buildTopBar()
     connect(m_beamButton, &QPushButton::clicked, this, &MainWindow::toggleBeam);
     {
         auto *bl = box(2);
-        bl->addWidget(new QLabel(QStringLiteral("Beam (Ethernet):")));
         bl->addWidget(m_beamAddress);
         bl->addWidget(m_beamPort);
         bl->addWidget(m_beamButton);
@@ -326,17 +323,10 @@ QWidget *MainWindow::buildTopBar()
 
     for (StatusPill *&pill : m_counterPills) {
         pill = new StatusPill;
-        l2->addWidget(pill);
+        l->addWidget(pill);
     }
-    l2->addStretch(1);
-    l2->addWidget(m_rxErrLabel);
 
-    // Một thẻ cho đường của trang đang mở; bấm thì thả ra trạng thái đủ 4 đường (2 Ethernet + 2 RS485).
-    l->addSpacing(12);
-    m_connPill = new StatusPill;
-    m_connPill->setClickable(true);
-    l->addWidget(m_connPill);
-    connect(m_connPill, &StatusPill::clicked, this, &MainWindow::showConnPopup);
+    // Cửa sổ thả: trạng thái đủ 4 đường.
 
     m_connPopup = new QFrame(this, Qt::Popup);
     m_connPopup->setFrameShape(QFrame::StyledPanel);
@@ -376,7 +366,7 @@ void MainWindow::syncConnPill()
         m_connPill->setToolTip(QStringLiteral("Bấm để xem đủ các đường kết nối"));
     }
     StatusPill *order[] = {m_tcpPill, m_beamPill, m_comPill, m_sparePill};
-    for (int i = 0; i < m_connDetail.size(); ++i) m_connDetail[i]->setText(order[i]->toolTip());
+    for (int i = 0; i < m_connDetail.size(); ++i) m_connDetail[i]->setText(order[i]->toolTip() + (i == 0 && m_ctx.tcp ? QStringLiteral(" · ") + m_rxErrText : QString()));
 }
 
 void MainWindow::showConnPopup()

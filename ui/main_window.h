@@ -70,7 +70,7 @@ private:
     QPushButton *m_beamButton;
     core::Transport::State m_beamState = core::Transport::State::Closed;
     QList<int> m_pageConn;               // ô kết nối của từng trang, -1 = không có
-    QLabel *m_rxErrLabel;
+    QString m_rxErrText = QStringLiteral("Lỗi CRC: 0 · Byte bỏ qua: 0");   // hiện trong cửa sổ thả của thẻ kết nối
     StatusPill *m_counterPills[5];
     core::Transport::State m_tcpState = core::Transport::State::Closed, m_comState = core::Transport::State::Closed;
 

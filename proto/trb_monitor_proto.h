@@ -29,7 +29,7 @@ constexpr int kNumFields = kIdxPulseBeamsync + 1;
 struct InitBit { int bit; const char *name; };
 constexpr InitBit kInitBits[] = {{0, "eMMC Init"}, {1, "DDR3 Calib"}, {2, "eMMC Config"}, {4, "Array Calib"}, {5, "Amp Calib"}, {6, "LUT"}};
 constexpr int kNumInitBits = 6;
-QString errName(int i);                  // tên loại bản tin lỗi i (0..11); chưa có tên thì "Loại lỗi i+1"
+QString errName(int i);                  // tên loại bản tin lỗi i (0..11): Beam, Calib PG, Config ADAR, ghi LUT, Control, tra LUT, dịch pha/biên, ghi/kiểm tra calib toàn mảng, ghi config, hỏi cấu hình, hỏi giám sát
 
 // PG (Power Good): bit i = TRM(i+1), 1 = nguồn tốt. Bit 0 trong 4 bit thấp là lỗi và được coi như một trip.
 constexpr int kPgMask = 0x0F;

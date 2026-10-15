@@ -87,13 +87,6 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     }
     m_debugPill = new StatusPill;
     m_debugPill->hide();
-    // Bản tin lỗi: nằm cùng hàng với ô chọn MB/TRB và trạng thái, căn phải; bấm để xem số bản tin từng loại.
-    auto *errLabel = new QLabel(QStringLiteral("Bản tin lỗi"));
-    theme::setRole(errLabel, "title");
-    m_errButton = new QPushButton(kDash);
-    theme::setRole(m_errButton, "secondary");
-    m_errButton->setToolTip(QStringLiteral("Tổng số bản tin lỗi (cộng %1 loại). Bấm để xem số bản tin từng loại.").arg(trbmon::kNumErr));
-    connect(m_errButton, &QPushButton::clicked, this, &TrbDetailPage::showErrors);
     m_status = new QLabel;
     theme::setRole(m_status, "muted");
 
@@ -105,8 +98,6 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     head->addSpacing(12);
     head->addLayout(pillBox);
     head->addWidget(m_status, 1);
-    head->addWidget(errLabel);
-    head->addWidget(m_errButton);
     head->addWidget(m_debugPill);
 
     auto *body = new QHBoxLayout;
@@ -204,6 +195,19 @@ QWidget *TrbDetailPage::buildMonitor()
     pulses->addWidget(makeCard(QStringLiteral("Period BEAMSYNC"), m_rawMetrics), 1, 0);
     pulses->addWidget(makeCard(QStringLiteral("Pulse BEAMSYNC"), m_rawMetrics), 1, 1);
 
+    // Bản tin lỗi: một mục nhỏ căn phải phía trên thẻ PA; bấm để xem số bản tin từng loại.
+    auto *errRow = new QHBoxLayout;
+    errRow->addStretch(1);
+    auto *errLabel = new QLabel(QStringLiteral("Bản tin lỗi"));
+    theme::setRole(errLabel, "title");
+    m_errButton = new QPushButton(kDash);
+    theme::setRole(m_errButton, "secondary");
+    m_errButton->setFixedHeight(26);
+    m_errButton->setToolTip(QStringLiteral("Tổng số bản tin lỗi (cộng %1 loại). Bấm để xem số bản tin từng loại.").arg(trbmon::kNumErr));
+    connect(m_errButton, &QPushButton::clicked, this, &TrbDetailPage::showErrors);
+    errRow->addWidget(errLabel);
+    errRow->addWidget(m_errButton);
+
     // Đèn trạng thái ADAR, PG, PA đặt trên cùng, to và có nhãn để nhìn là biết ngay.
     auto *leds = new QHBoxLayout;
     leds->setSpacing(theme::kSpace);
@@ -254,6 +258,7 @@ QWidget *TrbDetailPage::buildMonitor()
     auto *l = new QVBoxLayout(w);
     l->setContentsMargins(0, 0, 0, 0);
     l->setSpacing(theme::kSpace);
+    l->addLayout(errRow);
     l->addLayout(leds);
     l->addLayout(leds2);
     l->addLayout(tables, 1);
@@ -481,7 +486,7 @@ void TrbDetailPage::showErrors()
         }
         auto *l = new QVBoxLayout(m_errDialog);
         l->addWidget(m_errTable);
-        m_errDialog->resize(380, 30 * trbmon::kNumErr + 90);
+        m_errDialog->resize(520, 30 * trbmon::kNumErr + 90);
     }
     refreshErrors();
     m_errDialog->show();
