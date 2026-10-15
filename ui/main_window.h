@@ -35,8 +35,6 @@ private:
     QWidget *buildTopBar();
     QWidget *buildOverviewPage();
     QWidget *buildLogPanel();
-    void watchBeam();
-    void toggleBeam();
     void showConnBox();
     void watchLink(core::Link *link, const QString &title, StatusPill *pill, QPushButton *button);
     void toggleTcp();
@@ -58,16 +56,12 @@ private:
     QSpinBox *m_tcpPort;
     QComboBox *m_comPort, *m_comBaud;
     QPushButton *m_tcpButton, *m_comButton;
-    StatusPill *m_tcpPill, *m_comPill, *m_beamPill, *m_sparePill;   // dải tổng quan 4 cổng (luôn hiện)
+    StatusPill *m_tcpPill, *m_comPill, *m_sparePill;   // thẻ trạng thái các đường trong popup
     StatusPill *m_connPill;              // một thẻ cho đường của trang đang mở; bấm để xem đủ 4 đường
     QFrame *m_connPopup;
     QLabel *m_rxErrLabel = nullptr;      // thống kê lỗi nhận, ở cuối cửa sổ thả
     void syncConnPill();
     void showConnPopup();
-    QLineEdit *m_beamAddress;
-    QSpinBox *m_beamPort;
-    QPushButton *m_beamButton;
-    core::Transport::State m_beamState = core::Transport::State::Closed;
     QList<int> m_pageConn;               // ô kết nối của từng trang, -1 = không có
     QString m_rxErrText = QStringLiteral("Lỗi CRC: 0 · Byte bỏ qua: 0");   // hiện trong cửa sổ thả của thẻ kết nối
     StatusPill *m_counterPills[5];

@@ -9,8 +9,6 @@ struct Settings {
     quint16 monitorPort;
     QString monitorReplayFile; // khác rỗng: phát lại file hex thay cho TCP (để thử)
     int replayIntervalMs;
-    QString beamAddress;       // đường Ethernet điều khiển beam (PC là TCP client)
-    quint16 beamPort;
     QString servicePort;       // cổng COM của đường RS485 (cấu hình, nạp code)
     int serviceBaud;
     bool trbCheckCrc, psuCheckCrc;
@@ -46,8 +44,6 @@ struct Settings {
         s.monitorPort = quint16(get("monitor/gatewayPort", 5000).toUInt());
         s.monitorReplayFile = get("monitor/replayFile", "").toString();
         s.replayIntervalMs = get("monitor/replayIntervalMs", 5).toInt();
-        s.beamAddress = get("beam/address", "192.168.1.20").toString();
-        s.beamPort = quint16(get("beam/port", 6000).toUInt());
         s.servicePort = get("service/port", "").toString();
         s.serviceBaud = get("service/baud", 1000000).toInt();
         s.trbCheckCrc = get("trb/checkCrc", true).toBool();

@@ -41,13 +41,8 @@ int main(int argc, char *argv[])
     ctx.serviceLink = new core::Link(QStringLiteral("service"), ctx.serial, &registry);
     ctx.serviceLink->setIdleResetMs(20); // RS485 hỏi-đáp: bỏ khung cụt để không chặn câu trả lời kế tiếp
 
-    // Đường Ethernet điều khiển beam: chỉ gửi, không nhận khung nào nên dùng registry rỗng. Người dùng bấm Kết nối ở trang Beam.
-    core::FrameRegistry beamRegistry;
-    ctx.beamTcp = new core::TcpClientTransport(cfg.beamAddress, cfg.beamPort);
-    ctx.beamLink = new core::Link(QStringLiteral("beam"), ctx.beamTcp, &beamRegistry);
-
     QThread ioThread;
-    for (core::Link *l : {ctx.monitorLink, ctx.serviceLink, ctx.beamLink}) {
+    for (core::Link *l : {ctx.monitorLink, ctx.serviceLink}) {
         l->moveToThread(&ioThread);
         QObject::connect(&ioThread, &QThread::finished, l, &QObject::deleteLater);
     }

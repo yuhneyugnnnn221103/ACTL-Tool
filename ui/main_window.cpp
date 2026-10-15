@@ -106,8 +106,8 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     setWindowTitle(QStringLiteral("ACTL Tool"));
     setMinimumSize(1100, 560);   // đặt sẵn để layout không tự nới cửa sổ quá màn hình; trang nào lớn hơn thì cuộn
     // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
-    // Ô kết nối hiện theo trang: 0 giám sát (Ethernet), 1 cấu hình/nạp code (RS485), 2 beam (Ethernet), -1 không có.
-    m_pageConn = {0, 0, 1, 0, 1, 1, 2, -1};
+    // Đường kết nối của từng trang: 0 giám sát (Ethernet; điều khiển TRB/PSU và beam cũng đi đường này), 1 cấu hình/nạp code (RS485), -1 không có.
+    m_pageConn = {0, 0, 1, 0, 1, 1, 0, -1};
     m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogBeam, LogSystem};
 
     // Điều hướng trái + các trang.
@@ -227,7 +227,6 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
 
     watchLink(ctx.monitorLink, QStringLiteral("Giám sát (TCP)"), m_tcpPill, m_tcpButton);
     watchLink(ctx.serviceLink, QStringLiteral("Cấu hình (RS485)"), m_comPill, m_comButton);
-    watchBeam();
     connect(ctx.monitorLink, &core::Link::rxErrorsChanged, this, [this](quint64 crc, quint64 dropped) {
         m_rxErrText = QStringLiteral("Lỗi CRC: %1 · Byte bỏ qua: %2").arg(crc).arg(dropped);
         if (m_rxErrLabel) m_rxErrLabel->setText(m_rxErrText);
@@ -259,14 +258,13 @@ QWidget *MainWindow::buildTopBar()
     pl->setHorizontalSpacing(12);
     pl->setVerticalSpacing(8);
     m_tcpPill = new StatusPill;
-    m_beamPill = new StatusPill;
     m_comPill = new StatusPill;
     m_sparePill = new StatusPill;
     m_sparePill->setPill(theme::statusMark(Status::NoData) + QStringLiteral(" RS485 #2"), theme::statusColor(Status::NoData), theme::statusTextColor(Status::NoData));
     m_sparePill->setToolTip(QStringLiteral("RS485 #2: dành cho chức năng chưa bổ sung"));
-    StatusPill *rowPill[] = {m_tcpPill, m_beamPill, m_comPill, m_sparePill};   // thứ tự dòng: giám sát, beam, RS485 cấu hình, RS485 #2
-    for (int r = 0; r < 4; ++r) pl->addWidget(rowPill[r], r, 0);
-    const int rowOf[3] = {0, 2, 1};      // chỉ số "ô" (0 giám sát, 1 RS485 cấu hình, 2 beam) -> dòng trong cửa sổ
+    StatusPill *rowPill[] = {m_tcpPill, m_comPill, m_sparePill};   // thứ tự dòng: giám sát (Ethernet, dùng chung cho điều khiển và beam), RS485 cấu hình, RS485 #2
+    for (int r = 0; r < 3; ++r) pl->addWidget(rowPill[r], r, 0);
+    const int rowOf[2] = {0, 1};         // chỉ số "ô" (0 giám sát, 1 RS485 cấu hình) -> dòng trong cửa sổ
     auto box = [&](int index) {
         auto *w = new QWidget;
         auto *bl = new QHBoxLayout(w);
@@ -319,21 +317,6 @@ QWidget *MainWindow::buildTopBar()
         bl->addWidget(m_comButton);
     }
 
-    // Beam Ethernet: PC là TCP client, nối tới thiết bị beam.
-    m_beamAddress = new QLineEdit(cfg.beamAddress);
-    m_beamAddress->setFixedWidth(120);
-    m_beamAddress->setPlaceholderText(QStringLiteral("IP thiết bị beam"));
-    m_beamPort = new QSpinBox;
-    m_beamPort->setRange(1, 65535);
-    m_beamPort->setValue(cfg.beamPort);
-    m_beamButton = new QPushButton;
-    connect(m_beamButton, &QPushButton::clicked, this, &MainWindow::toggleBeam);
-    {
-        auto *bl = box(2);
-        bl->addWidget(m_beamAddress);
-        bl->addWidget(m_beamPort);
-        bl->addWidget(m_beamButton);
-    }
     l->addStretch(1);
 
     for (StatusPill *&pill : m_counterPills) {
@@ -344,10 +327,10 @@ QWidget *MainWindow::buildTopBar()
     {   // dòng RS485 #2 (chưa có chức năng) và thống kê lỗi nhận
         auto *spare = new QLabel(QStringLiteral("dành cho chức năng chưa bổ sung"));
         theme::setRole(spare, "muted");
-        pl->addWidget(spare, 3, 1);
+        pl->addWidget(spare, 2, 1);
         m_rxErrLabel = new QLabel(m_rxErrText);
         theme::setRole(m_rxErrLabel, "muted");
-        pl->addWidget(m_rxErrLabel, 4, 0, 1, 2);
+        pl->addWidget(m_rxErrLabel, 3, 0, 1, 2);
     }
     return bar;
 }
@@ -356,10 +339,10 @@ QWidget *MainWindow::buildTopBar()
 void MainWindow::syncConnPill()
 {
     if (!m_connPill) return;
-    StatusPill *pills[] = {m_tcpPill, m_comPill, m_beamPill};
+    StatusPill *pills[] = {m_tcpPill, m_comPill};
     const int page = m_nav ? m_nav->currentRow() : 0;
     const int which = page >= 0 && page < m_pageConn.size() ? m_pageConn.at(page) : -1;
-    // m_pageConn: 0 giám sát, 1 RS485, 2 beam -> chỉ số mảng pills theo cùng thứ tự
+    // m_pageConn: 0 giám sát (Ethernet), 1 RS485 -> chỉ số mảng pills theo cùng thứ tự
     if (which >= 0) {
         StatusPill *src = pills[which];
         m_connPill->setPill(src->text() + QStringLiteral(" ▾"), src->background(), src->foreground());
@@ -383,40 +366,6 @@ void MainWindow::showConnPopup()
 void MainWindow::showConnBox()
 {
     syncConnPill();
-}
-
-// Đường beam Ethernet: trạng thái trên dải tổng quan, nút, sự kiện.
-void MainWindow::watchBeam()
-{
-    using S = core::Transport::State;
-    auto show = [this](S s) {
-        m_beamState = s;
-        const QString state = s == S::Connected ? QStringLiteral("đã kết nối") : s == S::Waiting ? QStringLiteral("đang nối thiết bị") : QStringLiteral("đóng");
-        const Status look = s == S::Connected ? Status::Ok : s == S::Waiting ? Status::Warning : Status::Lost;
-        m_beamPill->setPill(theme::statusMark(look) + QStringLiteral(" Beam (ETH)"), theme::statusColor(look), theme::statusTextColor(look));
-        m_beamPill->setToolTip(QStringLiteral("Beam (Ethernet): ") + state);
-        m_beamButton->setText(s == S::Closed ? QStringLiteral("Kết nối") : QStringLiteral("Ngắt"));
-        m_beamAddress->setEnabled(s == S::Closed);
-        m_beamPort->setEnabled(s == S::Closed);
-        return QStringLiteral("Beam (Ethernet): ") + state;
-    };
-    show(S::Closed);
-    connect(m_ctx.beamLink, &core::Link::stateChanged, this, [=](S s) { logEvent(tagged(EventKind::Net, show(s)), LogBeam); });
-    connect(m_ctx.beamLink, &core::Link::errorOccurred, this,
-            [=](const QString &m) { logEvent(tagged(EventKind::Err, QStringLiteral("Lỗi Beam (Ethernet): %1").arg(m)), LogBeam); });
-}
-
-void MainWindow::toggleBeam()
-{
-    core::Link *link = m_ctx.beamLink;
-    if (m_beamState != core::Transport::State::Closed) { QMetaObject::invokeMethod(link, &core::Link::stop); return; }
-    const QString host = m_beamAddress->text().trimmed();
-    if (host.isEmpty()) { logEvent(tagged(EventKind::Err, QStringLiteral("Chưa nhập địa chỉ IP của thiết bị beam")), LogBeam); return; }
-    const quint16 port = quint16(m_beamPort->value());
-    Settings::save("beam/address", host);
-    Settings::save("beam/port", port);
-    core::TcpClientTransport *t = m_ctx.beamTcp;
-    QMetaObject::invokeMethod(link, [=] { t->configure(host, port); link->start(); });
 }
 
 // Theo dõi một link: nhãn trạng thái, chữ trên nút, sự kiện, hex thô.

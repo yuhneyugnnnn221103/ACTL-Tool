@@ -21,8 +21,6 @@ struct AppContext {
     model::PsuStore *psuStore = nullptr;
     model::Thresholds *psuThresholds = nullptr;
     core::Link *monitorLink = nullptr;       // TCP: PC là client, Gateway là server; giám sát + điều khiển
-    core::Link *beamLink = nullptr;          // Ethernet riêng: chỉ gửi bản tin điều khiển beam
-    core::TcpClientTransport *beamTcp = nullptr;
     core::Link *serviceLink = nullptr;       // RS485: cấu hình + nạp code
     core::TcpClientTransport *tcp = nullptr; // nullptr khi đang phát lại file hex
     core::SerialTransport *serial = nullptr;

@@ -12,7 +12,7 @@ class QSpinBox;
 
 namespace ui {
 
-// Điều khiển beam qua đường Ethernet riêng (kết nối nằm ở thanh trên cùng): nhập Esp, Beta, Freq, Mode rồi gửi một bản tin 14 byte (xem proto/beam_eth_proto.h).
+// Điều khiển beam, gửi qua đường Ethernet giám sát/điều khiển chung với TRB và PSU: nhập Esp, Beta, Freq, Mode rồi gửi một bản tin 14 byte (xem proto/beam_eth_proto.h).
 class BeamEthPage : public QWidget {
     Q_OBJECT
 public:

@@ -80,7 +80,7 @@ BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(paren
     connect(m_send, &QPushButton::clicked, this, &BeamEthPage::send);
 
     auto *l = new QVBoxLayout(this);
-    m_hint = new QLabel(QStringLiteral("Chưa kết nối đường Beam (Ethernet): nhập IP, cổng và bấm Kết nối ở thanh trên cùng."));
+    m_hint = new QLabel(QStringLiteral("Chưa kết nối đường giám sát (Ethernet tới Gateway): bấm thẻ kết nối ở góc trên bên trái để nhập IP, cổng và kết nối. Bản tin beam đi chung đường này."));
     theme::setRole(m_hint, "muted");
     l->addWidget(m_hint);
     l->addWidget(form);
@@ -92,7 +92,7 @@ BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(paren
     for (QDoubleSpinBox *b : {m_esp, m_beta}) connect(b, &QDoubleSpinBox::valueChanged, this, &BeamEthPage::updatePreview);
     for (QSpinBox *b : {m_freq, m_modeValue}) connect(b, &QSpinBox::valueChanged, this, &BeamEthPage::updatePreview);
     connect(m_mode, &QButtonGroup::idClicked, this, &BeamEthPage::updatePreview);
-    connect(ctx.beamLink, &core::Link::stateChanged, this, &BeamEthPage::showState);
+    connect(ctx.monitorLink, &core::Link::stateChanged, this, &BeamEthPage::showState);   // beam đi chung đường giám sát (Ethernet tới Gateway)
     showState(State::Closed);
     updatePreview();
 }
@@ -127,7 +127,7 @@ void BeamEthPage::send()
     if (!error.isEmpty()) { m_result->setText(error); return; }
     core::Request r;
     r.data = buildFrame(p);                       // không có trả lời: gửi xong là xong
-    m_ctx.beamLink->send(r);
+    m_ctx.monitorLink->send(r);
     const QString text = QStringLiteral("Esp %1, Beta %2, Freq %3 MHz, Mode %4 / %5")
                              .arg(p.esp, 0, 'f', 1).arg(p.beta, 0, 'f', 1).arg(p.freqMhz).arg(p.modeValue).arg(modeName(p.mode));
     m_result->setText(QStringLiteral("Đã gửi lúc %1: %2").arg(QTime::currentTime().toString(QStringLiteral("HH:mm:ss")), text));
