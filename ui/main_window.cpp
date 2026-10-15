@@ -230,6 +230,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     watchBeam();
     connect(ctx.monitorLink, &core::Link::rxErrorsChanged, this, [this](quint64 crc, quint64 dropped) {
         m_rxErrText = QStringLiteral("Lỗi CRC: %1 · Byte bỏ qua: %2").arg(crc).arg(dropped);
+        if (m_rxErrLabel) m_rxErrLabel->setText(m_rxErrText);
     });
 
     auto *timer = new QTimer(this);
@@ -251,12 +252,26 @@ QWidget *MainWindow::buildTopBar()
     l->addWidget(m_connPill);
     connect(m_connPill, &StatusPill::clicked, this, &MainWindow::showConnPopup);
 
-    auto box = [&](int index) {          // mỗi đường một ô; chỉ ô của trang đang mở được hiện
+    // Cửa sổ thả: mỗi đường một dòng gồm thẻ trạng thái (luôn hiện), ô cấu hình và nút kết nối.
+    m_connPopup = new QFrame(this, Qt::Popup);
+    m_connPopup->setFrameShape(QFrame::StyledPanel);
+    auto *pl = new QGridLayout(m_connPopup);
+    pl->setHorizontalSpacing(12);
+    pl->setVerticalSpacing(8);
+    m_tcpPill = new StatusPill;
+    m_beamPill = new StatusPill;
+    m_comPill = new StatusPill;
+    m_sparePill = new StatusPill;
+    m_sparePill->setPill(theme::statusMark(Status::NoData) + QStringLiteral(" RS485 #2"), theme::statusColor(Status::NoData), theme::statusTextColor(Status::NoData));
+    m_sparePill->setToolTip(QStringLiteral("RS485 #2: dành cho chức năng chưa bổ sung"));
+    StatusPill *rowPill[] = {m_tcpPill, m_beamPill, m_comPill, m_sparePill};   // thứ tự dòng: giám sát, beam, RS485 cấu hình, RS485 #2
+    for (int r = 0; r < 4; ++r) pl->addWidget(rowPill[r], r, 0);
+    const int rowOf[3] = {0, 2, 1};      // chỉ số "ô" (0 giám sát, 1 RS485 cấu hình, 2 beam) -> dòng trong cửa sổ
+    auto box = [&](int index) {
         auto *w = new QWidget;
         auto *bl = new QHBoxLayout(w);
         bl->setContentsMargins(0, 0, 0, 0);
-        m_connBox[index] = w;
-        l->addWidget(w);
+        pl->addWidget(w, rowOf[index], 1);
         return bl;
     };
 
@@ -326,25 +341,13 @@ QWidget *MainWindow::buildTopBar()
         l->addWidget(pill);
     }
 
-    // Cửa sổ thả: trạng thái đủ 4 đường.
-
-    m_connPopup = new QFrame(this, Qt::Popup);
-    m_connPopup->setFrameShape(QFrame::StyledPanel);
-    auto *pl = new QGridLayout(m_connPopup);
-    pl->setHorizontalSpacing(12);
-    m_tcpPill = new StatusPill;
-    m_beamPill = new StatusPill;
-    m_comPill = new StatusPill;
-    m_sparePill = new StatusPill;
-    m_sparePill->setPill(theme::statusMark(Status::NoData) + QStringLiteral(" RS485 #2"), theme::statusColor(Status::NoData), theme::statusTextColor(Status::NoData));
-    m_sparePill->setToolTip(QStringLiteral("RS485 #2: dành cho chức năng chưa bổ sung"));
-    int row = 0;
-    for (StatusPill *p : {m_tcpPill, m_beamPill, m_comPill, m_sparePill}) {
-        auto *detail = new QLabel;
-        m_connDetail << detail;
-        pl->addWidget(p, row, 0);
-        pl->addWidget(detail, row, 1);
-        ++row;
+    {   // dòng RS485 #2 (chưa có chức năng) và thống kê lỗi nhận
+        auto *spare = new QLabel(QStringLiteral("dành cho chức năng chưa bổ sung"));
+        theme::setRole(spare, "muted");
+        pl->addWidget(spare, 3, 1);
+        m_rxErrLabel = new QLabel(m_rxErrText);
+        theme::setRole(m_rxErrLabel, "muted");
+        pl->addWidget(m_rxErrLabel, 4, 0, 1, 2);
     }
     return bar;
 }
@@ -365,15 +368,13 @@ void MainWindow::syncConnPill()
         m_connPill->setPill(QStringLiteral("Các cổng ▾"), theme::statusColor(Status::NoData), theme::statusTextColor(Status::NoData));
         m_connPill->setToolTip(QStringLiteral("Bấm để xem đủ các đường kết nối"));
     }
-    StatusPill *order[] = {m_tcpPill, m_beamPill, m_comPill, m_sparePill};
-    for (int i = 0; i < m_connDetail.size(); ++i) m_connDetail[i]->setText(order[i]->toolTip() + (i == 0 && m_ctx.tcp ? QStringLiteral(" · ") + m_rxErrText : QString()));
 }
 
 void MainWindow::showConnPopup()
 {
     syncConnPill();
     m_connPopup->adjustSize();
-    const QPoint below = m_connPill->mapToGlobal(QPoint(m_connPill->width() - m_connPopup->width(), m_connPill->height() + 4));
+    const QPoint below = m_connPill->mapToGlobal(QPoint(0, m_connPill->height() + 4));
     m_connPopup->move(below);
     m_connPopup->show();
 }
@@ -381,9 +382,6 @@ void MainWindow::showConnPopup()
 // Hiện đúng ô kết nối của trang đang mở.
 void MainWindow::showConnBox()
 {
-    const int page = m_nav ? m_nav->currentRow() : 0;
-    const int which = page >= 0 && page < m_pageConn.size() ? m_pageConn.at(page) : -1;
-    for (int i = 0; i < 3; ++i) m_connBox[i]->setVisible(i == which);
     syncConnPill();
 }
 

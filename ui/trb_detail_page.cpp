@@ -297,8 +297,9 @@ QWidget *TrbDetailPage::buildControl()
     bf->addRow(QStringLiteral("Amp TX"), m_ampTx = spin());
     bf->addRow(QStringLiteral("Amp RX"), m_ampRx = spin());
     bf->addRow(QStringLiteral("ADAR"), checkRow(numbered(QStringLiteral("%1"), 4), m_adar));
-    bf->addRow(QStringLiteral("ADAR"), checkRow({"5", "6", "7", "8"}, m_adar + 4));
-    bf->addRow(QStringLiteral("Kênh"), checkRow({"CH0", "CH1", "CH2", "CH3"}, m_ch));
+    bf->addRow(QString(), checkRow({"5", "6", "7", "8"}, m_adar + 4));       // cùng nhãn ADAR với hàng trên
+    bf->addRow(QStringLiteral("Kênh"), checkRow({"CH0", "CH1"}, m_ch));
+    bf->addRow(QString(), checkRow({"CH2", "CH3"}, m_ch + 2));
     auto *sendBeamBtn = new QPushButton(QStringLiteral("Gửi lệnh beam"));
     bf->addRow(sendBeamBtn);
 
@@ -308,7 +309,7 @@ QWidget *TrbDetailPage::buildControl()
     theme::addShadow(ctl);   // thẻ tĩnh, không cập nhật liên tục
     theme::addShadow(beam);
     auto *w = new QWidget;
-    w->setFixedWidth(360);
+    w->setFixedWidth(300);
     auto *l = new QVBoxLayout(w);
     l->setContentsMargins(4, 4, 4, 12);   // chừa chỗ cho bóng đổ
     l->setSpacing(theme::kMargin);
