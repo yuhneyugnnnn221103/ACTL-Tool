@@ -145,7 +145,7 @@ QGroupBox::title {
     background: transparent;
     font-weight: 700;
 }
-QGroupBox[compact="true"] { margin-top: 0; padding: 26px 8px 4px 8px; }
+QGroupBox[compact="true"] { margin-top: 0; padding: 22px 8px 2px 8px; }
 QGroupBox[compact="true"] QLabel { padding: 0; margin: 0; }
 QGroupBox QLabel, QGroupBox QCheckBox, QGroupBox QRadioButton { font-weight: 400; }
 QGroupBox[card="false"] { border: none; background: transparent; }

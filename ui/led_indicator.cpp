@@ -6,7 +6,7 @@
 namespace ui {
 
 namespace {
-constexpr int kDiameter = 28, kGap = 2;
+constexpr int kDiameter = 22, kGap = 1;
 }
 
 LedIndicator::LedIndicator(const QString &caption, QWidget *parent) : QWidget(parent), m_caption(caption)
@@ -24,7 +24,7 @@ void LedIndicator::setState(State s, const QString &toolTip)
 
 QSize LedIndicator::sizeHint() const
 {
-    return {qMax(44, fontMetrics().horizontalAdvance(m_caption) + 8), kDiameter + kGap + fontMetrics().height() + 4};
+    return {qMax(44, fontMetrics().horizontalAdvance(m_caption) + 8), kDiameter + kGap + fontMetrics().height() + 2};
 }
 
 void LedIndicator::paintEvent(QPaintEvent *)

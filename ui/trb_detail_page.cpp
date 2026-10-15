@@ -56,11 +56,11 @@ QGroupBox *ledGroup(const QString &title, const QStringList &captions, QList<Led
     return g;
 }
 
-QWidget *checkRow(const QStringList &names, QCheckBox **out)
+QWidget *checkRow(const QStringList &names, QCheckBox **out, int topPad = 0)
 {
     auto *w = new QWidget;
     auto *l = new QHBoxLayout(w);
-    l->setContentsMargins(0, 0, 0, 0);
+    l->setContentsMargins(0, topPad, 0, 0);
     for (int i = 0; i < names.size(); ++i) l->addWidget(out[i] = new QCheckBox(names.at(i)));
     l->addStretch(1);
     return w;
@@ -300,9 +300,9 @@ QWidget *TrbDetailPage::buildControl()
     bf->addRow(QStringLiteral("Phase RX"), m_phaseRx = spin());
     bf->addRow(QStringLiteral("Amp TX"), m_ampTx = spin());
     bf->addRow(QStringLiteral("Amp RX"), m_ampRx = spin());
-    bf->addRow(QStringLiteral("ADAR"), checkRow(numbered(QStringLiteral("%1"), 4), m_adar));
+    bf->addRow(QStringLiteral("ADAR"), checkRow(numbered(QStringLiteral("%1"), 4), m_adar, 8));   // giãn khỏi hàng Amp RX
     bf->addRow(QString(), checkRow({"5", "6", "7", "8"}, m_adar + 4));       // cùng nhãn ADAR với hàng trên
-    bf->addRow(QStringLiteral("Kênh"), checkRow({"CH0", "CH1"}, m_ch));
+    bf->addRow(QStringLiteral("Kênh"), checkRow({"CH0", "CH1"}, m_ch, 8));   // giãn khỏi hàng ADAR
     bf->addRow(QString(), checkRow({"CH2", "CH3"}, m_ch + 2));
     auto *sendBeamBtn = new QPushButton(QStringLiteral("Gửi lệnh beam"));
     bf->addRow(sendBeamBtn);
