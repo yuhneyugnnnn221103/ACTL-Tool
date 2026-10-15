@@ -87,6 +87,13 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     }
     m_debugPill = new StatusPill;
     m_debugPill->hide();
+    // Bản tin lỗi: cùng hàng với ô chọn MB/TRB, căn phải theo mép phải của phần giám sát (ngay trên thẻ PA); bấm để xem từng loại.
+    auto *errLabel = new QLabel(QStringLiteral("Bản tin lỗi"));
+    theme::setRole(errLabel, "title");
+    m_errButton = new QPushButton(kDash);
+    theme::setRole(m_errButton, "secondary");
+    m_errButton->setToolTip(QStringLiteral("Tổng số bản tin lỗi (cộng %1 loại). Bấm để xem số bản tin từng loại.").arg(trbmon::kNumErr));
+    connect(m_errButton, &QPushButton::clicked, this, &TrbDetailPage::showErrors);
     m_status = new QLabel;
     theme::setRole(m_status, "muted");
 
@@ -99,6 +106,8 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
     head->addLayout(pillBox);
     head->addWidget(m_status, 1);
     head->addWidget(m_debugPill);
+    head->addWidget(errLabel);
+    head->addWidget(m_errButton);
 
     auto *body = new QHBoxLayout;
     // Cửa sổ thấp thì cuộn thay vì ép các bảng thấp lại làm mất dòng cuối.
@@ -108,12 +117,16 @@ TrbDetailPage::TrbDetailPage(const model::DeviceStore *store, services::TrbContr
         scroll->setWidget(buildMonitor());
     scroll->widget()->setObjectName(QStringLiteral("monitorPane"));
     scroll->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; } #monitorPane { background: transparent; }"));
-    body->addWidget(scroll, 1);
+    // Hàng đầu chỉ nằm trên cột giám sát, nên mép phải của nó trùng mép phải thẻ PA; cột điều khiển chạy suốt chiều cao.
+    auto *left = new QVBoxLayout;
+    left->setSpacing(theme::kSpace);
+    left->addLayout(head);
+    left->addWidget(scroll, 1);
+    body->addLayout(left, 1);
     body->addWidget(buildControl());
 
     auto *layout = new QVBoxLayout(this);
     layout->setSpacing(theme::kSpace);
-    layout->addLayout(head);
     layout->addLayout(body, 1);
 
     connect(prev, &QPushButton::clicked, this, [this] { step(-1); });
@@ -195,19 +208,6 @@ QWidget *TrbDetailPage::buildMonitor()
     pulses->addWidget(makeCard(QStringLiteral("Period BEAMSYNC"), m_rawMetrics), 1, 0);
     pulses->addWidget(makeCard(QStringLiteral("Pulse BEAMSYNC"), m_rawMetrics), 1, 1);
 
-    // Bản tin lỗi: một mục nhỏ căn phải ngay phía trên thẻ PA; bấm để xem số bản tin từng loại.
-    auto *errRow = new QHBoxLayout;
-    errRow->addStretch(1);
-    auto *errLabel = new QLabel(QStringLiteral("Bản tin lỗi"));
-    theme::setRole(errLabel, "title");
-    m_errButton = new QPushButton(kDash);
-    theme::setRole(m_errButton, "secondary");
-    m_errButton->setFixedHeight(26);
-    m_errButton->setToolTip(QStringLiteral("Tổng số bản tin lỗi (cộng %1 loại). Bấm để xem số bản tin từng loại.").arg(trbmon::kNumErr));
-    connect(m_errButton, &QPushButton::clicked, this, &TrbDetailPage::showErrors);
-    errRow->addWidget(errLabel);
-    errRow->addWidget(m_errButton);
-
     // Đèn trạng thái ADAR, PG, PA đặt trên cùng, to và có nhãn để nhìn là biết ngay.
     auto *leds = new QHBoxLayout;
     leds->setSpacing(theme::kSpace);
@@ -258,7 +258,6 @@ QWidget *TrbDetailPage::buildMonitor()
     auto *l = new QVBoxLayout(w);
     l->setContentsMargins(0, 0, 0, 0);
     l->setSpacing(theme::kSpace);
-    l->addLayout(errRow);
     l->addLayout(leds);
     l->addLayout(leds2);
     l->addLayout(tables, 1);
