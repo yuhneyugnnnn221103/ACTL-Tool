@@ -4,6 +4,7 @@
 #include <QMainWindow>
 
 class QCheckBox;
+class QFrame;
 class QComboBox;
 class QLabel;
 class QHBoxLayout;
@@ -58,6 +59,11 @@ private:
     QComboBox *m_comPort, *m_comBaud;
     QPushButton *m_tcpButton, *m_comButton;
     StatusPill *m_tcpPill, *m_comPill, *m_beamPill, *m_sparePill;   // dải tổng quan 4 cổng (luôn hiện)
+    StatusPill *m_connPill;              // một thẻ cho đường của trang đang mở; bấm để xem đủ 4 đường
+    QFrame *m_connPopup;
+    QList<QLabel *> m_connDetail;        // dòng mô tả bên cạnh từng thẻ trong cửa sổ thả
+    void syncConnPill();
+    void showConnPopup();
     QWidget *m_connBox[3] = {};          // ô kết nối theo trang: giám sát (Ethernet), cấu hình (RS485), beam (Ethernet)
     QLineEdit *m_beamAddress;
     QSpinBox *m_beamPort;

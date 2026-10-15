@@ -28,6 +28,7 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QUrl>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -330,16 +331,61 @@ QWidget *MainWindow::buildTopBar()
     l2->addStretch(1);
     l2->addWidget(m_rxErrLabel);
 
-    // Dải tổng quan các cổng (luôn hiện): 2 Ethernet + 2 RS485. Rê chuột để xem chi tiết.
+    // Một thẻ cho đường của trang đang mở; bấm thì thả ra trạng thái đủ 4 đường (2 Ethernet + 2 RS485).
     l->addSpacing(12);
+    m_connPill = new StatusPill;
+    m_connPill->setClickable(true);
+    l->addWidget(m_connPill);
+    connect(m_connPill, &StatusPill::clicked, this, &MainWindow::showConnPopup);
+
+    m_connPopup = new QFrame(this, Qt::Popup);
+    m_connPopup->setFrameShape(QFrame::StyledPanel);
+    auto *pl = new QGridLayout(m_connPopup);
+    pl->setHorizontalSpacing(12);
     m_tcpPill = new StatusPill;
     m_beamPill = new StatusPill;
     m_comPill = new StatusPill;
     m_sparePill = new StatusPill;
-    m_sparePill->setPill(theme::statusMark(Status::NoData) + QStringLiteral("RS485 #2"), theme::statusColor(Status::NoData), theme::statusTextColor(Status::NoData));
+    m_sparePill->setPill(theme::statusMark(Status::NoData) + QStringLiteral(" RS485 #2"), theme::statusColor(Status::NoData), theme::statusTextColor(Status::NoData));
     m_sparePill->setToolTip(QStringLiteral("RS485 #2: dành cho chức năng chưa bổ sung"));
-    for (StatusPill *p : {m_tcpPill, m_beamPill, m_comPill, m_sparePill}) l->addWidget(p);
+    int row = 0;
+    for (StatusPill *p : {m_tcpPill, m_beamPill, m_comPill, m_sparePill}) {
+        auto *detail = new QLabel;
+        m_connDetail << detail;
+        pl->addWidget(p, row, 0);
+        pl->addWidget(detail, row, 1);
+        ++row;
+    }
     return bar;
+}
+
+// Thẻ trên thanh = bản sao thẻ của đường mà trang đang mở dùng (trang không có đường thì thẻ trung tính).
+void MainWindow::syncConnPill()
+{
+    if (!m_connPill) return;
+    StatusPill *pills[] = {m_tcpPill, m_comPill, m_beamPill};
+    const int page = m_nav ? m_nav->currentRow() : 0;
+    const int which = page >= 0 && page < m_pageConn.size() ? m_pageConn.at(page) : -1;
+    // m_pageConn: 0 giám sát, 1 RS485, 2 beam -> chỉ số mảng pills theo cùng thứ tự
+    if (which >= 0) {
+        StatusPill *src = pills[which];
+        m_connPill->setPill(src->text() + QStringLiteral(" ▾"), src->background(), src->foreground());
+        m_connPill->setToolTip(src->toolTip() + QStringLiteral("\nBấm để xem đủ các đường kết nối"));
+    } else {
+        m_connPill->setPill(QStringLiteral("Các cổng ▾"), theme::statusColor(Status::NoData), theme::statusTextColor(Status::NoData));
+        m_connPill->setToolTip(QStringLiteral("Bấm để xem đủ các đường kết nối"));
+    }
+    StatusPill *order[] = {m_tcpPill, m_beamPill, m_comPill, m_sparePill};
+    for (int i = 0; i < m_connDetail.size(); ++i) m_connDetail[i]->setText(order[i]->toolTip());
+}
+
+void MainWindow::showConnPopup()
+{
+    syncConnPill();
+    m_connPopup->adjustSize();
+    const QPoint below = m_connPill->mapToGlobal(QPoint(m_connPill->width() - m_connPopup->width(), m_connPill->height() + 4));
+    m_connPopup->move(below);
+    m_connPopup->show();
 }
 
 // Hiện đúng ô kết nối của trang đang mở.
@@ -348,6 +394,7 @@ void MainWindow::showConnBox()
     const int page = m_nav ? m_nav->currentRow() : 0;
     const int which = page >= 0 && page < m_pageConn.size() ? m_pageConn.at(page) : -1;
     for (int i = 0; i < 3; ++i) m_connBox[i]->setVisible(i == which);
+    syncConnPill();
 }
 
 // Đường beam Ethernet: trạng thái trên dải tổng quan, nút, sự kiện.
@@ -673,6 +720,7 @@ void MainWindow::showPsu(int addr)
 
 void MainWindow::refresh()
 {
+    syncConnPill();
     m_store->markStale(QDateTime::currentMSecsSinceEpoch(), m_ctx.settings.staleMs);
     const auto debug = m_ctx.trbControl->debugTrb();
     m_grid->setDebugTrb(debug ? debug->first : -1, debug ? debug->second : -1);

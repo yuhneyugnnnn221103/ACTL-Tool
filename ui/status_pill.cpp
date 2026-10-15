@@ -1,4 +1,5 @@
 #include "status_pill.h"
+#include <QMouseEvent>
 #include <QPainter>
 
 namespace ui {
@@ -16,6 +17,18 @@ void StatusPill::setPill(const QString &text, const QColor &background, const QC
     m_fg = foreground;
     updateGeometry();
     update();
+}
+
+void StatusPill::setClickable(bool on)
+{
+    m_clickable = on;
+    setCursor(on ? Qt::PointingHandCursor : Qt::ArrowCursor);
+}
+
+void StatusPill::mouseReleaseEvent(QMouseEvent *e)
+{
+    if (m_clickable && e->button() == Qt::LeftButton && rect().contains(e->position().toPoint())) emit clicked();
+    QWidget::mouseReleaseEvent(e);
 }
 
 QSize StatusPill::sizeHint() const
