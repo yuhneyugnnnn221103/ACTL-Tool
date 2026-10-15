@@ -33,6 +33,7 @@
 #include <QListWidget>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSplitter>
 #include <QScrollBar>
 #include <QTextBlockFormat>
@@ -102,6 +103,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     : QMainWindow(parent), m_ctx(ctx), m_store(ctx.store)
 {
     setWindowTitle(QStringLiteral("ACTL Tool"));
+    setMinimumSize(1000, 560);   // đặt sẵn để layout không tự nới cửa sổ quá màn hình; trang nào lớn hơn thì cuộn
     // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
     // Ô kết nối hiện theo trang: 0 giám sát (Ethernet), 1 cấu hình/nạp code (RS485), 2 beam (Ethernet), -1 không có.
     m_pageConn = {0, 0, 1, 0, 1, 1, 2, -1};
@@ -112,25 +114,34 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     m_nav->setObjectName(QStringLiteral("nav"));
     m_nav->setFixedWidth(168);
     m_pages = new QStackedWidget;
+    // Mỗi trang nằm trong vùng cuộn: cửa sổ nhỏ hơn kích thước thiết kế thì cuộn, không làm cửa sổ tràn quá màn hình.
+    auto scrollPage = [](QWidget *page) {
+        auto *sa = new QScrollArea;
+        sa->setWidgetResizable(true);
+        sa->setFrameShape(QFrame::NoFrame);
+        sa->setWidget(page);
+        sa->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; } QScrollArea > QWidget > QWidget { background: transparent; }"));
+        return sa;
+    };
     m_nav->addItem(QStringLiteral("Tổng quan"));
-    m_pages->addWidget(buildOverviewPage());
+    m_pages->addWidget(scrollPage(buildOverviewPage()));
     m_nav->addItem(QStringLiteral("Chi tiết TRB"));
-    m_pages->addWidget(m_detail = new TrbDetailPage(m_store, ctx.trbControl, ctx.thresholds));
+    m_pages->addWidget(m_detailHolder = scrollPage(m_detail = new TrbDetailPage(m_store, ctx.trbControl, ctx.thresholds)));
     m_nav->addItem(QStringLiteral("Cấu hình TRB"));
-    m_pages->addWidget(new TrbConfigPage(ctx));
+    m_pages->addWidget(scrollPage(new TrbConfigPage(ctx)));
     m_nav->addItem(QStringLiteral("PSU"));
-    m_pages->addWidget(m_psu = new PsuPage(ctx));
+    m_pages->addWidget(m_psuHolder = scrollPage(m_psu = new PsuPage(ctx)));
     m_nav->addItem(QStringLiteral("Cấu hình PSU"));
-    m_pages->addWidget(new PsuConfigPage(ctx));
+    m_pages->addWidget(scrollPage(new PsuConfigPage(ctx)));
     m_nav->addItem(QStringLiteral("Nạp code"));
-    m_pages->addWidget(new FirmwarePage(ctx));
+    m_pages->addWidget(scrollPage(new FirmwarePage(ctx)));
     m_nav->addItem(QStringLiteral("Beam Ethernet"));
     auto *beamPage = new BeamEthPage(ctx);
-    m_pages->addWidget(beamPage);
+    m_pages->addWidget(scrollPage(beamPage));
     connect(beamPage, &BeamEthPage::logEvent, this, [this](const QString &text) { logEvent(text, LogBeam); });
     m_nav->addItem(QStringLiteral("Giả lập"));
     auto *simPage = new SimPage(ctx);
-    m_pages->addWidget(simPage);
+    m_pages->addWidget(scrollPage(simPage));
     const int simRow = m_nav->count() - 1;
     connect(simPage, &SimPage::runningChanged, this, [this, simRow](bool on) {   // nhắc đang giả lập để không nhầm với thiết bị thật
         m_nav->item(simRow)->setText(on ? QStringLiteral("Giả lập (đang chạy)") : QStringLiteral("Giả lập"));
@@ -230,8 +241,13 @@ QWidget *MainWindow::buildTopBar()
 {
     const Settings &cfg = m_ctx.settings;
     auto *bar = new QWidget;
-    auto *l = new QHBoxLayout(bar);
-    l->setContentsMargins(0, 0, 0, 0);
+    auto *rows = new QVBoxLayout(bar);       // hai hàng để thanh trên cùng không rộng quá màn hình
+    rows->setContentsMargins(0, 0, 0, 0);
+    rows->setSpacing(theme::kSpace);
+    auto *l = new QHBoxLayout;               // hàng 1: kết nối của trang đang mở + dải tổng quan cổng
+    auto *l2 = new QHBoxLayout;              // hàng 2: bộ đếm trạng thái + lỗi CRC
+    rows->addLayout(l);
+    rows->addLayout(l2);
 
     auto box = [&](int index) {          // mỗi đường một ô; chỉ ô của trang đang mở được hiện
         auto *w = new QWidget;
@@ -263,8 +279,6 @@ QWidget *MainWindow::buildTopBar()
         } else {
             bl->addWidget(new QLabel(QStringLiteral("đang phát lại file hex")));
         }
-        bl->addSpacing(8);
-        bl->addWidget(m_rxErrLabel);
     }
 
     // Cấu hình và nạp code: cổng COM (RS485).
@@ -311,8 +325,10 @@ QWidget *MainWindow::buildTopBar()
 
     for (StatusPill *&pill : m_counterPills) {
         pill = new StatusPill;
-        l->addWidget(pill);
+        l2->addWidget(pill);
     }
+    l2->addStretch(1);
+    l2->addWidget(m_rxErrLabel);
 
     // Dải tổng quan các cổng (luôn hiện): 2 Ethernet + 2 RS485. Rê chuột để xem chi tiết.
     l->addSpacing(12);
@@ -599,7 +615,7 @@ bool MainWindow::logVisible(const LogEntry &e) const
     const int mask = page >= 0 && page < m_pageGroups.size() ? m_pageGroups.at(page) : LogAll;
     if (e.group == LogSystem) return true;
     if (!(mask & e.group)) return false;
-    if (m_pages->currentWidget() == m_detail && e.group == LogTrbMonitor && e.mb >= 0)
+    if (m_pages->currentWidget() == m_detailHolder && e.group == LogTrbMonitor && e.mb >= 0)
         return e.mb == m_detail->mb() && e.trb == m_detail->trb();
     return true;
 }
@@ -652,7 +668,7 @@ void MainWindow::showDetail(int mb, int trb)
 void MainWindow::showPsu(int addr)
 {
     m_psu->setDevice(addr);
-    m_nav->setCurrentRow(m_pages->indexOf(m_psu));
+    m_nav->setCurrentRow(m_pages->indexOf(m_psuHolder));
 }
 
 void MainWindow::refresh()
@@ -663,8 +679,8 @@ void MainWindow::refresh()
     m_grid->update();
     m_psuGrid->update();
     m_ctx.psuStore->markStale(QDateTime::currentMSecsSinceEpoch(), m_ctx.settings.staleMs);
-    if (m_pages->currentWidget() == m_detail) m_detail->refresh();
-    if (m_pages->currentWidget() == m_psu) m_psu->refresh();
+    if (m_pages->currentWidget() == m_detailHolder) m_detail->refresh();
+    if (m_pages->currentWidget() == m_psuHolder) m_psu->refresh();
 
     const std::pair<Status, QString> counters[] = {
         {Status::Ok, QStringLiteral("tốt")}, {Status::Warning, QStringLiteral("quá ngưỡng")},

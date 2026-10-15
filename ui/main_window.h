@@ -71,6 +71,7 @@ private:
     OverviewGrid *m_grid;
     TrbDetailPage *m_detail;
     PsuPage *m_psu;
+    QWidget *m_detailHolder = nullptr, *m_psuHolder = nullptr;   // vùng cuộn bọc quanh trang chi tiết / PSU
     PsuGrid *m_psuGrid;
     QListWidget *m_nav, *m_abnormal;
     QStackedWidget *m_pages;
