@@ -131,19 +131,21 @@ QGroupBox {
     background: @surface@;
     border: 1px solid @border@;
     border-radius: 8px;
-    margin-top: 12px;
-    padding: 16px 12px 12px 12px;
+    margin-top: 0;
+    padding: 26px 12px 12px 12px;
     font-weight: 700;
 }
+/* Tiêu đề nằm trong khung (không nhô lên đè viền) */
 QGroupBox::title {
-    subcontrol-origin: margin;
+    subcontrol-origin: padding;
     subcontrol-position: top left;
-    left: 12px;
-    padding: 0 4px;
-    background: @surface@;
+    left: 10px;
+    top: 5px;
+    padding: 0 2px;
+    background: transparent;
     font-weight: 700;
 }
-QGroupBox[compact="true"] { margin-top: 8px; padding: 12px 8px 4px 8px; }
+QGroupBox[compact="true"] { margin-top: 0; padding: 26px 8px 4px 8px; }
 QGroupBox[compact="true"] QLabel { padding: 0; margin: 0; }
 QGroupBox QLabel, QGroupBox QCheckBox, QGroupBox QRadioButton { font-weight: 400; }
 QGroupBox[card="false"] { border: none; background: transparent; }
