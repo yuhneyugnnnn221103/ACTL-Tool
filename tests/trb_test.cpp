@@ -258,19 +258,23 @@ private slots:
         p.beta = -4.5;          // x10 = -45 = 0xFFD3 (bù 2): D3 FF
         p.freqMhz = 2400;       // 0x0960: 60 09
         p.modeValue = 5;
-        p.mode = be::ModeSel::A1;   // byte 10 = 0x10
-        const QByteArray f = be::buildFrame(p);
-        QCOMPARE(f.size(), 14);
-        QCOMPARE(f.left(10).toHex(), QByteArray("abcd" "7b00" "d3ff" "6009" "0510"));
-        QCOMPARE(f.right(2).toHex(), QByteArray("efff"));              // đuôi EF FF
-        // CRC16 tính từ ESP tới hết MODE (byte 3..10), ghi byte thấp trước
-        const quint16 crc = core::crc16(reinterpret_cast<const quint8 *>(f.constData()) + 2, 8);
-        QCOMPARE(quint8(f[10]), quint8(crc & 0xFF));
-        QCOMPARE(quint8(f[11]), quint8(crc >> 8));
-
-        QCOMPARE(be::modeByte(be::ModeSel::A0), quint8(0x01));
-        QCOMPARE(be::modeByte(be::ModeSel::A1), quint8(0x10));
-        QCOMPARE(be::modeByte(be::ModeSel::A2), quint8(0x11));
+        const QByteArray all = be::buildFrame(p);
+        QCOMPARE(all.size(), 42);                                        // 3 khung x 14 byte
+        const quint8 modes[3] = {0x01, 0x10, 0x11};
+        for (int k = 0; k < 3; ++k) {
+            const QByteArray f = all.mid(k * 14, 14);
+            QCOMPARE(f.left(9).toHex(), QByteArray("abcd" "7b00" "d3ff" "6009" "05"));   // cùng dữ liệu, byte 9 = số nhập
+            QCOMPARE(quint8(f[9]), modes[k]);                                          // byte 10 lần lượt 01, 10, 11
+            QCOMPARE(f.right(2).toHex(), QByteArray("efff"));                          // mỗi khung có đuôi EF FF
+            // CRC16 từng khung tính từ ESP tới hết MODE (byte 3..10), ghi byte thấp trước
+            const quint16 crc = core::crc16(reinterpret_cast<const quint8 *>(f.constData()) + 2, 8);
+            QCOMPARE(quint8(f[10]), quint8(crc & 0xFF));
+            QCOMPARE(quint8(f[11]), quint8(crc >> 8));
+        }
+        QVERIFY(all.mid(10, 2) != all.mid(24, 2));                      // CRC khác nhau vì byte 10 khác
+        QCOMPARE(be::modeByte(0), quint8(0x01));
+        QCOMPARE(be::modeByte(1), quint8(0x10));
+        QCOMPARE(be::modeByte(2), quint8(0x11));
         QCOMPARE(be::toTenths(0.3), qint16(3));                          // 0.3 x 10 = 3.0000000000000004 vẫn ra 3
         QCOMPARE(be::toTenths(-3276.8), qint16(-32768));
         QCOMPARE(be::toTenths(3276.7), qint16(32767));

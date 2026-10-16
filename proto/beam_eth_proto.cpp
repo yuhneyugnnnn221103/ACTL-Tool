@@ -4,24 +4,10 @@
 
 namespace proto::beameth {
 
-QString modeName(ModeSel m)
+quint8 modeByte(int index)
 {
-    switch (m) {
-    case ModeSel::A0: return QStringLiteral("A0");
-    case ModeSel::A1: return QStringLiteral("A1");
-    case ModeSel::A2: return QStringLiteral("A2");
-    }
-    return {};
-}
-
-quint8 modeByte(ModeSel m)
-{
-    switch (m) {
-    case ModeSel::A0: return 0x01;
-    case ModeSel::A1: return 0x10;
-    case ModeSel::A2: return 0x11;
-    }
-    return 0;
+    static const quint8 kBytes[kFrameCount] = {0x01, 0x10, 0x11};
+    return index >= 0 && index < kFrameCount ? kBytes[index] : 0;
 }
 
 qint16 toTenths(double v) { return qint16(qRound(v * 10.0)); }
@@ -39,20 +25,24 @@ QString validate(const Params &p)
 QByteArray buildFrame(const Params &p)
 {
     if (!validate(p).isEmpty()) return {};
-    QByteArray f(kLength, 0);
-    f[0] = char(core::kHeader1);
-    f[1] = char(core::kHeader2);
-    auto put16 = [&](int off, quint16 v) { f[off] = char(v & 0xFF); f[off + 1] = char(v >> 8); };   // little endian: byte thấp trước
-    put16(2, quint16(toTenths(p.esp)));          // số có dấu: ép về quint16 giữ nguyên bit bù 2
-    put16(4, quint16(toTenths(p.beta)));
-    put16(6, quint16(p.freqMhz));
-    f[8] = char(p.modeValue);
-    f[9] = char(modeByte(p.mode));
-    const quint16 crc = core::crc16(reinterpret_cast<const quint8 *>(f.constData()) + 2, 8);
-    put16(10, crc);
-    f[12] = char(0xEF);
-    f[13] = char(0xFF);
-    return f;
+    QByteArray all;
+    all.reserve(kLength);
+    for (int k = 0; k < kFrameCount; ++k) {      // ba khung giống nhau, chỉ khác byte 10 của MODE
+        QByteArray f(kFrameLength, 0);
+        f[0] = char(core::kHeader1);
+        f[1] = char(core::kHeader2);
+        auto put16 = [&](int off, quint16 v) { f[off] = char(v & 0xFF); f[off + 1] = char(v >> 8); };   // little endian
+        put16(2, quint16(toTenths(p.esp)));      // số có dấu: ép về quint16 giữ nguyên bit bù 2
+        put16(4, quint16(toTenths(p.beta)));
+        put16(6, quint16(p.freqMhz));
+        f[8] = char(p.modeValue);
+        f[9] = char(modeByte(k));
+        put16(10, core::crc16(reinterpret_cast<const quint8 *>(f.constData()) + 2, 8));
+        f[12] = char(0xEF);
+        f[13] = char(0xFF);
+        all += f;
+    }
+    return all;
 }
 
 } // namespace proto::beameth

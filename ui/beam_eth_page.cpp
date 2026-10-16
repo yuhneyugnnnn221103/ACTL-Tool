@@ -1,7 +1,6 @@
 #include "beam_eth_page.h"
 #include "log_filter.h"
 #include "theme.h"
-#include <QButtonGroup>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -9,7 +8,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QRadioButton>
 #include <QSpinBox>
 #include <QTime>
 
@@ -42,24 +40,14 @@ BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(paren
     m_modeValue = new QSpinBox;
     m_modeValue->setRange(0, kModeValueMax);
     m_modeValue->setAlignment(Qt::AlignRight);
-    m_mode = new QButtonGroup(this);          // chọn đúng một trong A0, A1, A2
-    auto *modeRow = new QHBoxLayout;
-    for (ModeSel m : {ModeSel::A0, ModeSel::A1, ModeSel::A2}) {
-        auto *r = new QRadioButton(modeName(m));
-        r->setToolTip(QStringLiteral("Gửi byte 0x%1").arg(modeByte(m), 2, 16, QLatin1Char('0')).toUpper());
-        m_mode->addButton(r, int(m));
-        modeRow->addWidget(r);
-    }
-    modeRow->addStretch(1);
-    m_mode->button(int(ModeSel::A0))->setChecked(true);
 
     auto *form = new QGroupBox(QStringLiteral("Bản tin beam"));
     auto *f = new QFormLayout(form);
     f->addRow(QStringLiteral("Esp"), m_esp);
     f->addRow(QStringLiteral("Beta"), m_beta);
     f->addRow(QStringLiteral("Freq"), m_freq);
-    f->addRow(QStringLiteral("Mode (byte 9)"), m_modeValue);
-    f->addRow(QStringLiteral("Mode (byte 10)"), modeRow);
+    f->addRow(QStringLiteral("Mode"), m_modeValue);
+    m_modeValue->setToolTip(QStringLiteral("Byte 9 của MODE, giống nhau ở cả 3 khung; byte 10 do chương trình đặt lần lượt 01, 10, 11"));
     m_esp->setToolTip(QStringLiteral("Số thập phân có dấu, một chữ số sau dấu phẩy; bản tin gửi giá trị x 10 (16 bit có dấu)"));
     m_beta->setToolTip(m_esp->toolTip());
     m_freq->setToolTip(QStringLiteral("Tần số, đơn vị MHz, số nguyên"));
@@ -91,7 +79,6 @@ BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(paren
 
     for (QDoubleSpinBox *b : {m_esp, m_beta}) connect(b, &QDoubleSpinBox::valueChanged, this, &BeamEthPage::updatePreview);
     for (QSpinBox *b : {m_freq, m_modeValue}) connect(b, &QSpinBox::valueChanged, this, &BeamEthPage::updatePreview);
-    connect(m_mode, &QButtonGroup::idClicked, this, &BeamEthPage::updatePreview);
     connect(ctx.monitorLink, &core::Link::stateChanged, this, &BeamEthPage::showState);   // beam đi chung đường giám sát (Ethernet tới Gateway)
     showState(State::Closed);
     updatePreview();
@@ -104,7 +91,6 @@ Params BeamEthPage::params() const
     p.beta = m_beta->value();
     p.freqMhz = m_freq->value();
     p.modeValue = m_modeValue->value();
-    p.mode = ModeSel(m_mode->checkedId());
     return p;
 }
 
@@ -128,8 +114,8 @@ void BeamEthPage::send()
     core::Request r;
     r.data = buildFrame(p);                       // không có trả lời: gửi xong là xong
     m_ctx.monitorLink->send(r);
-    const QString text = QStringLiteral("Esp %1, Beta %2, Freq %3 MHz, Mode %4 / %5")
-                             .arg(p.esp, 0, 'f', 1).arg(p.beta, 0, 'f', 1).arg(p.freqMhz).arg(p.modeValue).arg(modeName(p.mode));
+    const QString text = QStringLiteral("Esp %1, Beta %2, Freq %3 MHz, Mode %4 (3 khung, byte 10 = 01, 10, 11)")
+                             .arg(p.esp, 0, 'f', 1).arg(p.beta, 0, 'f', 1).arg(p.freqMhz).arg(p.modeValue);
     m_result->setText(QStringLiteral("Đã gửi lúc %1: %2").arg(QTime::currentTime().toString(QStringLiteral("HH:mm:ss")), text));
     emit logEvent(tagged(EventKind::Ctrl, QStringLiteral("Đã gửi (không chờ ACK): Beam Ethernet, %1 [%2]")
                                               .arg(text, QString::fromLatin1(r.data.toHex(' ').toUpper()))));

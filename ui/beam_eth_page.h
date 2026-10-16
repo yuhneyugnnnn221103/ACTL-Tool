@@ -3,7 +3,6 @@
 #include "../proto/beam_eth_proto.h"
 #include <QWidget>
 
-class QButtonGroup;
 class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
@@ -12,7 +11,7 @@ class QSpinBox;
 
 namespace ui {
 
-// Điều khiển beam, gửi qua đường Ethernet giám sát/điều khiển chung với TRB và PSU: nhập Esp, Beta, Freq, Mode rồi gửi một bản tin 14 byte (xem proto/beam_eth_proto.h).
+// Điều khiển beam, gửi qua đường Ethernet giám sát/điều khiển chung với TRB và PSU: nhập Esp, Beta, Freq, Mode rồi gửi một bản tin 42 byte (3 khung 14 byte) (xem proto/beam_eth_proto.h).
 class BeamEthPage : public QWidget {
     Q_OBJECT
 public:
@@ -32,7 +31,6 @@ private:
     QSpinBox *m_freq, *m_modeValue;
     QPushButton *m_send;
     QDoubleSpinBox *m_esp, *m_beta;
-    QButtonGroup *m_mode;
     QLabel *m_preview, *m_result, *m_hint;
 };
 
