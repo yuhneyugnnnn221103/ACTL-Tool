@@ -25,7 +25,13 @@ QList<double> FieldTable::decode(const QByteArray &frame) const
         quint32 raw = 0;
         for (int i = 0; i < f.size; ++i)
             raw = (raw << 8) | quint8(frame.at(f.offset + i));
-        out.append(raw * f.scale);
+        if (f.isSigned) {                                   // mở rộng dấu từ bit cao nhất của trường
+            const int bits = 8 * f.size;
+            const qint64 v = (bits < 32 && (raw >> (bits - 1) & 1)) ? qint64(raw) - (qint64(1) << bits) : (bits == 32 ? qint64(qint32(raw)) : qint64(raw));
+            out.append(double(v) * f.scale);
+        } else {
+            out.append(raw * f.scale);
+        }
     }
     return out;
 }
@@ -57,8 +63,9 @@ void FieldTable::fromJson(const QJsonObject &json, QList<double> &values) const
     for (int i = 0; i < m_fields.size(); ++i) {
         const Field &f = m_fields.at(i);
         const QJsonValue v = json.value(f.group).toObject().value(f.name);
-        const double max = f.size >= 4 ? 4294967295.0 : double((1u << (8 * f.size)) - 1);
-        if (v.isDouble() && v.toDouble() >= 0 && v.toDouble() <= max) values[i] = v.toDouble();
+        const double span = std::ldexp(1.0, 8 * f.size);                  // 2^(8*size)
+        const double lo = f.isSigned ? -span / 2 : 0, hi = f.isSigned ? span / 2 - 1 : span - 1;
+        if (v.isDouble() && v.toDouble() >= lo && v.toDouble() <= hi) values[i] = v.toDouble();
     }
 }
 

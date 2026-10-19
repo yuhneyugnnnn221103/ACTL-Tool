@@ -11,12 +11,13 @@ namespace proto {
 struct Field {
     QString name;
     int offset = 0;
-    int size = 1;          // 1..4 byte, không dấu, big-endian
+    int size = 1;          // 1..4 byte, big-endian; không dấu trừ khi isSigned
     double scale = 1.0;    // giá trị = raw * scale
     QString unit;
     QString group;         // nhóm hiển thị (dùng cho bản tin cấu hình)
     bool hex = false;      // hiển thị/nhập dạng hex (thanh ghi)
     QString note;          // mô tả chức năng, hiện làm tooltip
+    bool isSigned = false; // số có dấu (bù 2 theo độ rộng trường)
 };
 
 class FieldTable {
@@ -26,6 +27,7 @@ public:
     int indexOf(const QString &group, const QString &name) const;
     void setHex(int index) { m_fields[index].hex = true; }
     void setNote(int index, const QString &note) { m_fields[index].note = note; }
+    void setSigned(int index) { m_fields[index].isSigned = true; }
     const QList<Field> &fields() const { return m_fields; }
     int size() const { return m_fields.size(); }
 

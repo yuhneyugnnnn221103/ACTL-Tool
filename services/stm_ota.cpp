@@ -18,6 +18,7 @@ void StmOta::queryInfo(const QList<int> &addrs)
     if (busy() || addrs.isEmpty()) return;
     m_queue = addrs;
     m_infoOnly = true;
+    m_rollback = false;
     m_ok = m_fail = 0;
     nextDevice();
 }
@@ -32,6 +33,17 @@ void StmOta::start(const QList<int> &addrs, const QByteArray &imageA, const QByt
     m_version = version;
     m_autoCommit = autoCommit;
     m_infoOnly = false;
+    m_rollback = false;
+    m_ok = m_fail = 0;
+    nextDevice();
+}
+
+void StmOta::rollback(const QList<int> &addrs)
+{
+    if (busy() || addrs.isEmpty()) return;
+    m_queue = addrs;
+    m_infoOnly = false;
+    m_rollback = true;
     m_ok = m_fail = 0;
     nextDevice();
 }
@@ -51,7 +63,8 @@ void StmOta::nextDevice()
         return;
     }
     m_addr = m_queue.takeFirst();
-    send(stmota::buildCtrl(quint8(m_addr), stmota::kInfo), State::Info, 1000);
+    if (m_rollback) send(stmota::buildCtrl(quint8(m_addr), stmota::kRollback), State::Rollback, 3000);
+    else send(stmota::buildCtrl(quint8(m_addr), stmota::kInfo), State::Info, 1000);
 }
 
 void StmOta::send(const QByteArray &frame, State state, int timeoutMs)
@@ -94,31 +107,38 @@ void StmOta::onFrame(const core::Frame &frame)
     switch (m_state) {
     case State::Info: {
         if (a.ackCmd != stmota::kInfo) return;
-        emit deviceInfo(m_addr, a.slot, a.info);
-        if (m_infoOnly) { done(true, QStringLiteral("slot %1, version %2").arg(a.slot).arg(a.info)); return; }
+        emit deviceInfo(m_addr, a.slot, a.info, a.trial);
+        const QString trial = a.trial & 0x80 ? QStringLiteral("đã xác nhận") : QStringLiteral("đang thử, lần boot %1").arg(a.trial & 0x7F);
+        if (m_infoOnly) { done(true, QStringLiteral("slot %1, version %2 (%3)").arg(a.slot).arg(a.info).arg(a.slot == 'R' ? QStringLiteral("bootloader recovery") : trial)); return; }
+        // Đang chạy A thì nạp ảnh slot B và ngược lại; ở recovery ('R') cả hai slot hỏng, bootloader xóa cả hai nên chọn ảnh A trước.
         const char target = a.slot == 'A' ? 'B' : 'A';
         m_image = target == 'A' ? m_imageA : m_imageB;
+        if (m_image.isEmpty() && a.slot == 'R') m_image = m_imageB;
         if (m_image.isEmpty()) { done(false, QStringLiteral("đang chạy slot %1 nhưng chưa chọn file cho slot %2").arg(a.slot).arg(target)); return; }
         m_chunks = (m_image.size() + stmota::kChunk - 1) / stmota::kChunk;
         m_seq = m_retries = 0;
-        emit deviceProgress(m_addr, 0, QStringLiteral("Gửi BEGIN (ảnh slot %1)").arg(target));
-        send(stmota::buildBegin(quint8(m_addr), quint32(m_image.size()), stmota::crc32(m_image), m_version),
-             State::BeginAccept, 2000);
+        emit deviceProgress(m_addr, 0, QStringLiteral("Xóa slot đích (ảnh slot %1), có thể mất vài giây").arg(target));
+        send(stmota::buildCtrl(quint8(m_addr), stmota::kErase), State::Erase, 20000);
         break;
     }
-    case State::BeginAccept:
-    case State::BeginReady:
-        if (a.ackCmd != stmota::kBegin) return;
+    case State::Erase:
+        if (a.ackCmd != stmota::kErase) return;
         if (a.status == stmota::EraseFail) { done(false, QStringLiteral("xóa sector thất bại (mã HAL 0x%1)").arg(a.info, 8, 16, QLatin1Char('0'))); return; }
+        if (a.status != stmota::Ok) { done(false, QStringLiteral("ERASE bị từ chối: ") + why); return; }
+        emit deviceProgress(m_addr, 0, QStringLiteral("Gửi BEGIN"));
+        send(stmota::buildBegin(quint8(m_addr), quint32(m_image.size()), stmota::crc32(m_image), m_version), State::Begin, 2000);
+        break;
+
+    case State::Begin:
+        if (a.ackCmd != stmota::kBegin) return;
         if (a.status != stmota::Ok) { done(false, QStringLiteral("BEGIN bị từ chối: ") + why); return; }
-        // Hai ACK cùng ack_cmd và status; chỉ ACK có info = 1 mới nghĩa là đã xóa xong.
-        if (a.info != 1u) {
-            m_state = State::BeginReady;
-            m_timer.start(15000);
-            emit deviceProgress(m_addr, 0, QStringLiteral("Thiết bị đang xóa sector"));
-            return;
-        }
         sendChunk();
+        break;
+
+    case State::Rollback:
+        if (a.ackCmd != stmota::kRollback) return;
+        if (a.status == stmota::Ok) done(true, QStringLiteral("đã quay về slot kia, thiết bị đang khởi động lại"));
+        else done(false, QStringLiteral("ROLLBACK bị từ chối: ") + why);
         break;
 
     case State::Data:
@@ -129,6 +149,9 @@ void StmOta::onFrame(const core::Frame &frame)
         } else if (a.status == stmota::BadSeq) {
             if (++m_retries > kMaxRetries) { done(false, QStringLiteral("thiết bị liên tục báo sai thứ tự ở chunk %1").arg(m_seq)); return; }
             m_seq = int(a.info) + 1; // firmware báo seq cuối đã nhận
+        } else if (a.status == stmota::ProgFail) {
+            done(false, QStringLiteral("lỗi ghi flash ở chunk %1 (info 0x%2)").arg(m_seq).arg(a.info, 8, 16, QLatin1Char('0')));
+            return;
         } else {
             done(false, QStringLiteral("DATA chunk %1: %2").arg(m_seq).arg(why));
             return;
@@ -163,8 +186,9 @@ void StmOta::onTimeout()
 {
     switch (m_state) {
     case State::Info:        done(false, QStringLiteral("không trả lời")); break;
-    case State::BeginAccept: done(false, QStringLiteral("không trả lời BEGIN")); break;
-    case State::BeginReady:  done(false, QStringLiteral("quá thời gian chờ xóa sector")); break;
+    case State::Erase:       done(false, QStringLiteral("quá thời gian chờ xóa slot đích (20 s)")); break;
+    case State::Begin:       done(false, QStringLiteral("không trả lời BEGIN")); break;
+    case State::Rollback:    done(false, QStringLiteral("không nhận được ACK ROLLBACK")); break;
     case State::Data:
         if (++m_retries > kMaxRetries) done(false, QStringLiteral("chunk %1 không được ACK sau %2 lần gửi lại").arg(m_seq).arg(kMaxRetries));
         else sendChunk();

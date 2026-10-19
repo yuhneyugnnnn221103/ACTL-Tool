@@ -74,6 +74,8 @@ core::FrameSpec readReplySpec(bool checkCrc)
     return {replyCmd(), kLength, kCrcStart, checkCrc, QStringLiteral("PSU cấu hình")};
 }
 
+static void table_setSigned(FieldTable &t, int i) { t.setSigned(i); }
+
 static FieldTable build()
 {
     FieldTable t;
@@ -94,10 +96,22 @@ static FieldTable build()
             for (const Reg &r : kAdsChannel)
                 add(clusterGroup(c, "ADS"), QStringLiteral("CH%1_%2").arg(ch).arg(QString::fromLatin1(r.name)), r.size, r.note, true);
     }
+    // Ghi chú theo firmware APSU: SHUNT_CAL = 0 dùng mặc định; bit RST/RSTACC của CONFIG bị xóa; SUVL/BUVL chỉ nạp khi SAFE_ON.
+    auto inaNote = [](const char *r) -> const char * {
+        const QByteArray n(r);
+        if (n == "SHUNT_CAL") return "0 = firmware dùng giá trị mặc định của INA này";
+        if (n == "CONFIG") return "Bit RST và RSTACC bị firmware xóa trước khi nạp vào INA";
+        if (n == "SUVL" || n == "BUVL") return "Ngưỡng dưới: chỉ nạp vào INA khi PSU ở SAFE_ON (lúc OFF/ARMING IC giữ giá trị tắt)";
+        return nullptr;
+    };
     for (int n = 1; n <= 4; ++n)
-        for (const char *r : kIna) add(kInaGroup, QStringLiteral("INA%1_%2").arg(n).arg(QString::fromLatin1(r)), 2, nullptr, true);
+        for (const char *r : kIna) add(kInaGroup, QStringLiteral("INA%1_%2").arg(n).arg(QString::fromLatin1(r)), 2, inaNote(r), true);
+    // Ngưỡng Supply: dòng (I_*) có dấu 24 bit; giá trị 0 = tắt ngưỡng đó. So với giá trị thô cùng đơn vị bản tin giám sát.
     for (const char *s : kSupplyStems)
-        for (const char *end : {"_MAX", "_MIN"}) add(kSupplyGroup, QString::fromLatin1(s) + end, 3);
+        for (const char *end : {"_MAX", "_MIN"}) {
+            add(kSupplyGroup, QString::fromLatin1(s) + end, 3, "0 = tắt ngưỡng này; so với giá trị thô 24 bit như bản tin giám sát (dòng có dấu)");
+            if (s[0] == 'I') table_setSigned(t, t.size() - 1);
+        }
     Q_ASSERT(off == kLength - 4 - 16);
     return t;
 }

@@ -18,6 +18,7 @@ public:
     explicit PsuConfigPage(const AppContext &ctx, QWidget *parent = nullptr);
 
 private:
+    QString notOffNote(const QList<int> &addrs) const;   // cảnh báo PSU chưa ở SAFE_OFF (firmware bỏ qua cấu hình)
     QWidget *buildContent();
     void selectDevice(int addr);
     void showDeviceColumn();

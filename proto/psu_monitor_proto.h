@@ -2,7 +2,10 @@
 // Bản tin giám sát PSU, CMD 2 byte 81 81, 266 byte (theo "Định nghĩa bản tin"), CRC phủ từ byte CMD:
 // [AB CD][81 81][Addr][CỤM 1..4: 4x48B][SUPPLY 24B][RTC 7B][Trip 10B][Dự phòng 24B][CRC 2B][E1 E2]
 // Mỗi cụm: 6 giá trị ADC + 2 giá trị AMC (3 byte) rồi 12 giá trị XDP (2 byte).
-// Mọi giá trị đang là số thô không dấu (chưa có công thức quy đổi và chưa rõ dấu).
+// Giá trị là số thô (chưa có công thức quy đổi). Supply là thanh ghi CURRENT / VBUS của INA228 (3 byte, dữ liệu ở bit 23..4):
+// dòng có dấu (bù 2, 24 bit), áp không dấu. Giá trị lưu trong app là thô đủ 24 bit (so ngưỡng cùng đơn vị với firmware);
+// khi hiển thị thì dịch phải 4 bit (supplyShown).
+// Vùng dự phòng 24 byte (byte 239..262) là mở rộng của firmware APSU: trạng thái an toàn, cờ, INA, slot, version (xem kIdxSafeState...).
 #include "../core/frame.h"
 #include "field_table.h"
 #include <QString>
@@ -11,6 +14,7 @@ namespace proto::psumon {
 
 constexpr int kLength = 266, kCrcStart = 2, kOffAddr = 4;
 constexpr int kNumCluster = 4, kClusterFields = 20, kNumSupply = 8, kNumRtc = 7, kNumTrip = 10;
+constexpr int kPollLength = 13;   // khung hỏi 02 02
 
 // Thứ tự trường trong một cụm (cũng là thứ tự trong bảng trường).
 enum ClusterField {
@@ -23,9 +27,33 @@ constexpr int clusterField(int cluster, ClusterField f) { return cluster * kClus
 constexpr int kIdxSupply0 = kNumCluster * kClusterFields;
 constexpr int kIdxRtc0 = kIdxSupply0 + kNumSupply;
 constexpr int kIdxTrip0 = kIdxRtc0 + kNumRtc;
-constexpr int kNumFields = kIdxTrip0 + kNumTrip;
+// Mở rộng firmware trong vùng dự phòng (theo thứ tự byte từ 239).
+constexpr int kIdxExt0 = kIdxTrip0 + kNumTrip;
+constexpr int kIdxSafeState = kIdxExt0;        // SafeState
+constexpr int kIdxPwrFlags = kIdxExt0 + 1;     // bit0 PWR_EN đang bật, bit1 PC đang yêu cầu bật
+constexpr int kIdxTripCount = kIdxExt0 + 2;    // số lần trip liên tiếp
+constexpr int kIdxFaultCode = kIdxExt0 + 3;
+constexpr int kIdxInaFresh = kIdxExt0 + 4;     // mask kênh INA còn tươi (bit c = INA c+1)
+constexpr int kIdxInaCfgOk = kIdxExt0 + 5;     // mask INA cấu hình đúng
+constexpr int kIdxDcmFt = kIdxExt0 + 6;        // mask chân FT của DCM đang báo lỗi
+constexpr int kIdxCfgSaved = kIdxExt0 + 7;     // bit0 = cấu hình đã lưu Flash (0 = đang dùng mặc định)
+constexpr int kIdxDiagAlrt0 = kIdxExt0 + 8;    // DIAG_ALRT tích lũy của INA1..4 (4 trường 2 byte)
+constexpr int kIdxSlot = kIdxExt0 + 12;        // slot đang chạy: 'A' / 'B'
+constexpr int kIdxTrial = kIdxExt0 + 13;       // bit7 đã confirm, bit6..0 boot_count
+constexpr int kIdxVersion = kIdxExt0 + 14;     // version ảnh đang chạy (4 byte)
+constexpr int kNumFields = kIdxExt0 + 15;
+
+enum SafeState { SafeBoot = 0, SafeOff = 1, SafeArming = 2, SafeOn = 3, SafeTripped = 4, SafeLockout = 5 };
+QString safeStateText(int state);           // "BOOT", "OFF", ...
+QString tripName(int i);                    // i = 0..9 (Trip 1..10); bảng bit TẠM THỜI của firmware
+QString tripBitName(int i, int bit);        // rỗng nếu bit chưa dùng
+double supplyShown(double raw);             // dịch phải 4 bit (bậc thang xuống), giữ dấu
 
 QByteArray cmd();   // 81 81
+QByteArray pollCmd();                       // 02 02
+core::FrameSpec pollSpec(bool checkCrc);    // khung hỏi giám sát 13 byte (cho giả lập/test)
+QByteArray buildPoll(int addr);
+QByteArray buildFrame(int addr, const QList<double> &values);   // 81 81 đủ 266 byte (giả lập/test)
 core::FrameSpec spec(bool checkCrc);
 const FieldTable &table();
 

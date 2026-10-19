@@ -394,14 +394,26 @@ QWidget *FirmwarePage::buildStmTab()
         setBusy(true);
         m_ctx.stmOta->start(selected(), m_stmImageA, m_stmImageB, quint32(m_stmVersion->value()), m_stmAutoCommit->isChecked());
     }));
+    buttons->addWidget(button(QStringLiteral("Rollback (về slot kia)"), [=] {
+        if (!ready() || selected().isEmpty()) return;
+        if (!yes(this, QStringLiteral("Rollback STM32"),
+                 QStringLiteral("Đánh dấu slot đang chạy của %1 PSU là hỏng và reset để quay về slot còn lại?\n\nChỉ thực hiện được khi PSU ở SAFE_OFF và slot kia khởi động được.")
+                     .arg(selected().size()))) return;
+        if (!m_ctx.auth->unlock(this)) return;
+        for (int r = 0; r < count; ++r) { m_stmTable->item(r, 3)->setText({}); m_stmTable->item(r, 4)->setText({}); m_stmTable->item(r, 4)->setBackground({}); }
+        setBusy(true);
+        m_ctx.stmOta->rollback(selected());
+    }));
     buttons->addWidget(m_stmCancel);
-    for (QPushButton *b : m_stmActions) theme::setRole(b, b->text().startsWith(QStringLiteral("Nạp")) ? "danger" : "secondary");
+    for (QPushButton *b : m_stmActions) theme::setRole(b, b->text().startsWith(QStringLiteral("Nạp")) || b->text().startsWith(QStringLiteral("Rollback")) ? "danger" : "secondary");
     theme::setRole(m_stmCancel, "secondary");
     buttons->addStretch(1);
 
     services::StmOta *ota = m_ctx.stmOta;
-    connect(ota, &services::StmOta::deviceInfo, this, [=](int addr, char slot, quint32 version) {
-        m_stmTable->item(row(addr), 1)->setText(QString(QLatin1Char(slot)));
+    connect(ota, &services::StmOta::deviceInfo, this, [=](int addr, char slot, quint32 version, quint8 trial) {
+        const QString state = slot == 'R' ? QStringLiteral(" (recovery: cả hai slot hỏng)")
+                            : trial & 0x80 ? QStringLiteral(" (đã xác nhận)") : QStringLiteral(" (đang thử, lần boot %1)").arg(trial & 0x7F);
+        m_stmTable->item(row(addr), 1)->setText(QString(QLatin1Char(slot)) + state);
         m_stmTable->item(row(addr), 2)->setText(QString::number(version));
     });
     connect(ota, &services::StmOta::deviceProgress, this, [=](int addr, int percent, const QString &text) {

@@ -141,7 +141,8 @@ void PsuConfig::onRequestFinished(quint64 id, bool ok, const core::Frame &reply)
         }
     if (diff.isEmpty()) done(true, QStringLiteral("đã ghi và đọc lại khớp"));
     else done(false, QStringLiteral("đọc lại KHÔNG khớp %1 trường: %2%3").arg(diff.size())
-                         .arg(diff.mid(0, 5).join(", "), diff.size() > 5 ? QStringLiteral(", …") : QString()));
+                         .arg(diff.mid(0, 5).join(", "), diff.size() > 5 ? QStringLiteral(", …") : QString())
+                         + QStringLiteral(" (firmware chỉ nhận cấu hình khi PSU ở SAFE_OFF)"));
 }
 
 void PsuConfig::done(bool ok, const QString &message)

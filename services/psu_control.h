@@ -12,6 +12,8 @@ public:
     explicit PsuControl(core::Link *link, QObject *parent = nullptr);
 
     void sendControl(int addr, const proto::psuctl::ControlCmd &cmd);
+    // PSU đang TRIPPED: gửi Clear trip (tắt) rồi, sau một khoảng nghỉ, gửi lệnh bật ở khung riêng (firmware bỏ qua lệnh bật trong khung Clear trip).
+    void sendClearTripThenOn(int addr, int gapMs = 300);
 
 signals:
     void commandFinished(const QString &description, bool sent);

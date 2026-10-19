@@ -2,6 +2,7 @@
 #include "auth.h"
 #include "theme.h"
 #include "../proto/psu_config_proto.h"
+#include "../proto/psu_monitor_proto.h"
 #include <QComboBox>
 #include <QFile>
 #include <QFileDialog>
@@ -137,7 +138,7 @@ QWidget *PsuConfigPage::buildContent()
             return;
         }
         if (QMessageBox::question(this, QStringLiteral("Ghi cấu hình"),
-                                  QStringLiteral("Ghi toàn bộ cột \"Giá trị mới\" xuống PSU %1?").arg(m_addr))
+                                  QStringLiteral("Ghi toàn bộ cột \"Giá trị mới\" xuống PSU %1?").arg(m_addr) + notOffNote({m_addr}))
             != QMessageBox::Yes) return;
         if (!m_ctx.auth->unlock(this)) return; // chỉ hỏi mật khẩu khi thật sự gửi cấu hình xuống thiết bị
         setBusy(true);
@@ -194,7 +195,7 @@ QWidget *PsuConfigPage::buildContent()
         }
         if (QMessageBox::question(this, QStringLiteral("Cấu hình hàng loạt"),
                 QStringLiteral("Ghi TOÀN BỘ cột \"Giá trị mới\" xuống %1 PSU? Cấu hình hiện có của từng PSU bị ghi đè hoàn toàn.")
-                    .arg(devs.size())) != QMessageBox::Yes) return;
+                    .arg(devs.size()) + notOffNote(devs)) != QMessageBox::Yes) return;
         if (!m_ctx.auth->unlock(this)) return;
         setBusy(true);
         m_ctx.psuConfig->writeFullMany(devs, newValues());
@@ -323,6 +324,22 @@ void PsuConfigPage::applyGroupFilter()
     const QString g = m_group->currentIndex() == 0 ? QString() : m_group->currentText();
     for (int r = 0; r < m_table->rowCount(); ++r)
         m_table->setRowHidden(r, !g.isEmpty() && m_table->item(r, ColGroup)->text() != g);
+}
+
+// Firmware PSU chỉ nhận cấu hình khi ở SAFE_OFF và bỏ qua im lặng ở trạng thái khác (không ACK): cảnh báo trước khi ghi.
+QString PsuConfigPage::notOffNote(const QList<int> &addrs) const
+{
+    QStringList bad;
+    for (int a : addrs) {
+        const model::PsuState &st = m_ctx.psuStore->psu(a);
+        if (st.frames == 0) continue;                                    // chưa biết trạng thái: không cảnh báo
+        const int safe = int(st.values.at(proto::psumon::kIdxSafeState));
+        if (safe != proto::psumon::SafeOff) bad << QStringLiteral("PSU %1 (%2)").arg(a).arg(proto::psumon::safeStateText(safe));
+    }
+    if (bad.isEmpty()) return {};
+    return QStringLiteral("\n\nCẢNH BÁO: %1 không ở SAFE_OFF. Firmware chỉ nhận cấu hình khi SAFE_OFF và bỏ qua im lặng ở trạng thái khác, "
+                          "nên việc ghi sẽ không có tác dụng (bước đọc lại sẽ báo không khớp). Hãy tắt nguồn PSU trước. Vẫn gửi?")
+        .arg(bad.join(QStringLiteral(", ")));
 }
 
 } // namespace ui

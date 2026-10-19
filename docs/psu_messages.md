@@ -8,10 +8,10 @@ Tài liệu này tổng hợp mọi bản tin liên quan tới PSU trong ACTL To
 |---|---|
 | Khung | `AB CD` + **CMD 2 byte** + địa chỉ PSU + dữ liệu + **CRC16** (2 byte) + `E1 E2` |
 | CRC | CRC16-CCITT-FALSE (đa thức 0x1021, khởi tạo 0xFFFF), **tính từ byte CMD đến hết dữ liệu**, ghi **byte cao trước** |
-| Thứ tự byte | Mọi số nhiều byte đều **big-endian** (byte cao trước), **không dấu** |
+| Thứ tự byte | Mọi số nhiều byte đều **big-endian** (byte cao trước), **không dấu**, trừ dòng Supply (`I_*`) và ngưỡng dòng Supply có dấu bù 2 |
 | Vị trí byte | Trong tài liệu này byte đếm **từ 1**: `AB` = 1, `CD` = 2, CMD = 3-4, địa chỉ = 5 |
 | Địa chỉ PSU | 1 byte, mặc định 5 PSU địa chỉ 1 đến 5 (cài đặt `psu/count`, `psu/firstAddr`) |
-| Giá trị | Giá trị giám sát đang là **số thô** (chưa có công thức quy đổi), hiển thị đúng như nhận được |
+| Giá trị | Giá trị giám sát là **số thô** (chưa có công thức quy đổi); riêng Supply là thanh ghi INA228 và được dịch phải 4 bit khi hiển thị (mục 2.2) |
 | ACK | Điều khiển và ghi cấu hình **không có ACK**; ACK chỉ có trong nạp code STM32 |
 
 ### Đường truyền
@@ -29,6 +29,7 @@ Tài liệu này tổng hợp mọi bản tin liên quan tới PSU trong ACTL To
 |---|---|---|---|---|
 | Giám sát PSU | `81 81` | PSU → app | 266 | Số liệu 4 cụm DCM, nguồn phụ, RTC, trip |
 | Điều khiển PSU | `01 01` | app → PSU | 13 | Bật/tắt 4 cụm, Clear trip; không ACK |
+| Hỏi giám sát PSU | `02 02` | app/Gateway → PSU | 13 | Trả lời `81 81`; app có hàm dựng khung nhưng chưa tự gửi |
 | Hỏi cấu hình PSU | `03 03` | app → PSU | 13 | Trả lời bằng `82 82` |
 | Trả lời cấu hình PSU | `82 82` | PSU → app | 915 | Cùng bố cục khung ghi |
 | Ghi cấu hình PSU | `04 04` | app → PSU | 915 | Không ACK; app đọc lại để kiểm tra |
@@ -36,14 +37,16 @@ Tài liệu này tổng hợp mọi bản tin liên quan tới PSU trong ACTL To
 | STM32 DATA | `91 91` | app → PSU | 269 | Mỗi gói 256 byte |
 | STM32 END | `92 92` | app → PSU | 9 | PSU kiểm CRC32 toàn ảnh |
 | STM32 COMMIT | `93 93` | app → PSU | 9 | Kích hoạt ảnh mới, PSU reset |
-| STM32 ACK | `94 94` | PSU → app | 17 | Trả lời BEGIN/DATA/END/COMMIT/INFO |
-| STM32 INFO | `95 95` | app → PSU | 9 | Hỏi slot đang chạy và version |
+| STM32 ACK | `94 94` | PSU → app | 17 | Trả lời ERASE/BEGIN/DATA/END/COMMIT/INFO/ROLLBACK |
+| STM32 INFO | `95 95` | app → PSU | 9 | Hỏi slot đang chạy, version và trạng thái trial |
+| STM32 ERASE | `96 96` | app → PSU | 9 | Xóa slot đích; một ACK duy nhất khi xóa xong |
+| STM32 ROLLBACK | `97 97` | app → PSU | 9 | Quay về slot kia khi slot đang chạy hỏng; có ACK |
 
-Khung hỏi giám sát PSU (Gateway hỏi PSU) **chưa được định nghĩa** trong phần mềm; app chỉ nhận khung `81 81` mà Gateway chuyển lên.
+Firmware PSU **không tự phát**: chỉ trả lời, và trả ra đúng cổng đã nhận lệnh. Khung hỏi giám sát `02 02` (13 byte: `AB CD 02 02 Addr 00 00 00 00 CRC E1 E2`) do Gateway gửi; app chỉ nhận khung `81 81` Gateway chuyển lên (có sẵn hàm dựng `02 02` trong `proto/psu_monitor_proto`). Khung gửi sai địa chỉ thì PSU bỏ qua, không phản hồi.
 
 ## 2. Giám sát `81 81` (266 byte)
 
-Bố cục: `[AB CD][81 81][Addr][CỤM 1..4: 4 x 48 B][SUPPLY 24 B][RTC 7 B][TRIP 10 B][Dự phòng 24 B][CRC 2 B][E1 E2]`
+Bố cục: `[AB CD][81 81][Addr][CỤM 1..4: 4 x 48 B][SUPPLY 24 B][RTC 7 B][TRIP 10 B][Mở rộng firmware 24 B][CRC 2 B][E1 E2]`
 
 | Byte | Đoạn | Nội dung |
 |---|---|---|
@@ -57,7 +60,7 @@ Bố cục: `[AB CD][81 81][Addr][CỤM 1..4: 4 x 48 B][SUPPLY 24 B][RTC 7 B][TR
 | 198-221 | Supply | 8 giá trị x 3 byte |
 | 222-228 | RTC | 7 byte, mỗi trường 1 byte |
 | 229-238 | Trip | 10 trip code, mỗi cái 1 byte |
-| 239-262 | Dự phòng | 24 byte |
+| 239-262 | Mở rộng firmware | 24 byte (xem 2.5): trạng thái an toàn, cờ, INA, slot, version |
 | 263-264 | CRC | CRC16 từ byte 3 đến byte 262 |
 | 265-266 | Đuôi | `E1 E2` |
 
@@ -90,6 +93,8 @@ Mỗi cụm có 8 giá trị 3 byte (6 giá trị ADC và 2 giá trị AMC) rồ
 
 ### 2.2 Nguồn phụ (Supply, byte 198-221)
 
+Supply lấy từ 4 INA228: INA1 = `I_DCM`/`V_DCM`, INA2 = `I_5V`/`V_5V`, INA3 = `I_3V3_1`/`V_3V3_1`, INA4 = `I_3V3_2`/`V_3V3_2`. Mỗi giá trị là **3 byte thanh ghi CURRENT / VBUS nguyên bản** của INA228, dữ liệu nằm ở **bit 23..4**: giao diện **dịch phải 4 bit** để hiển thị; **dòng (`I_*`) có dấu** (bù 2, 24 bit), áp (`V_*`) không dấu. Kênh INA mất dữ liệu gửi `00 00 00`. App lưu và so ngưỡng bằng giá trị thô đủ 24 bit (cùng đơn vị với ngưỡng Supply trong cấu hình); tooltip ô Supply ghi cả giá trị thô.
+
 | Byte | Dài | Tên trường | Nhãn giao diện |
 |---|---|---|---|
 | 198-200 | 3 | SUPPLY.I_DCM | Dòng DCM Supply |
@@ -115,7 +120,19 @@ Mỗi cụm có 8 giá trị 3 byte (6 giá trị ADC và 2 giá trị AMC) rồ
 
 ### 2.4 Trip code (byte 229-238)
 
-Mỗi trip code là một byte. **Chưa có bảng ý nghĩa bit** cho PSU, nên app chỉ hiển thị số thô.
+Mỗi trip code là một byte. Bảng bit dưới đây là **TẠM THỜI** theo firmware (chờ bảng chính thức); giao diện hiện ý nghĩa từng bit ở tooltip:
+
+| Byte | Ý nghĩa |
+|---|---|
+| TRIP1 | bit k = giá trị Supply k vượt **MAX** (k: 0 `I_DCM`, 1 `V_DCM`, 2 `I_5V`, 3 `V_5V`, 4 `I_3V3_1`, 5 `V_3V3_1`, 6 `I_3V3_2`, 7 `V_3V3_2`) |
+| TRIP2 | bit k = giá trị Supply k dưới **MIN** |
+| TRIP3 | bit c = INA c+1 báo SHNTOL/POL (quá dòng/công suất); bit 4+c = SHNTUL |
+| TRIP4 | bit c = BUSOL (quá áp bus); bit 4+c = BUSUL (sụt áp bus) |
+| TRIP5 | bit c = TMPOL (quá nhiệt INA); bit 4+c = chân FT của DCM c+1 |
+| TRIP6 | bit0 mất liên lạc I²C; bit1 cắt do ALERT nhưng không xác nhận nguyên nhân; bit2 LOCKOUT; bit3 cấu hình INA không hợp lệ |
+| TRIP7..10 | 0 |
+
+Trip code **latch** cho tới khi nhận Clear trip (không tự xóa khi giá trị trở lại bình thường).
 
 | Byte | Dài | Tên trường | Nhãn giao diện |
 |---|---|---|---|
@@ -130,10 +147,32 @@ Mỗi trip code là một byte. **Chưa có bảng ý nghĩa bit** cho PSU, nên
 | 237 | 1 | TRIP9 | Trip code 9 |
 | 238 | 1 | TRIP10 | Trip code 10 |
 
-### 2.5 Cách app xử lý
+### 2.5 Mở rộng firmware (byte 239-262)
+
+Vùng dự phòng 24 byte được firmware APSU dùng làm vùng mở rộng. Offset tính từ byte 239:
+
+| Offset | Byte | Dài | Tên trường | Ý nghĩa |
+|---|---|---|---|---|
+| +0 | 239 | 1 | `FW.SAFE_STATE` | 0 BOOT, 1 OFF, 2 ARMING, 3 ON, 4 TRIPPED, 5 LOCKOUT |
+| +1 | 240 | 1 | `FW.PWR_FLAGS` | bit0 PWR_EN đang bật; bit1 PC đang yêu cầu bật |
+| +2 | 241 | 1 | `FW.TRIP_COUNT` | Số lần trip liên tiếp |
+| +3 | 242 | 1 | `FW.FAULT_CODE` | Mã lỗi (như LED) |
+| +4 | 243 | 1 | `FW.INA_FRESH` | Mask kênh INA còn tươi (bit c = INA c+1) |
+| +5 | 244 | 1 | `FW.INA_CFG_OK` | Mask INA cấu hình đúng |
+| +6 | 245 | 1 | `FW.DCM_FT` | Mask chân FT của DCM đang báo lỗi |
+| +7 | 246 | 1 | `FW.CFG_SAVED` | bit0 = cấu hình đã lưu Flash (0 = đang dùng mặc định) |
+| +8..+15 | 247-254 | 4 x 2 | `FW.DIAG_ALRT1..4` | DIAG_ALRT tích lũy của INA1..4 |
+| +16 | 255 | 1 | `FW.SLOT` | Slot đang chạy `A` / `B` |
+| +17 | 256 | 1 | `FW.TRIAL` | bit7 đã confirm, bit6..0 boot_count |
+| +18..+21 | 257-260 | 4 | `FW.VERSION` | Version ảnh đang chạy |
+| +22..+23 | 261-262 | 2 | | 0 |
+
+Giao diện hiện các giá trị này ở khung "Firmware PSU" trên trang PSU. Hai trạng thái **TRIPPED** và **LOCKOUT** ảnh hưởng tới điều khiển (mục 3).
+
+### 2.6 Cách app xử lý
 
 - **Trip:** có bất kỳ trip code nào khác 0 thì PSU ở trạng thái Trip (ưu tiên hơn Quá ngưỡng). Trip chưa gán được cho từng cụm.
-- **Quá ngưỡng:** giá trị nào có ngưỡng trong cấu hình (xem mục 4.4) được so với ngưỡng đã lưu phía app; vượt thì PSU ở trạng thái Quá ngưỡng. Các giá trị PEAK, VALLEY, RMS, nhiệt độ FET/XDP, RTC và trip chỉ hiển thị, không so sánh.
+- **Quá ngưỡng:** giá trị nào có ngưỡng trong cấu hình (xem mục 4.4) được so với ngưỡng đã lưu phía app; vượt thì PSU ở trạng thái Quá ngưỡng. Các giá trị PEAK, VALLEY, RMS, nhiệt độ FET/XDP, RTC, trip và vùng firmware chỉ hiển thị, không so sánh. Giá trị `0` ở một cận ngưỡng nghĩa là **tắt cận đó** (không so phía đó).
 - **Mất kết nối:** quá `system/staleMs` (mặc định 3000 ms) không có khung mới thì PSU bị đánh dấu mất kết nối (hiện `?`), số liệu cuối vẫn được giữ.
 - **Địa chỉ ngoài dải:** khung có địa chỉ không thuộc `psu/firstAddr` đến `psu/firstAddr + psu/count - 1` bị bỏ và đếm là "địa chỉ sai".
 - **CRC:** kiểm CRC mỗi khung, bật tắt bằng `psu/checkCrc` (mặc định bật). Khung sai CRC bị bỏ và đếm vào "Lỗi CRC".
@@ -147,13 +186,16 @@ Mỗi trip code là một byte. **Chưa có bảng ý nghĩa bit** cho PSU, nên
 | 1-2 | 2 | Header | `AB CD` |
 | 3-4 | 2 | CMD | `01 01` |
 | 5 | 1 | Addr | Địa chỉ PSU |
-| 6 | 1 | Mask | Bit 0..3 = cụm 1..4; **1 = bật, 0 = tắt**. Bit cao bị xóa về 0 |
+| 6 | 1 | Mask | Bit 0..3 = cụm 1..4; **1 = bật, 0 = tắt**. Phần cứng hiện chỉ có **một chân PWR_EN** (đóng cả 4 DCM) và chỉ lấy **bit0**; bit 1..3 bị bỏ qua. App gửi `0F` khi bật, `00` khi tắt |
 | 7 | 1 | ClearTrip | `0x01` = PSU xóa các trip code trong bản tin giám sát; `0x00` = không |
 | 8-9 | 2 | Dự phòng | `00 00` |
 | 10-11 | 2 | CRC | CRC16 từ byte 3 đến byte 9 |
 | 12-13 | 2 | Đuôi | `E1 E2` |
 
-- Mỗi lệnh **ghi đè trạng thái cả 4 cụm**, nên giao diện luôn hỏi xác nhận trước khi gửi.
+- Mỗi lệnh **ghi đè trạng thái bật/tắt**, nên giao diện luôn hỏi xác nhận trước khi gửi. Khi chọn PSU, ô "Bật nguồn" được điền sẵn theo `FW.PWR_FLAGS` bit0.
+- **ClearTrip = `01`:** đang TRIPPED thì xóa trip code và các cờ, về OFF; **lệnh bật trong cùng khung bị bỏ qua** (phải gửi ở khung sau). App tự gửi Clear trip (tắt) rồi, sau 300 ms, gửi lệnh bật ở khung riêng khi PSU đang TRIPPED. Ở trạng thái khác thì xóa trip code và bật/tắt theo Mask trong một khung.
+- **LOCKOUT** (≥ 3 lần trip liên tiếp): mọi lệnh bị bỏ qua, trip code giữ nguyên, chỉ reset phần cứng mới thoát; giao diện chặn gửi và báo rõ.
+- Lệnh bật bị từ chối (đang TRIPPED/LOCKOUT hoặc đang nạp code) thì PSU bỏ qua im lặng.
 - Không có ACK: app chỉ báo "đã gửi", không biết PSU đã thực hiện hay chưa; kết quả thấy qua bản tin giám sát kế tiếp.
 
 ## 4. Cấu hình
@@ -307,7 +349,8 @@ Kênh CH0 (CH1..CH7 cùng bố cục, tên `CHk_...`):
 2. **Ghi:** (nếu chỉ sửa một số ô thì app đọc cấu hình hiện tại trước, áp thay đổi lên bản đọc được) gửi `04 04` với Mask `FF FF`, chờ `config/writeGapMs` (mặc định 300 ms) cho PSU lưu, rồi **đọc lại** bằng `03 03` (cũng thử tối đa 3 lần).
 3. **Kiểm tra:** so từng trường của bản đọc lại với bản vừa ghi; khác thì báo "đọc lại KHÔNG khớp" kèm tối đa 5 tên trường đầu.
 4. Làm lần lượt từng PSU. Mật khẩu kỹ sư chỉ được hỏi khi ghi.
-5. Nút "Mặc định" điền giá trị hãng gợi ý: `OPERATION` = `0x80`, `ENABLE_FAULTS` = `0x3EFF`, `MASK_FAULTS` = `0x3EFF`, `RETRY` = `0x3FBF`, các trường khác = 0. Nếu có `psu_default_config.json` cạnh file chạy thì giá trị trong file thay cho mặc định cài sẵn.
+5. **Firmware chỉ nhận cấu hình khi SAFE_OFF**, ngoài ra bỏ qua im lặng (không ACK). Giao diện cảnh báo trước khi ghi nếu PSU đang báo trạng thái khác OFF, và thông báo "đọc lại KHÔNG khớp" có ghi chú này. 904 byte dữ liệu được PSU lưu nguyên vào Flash; chưa lưu thì `82 82` trả cấu hình mặc định (xem `FW.CFG_SAVED`).
+6. Nút "Mặc định" điền giá trị hãng gợi ý: `OPERATION` = `0x80`, `ENABLE_FAULTS` = `0x3EFF`, `MASK_FAULTS` = `0x3EFF`, `RETRY` = `0x3FBF`, các trường khác = 0. Nếu có `psu_default_config.json` cạnh file chạy thì giá trị trong file thay cho mặc định cài sẵn.
 
 ### 4.4 Ngưỡng cảnh báo phía app
 
@@ -316,7 +359,11 @@ Sau mỗi lần đọc thành công, app lấy các cặp ngưỡng sau từ c�
 - Mỗi cụm (4 cụm): `I_OUT_ADC1..3`, `TEMP_ADC1..3`, `I_IN_AMC`, `V_IN_AMC`, `V_IN_XDP`, `V_OUT_XDP`, `I_OUT_XDP` (11 giá trị, so với trường giám sát cùng tên `Cn.<tên>`).
 - Supply: `I_DCM`, `V_DCM`, `I_5V`, `V_5V`, `I_3V3_1`, `V_3V3_1`, `I_3V3_2`, `V_3V3_2`.
 
-## 5. Nạp code STM32 (`90`-`95`)
+Ngưỡng Supply là 3 byte, so với **giá trị thô cùng đơn vị bản tin giám sát** (chưa dịch phải 4 bit); ngưỡng dòng (`I_*`) **có dấu 24 bit**; giá trị `0` = tắt cận đó (cả MAX lẫn MIN). Firmware PSU cũng tự so các ngưỡng này (chỉ khi SAFE_ON, cần 2 mẫu liên tiếp, ~60 ms/mẫu) và latch trip code.
+
+Ghi chú theo firmware cho nhóm INA: `SHUNT_CAL` = 0 nghĩa là dùng giá trị mặc định của INA đó; bit RST/RSTACC của `CONFIG` bị firmware xóa; ngưỡng dưới `SUVL`, `BUVL` chỉ được nạp vào INA khi PSU ở SAFE_ON (chưa kiểm chứng trên board).
+
+## 5. Nạp code STM32 (`90`-`97`)
 
 Mã lệnh là một byte **lặp hai lần** ở phần CMD (ví dụ BEGIN là `90 90`). CRC phủ từ byte CMD.
 
@@ -341,20 +388,20 @@ Mã lệnh là một byte **lặp hai lần** ở phần CMD (ví dụ BEGIN là
 
 `[AB CD][CMD CMD][Addr][CRC 2 B][E1 E2]`
 
-- END: yêu cầu PSU kiểm CRC32 toàn ảnh. COMMIT: kích hoạt ảnh mới (PSU reset). INFO: hỏi slot đang chạy và version.
+- END: yêu cầu PSU kiểm CRC32 toàn ảnh. COMMIT: kích hoạt ảnh mới (PSU reset). INFO: hỏi slot đang chạy, version và trạng thái trial. **ERASE `96 96`:** xóa slot đích. **ROLLBACK `97 97`:** đánh dấu slot đang chạy hỏng rồi reset để quay về slot kia (có ACK; chỉ khi SAFE_OFF và slot kia khởi động được).
 
 ### 5.4 ACK `94 94` (17 byte)
 
-`[AB CD][94 94][Addr][AckCmd][Status][Info 4 B][Slot][Dự phòng][CRC 2 B][E1 E2]`
+`[AB CD][94 94][Addr][AckCmd][Status][Info 4 B][Slot][Trial][CRC 2 B][E1 E2]`
 
 | Byte | Dài | Trường | Ý nghĩa |
 |---|---|---|---|
 | 5 | 1 | Addr | Địa chỉ PSU |
-| 6 | 1 | AckCmd | Mã 1 byte của lệnh được trả lời (`90`..`93`, `95`) |
+| 6 | 1 | AckCmd | Mã 1 byte của lệnh được trả lời (`90`..`93`, `95`, `96`, `97`) |
 | 7 | 1 | Status | Mã trạng thái (bảng dưới) |
-| 8-11 | 4 | Info | Tùy lệnh: BEGIN `1` = đã xóa xong; DATA lỗi sai thứ tự = seq cuối đã nhận; END lỗi CRC = CRC thiết bị tính được; INFO = version; lỗi xóa = mã HAL |
-| 12 | 1 | Slot | `A` hoặc `B`, chỉ có nghĩa với INFO |
-| 13 | 1 | Dự phòng | |
+| 8-11 | 4 | Info | Tùy lệnh: ERASE `1` = đã xóa xong; DATA lỗi sai thứ tự = seq cuối đã nhận; END lỗi CRC = CRC thiết bị tính được; INFO = version; lỗi xóa = mã HAL |
+| 12 | 1 | Slot | `A` hoặc `B`; **`R` khi thiết bị ở bootloader recovery** (cả hai slot hỏng). Chỉ có nghĩa với INFO |
+| 13 | 1 | Trial | Chỉ có ở trả lời INFO: bit7 đã confirm, bit6..0 boot_count |
 
 | Status | Tên | Ý nghĩa |
 |---|---|---|
@@ -367,14 +414,29 @@ Mã lệnh là một byte **lặp hai lần** ở phần CMD (ví dụ BEGIN là
 | 6 | NoCommitPending | Chưa có END thành công để commit |
 | 7 | EraseFail | Xóa sector thất bại |
 | 8 | WrongSlot | Ảnh được link cho slot khác |
+| 9 | ProgFail | Lỗi ghi flash (info = mã HAL / địa chỉ) |
+| 10 | NoTarget | ROLLBACK: slot kia không khởi động được |
+| 11 | NotErased | BEGIN khi chưa ERASE |
 
 ### 5.5 Quy trình nạp (lần lượt từng PSU)
 
-1. **INFO** (chờ 1 s): biết PSU đang chạy slot nào. Nạp vào slot **còn lại**: đang chạy A thì nạp ảnh slot B, và ngược lại; cần chọn file cho slot đích.
-2. **BEGIN** (chờ 2 s): PSU trả hai ACK cùng `AckCmd` và `Status`; ACK đầu báo đã nhận, ACK có `Info = 1` báo **đã xóa xong** (chờ tối đa 15 s). `EraseFail` hoặc trạng thái khác `OK` thì dừng.
-3. **DATA** từng gói 256 byte (chờ ACK 800 ms; hết giờ thì gửi lại, tối đa 5 lần). `BadSeq` thì nhảy theo seq PSU báo (`Info + 1`), tối đa 5 lần.
-4. **END** (chờ 3 s): PSU kiểm CRC32; sai thì báo kèm CRC thiết bị tính được.
-5. **COMMIT** (chờ 2 s): có tùy chọn tự kích hoạt ngay khi CRC32 đúng, hoặc hỏi người dùng trước. Hết giờ chờ ACK COMMIT được coi là thành công có điều kiện (PSU thường reset trước khi trả lời); nên đọc lại INFO để xác nhận.
-6. Hủy giữa chừng không ảnh hưởng firmware đang chạy; slot đích có thể còn dữ liệu dở.
+Stop-and-wait: app chờ ACK rồi mới gửi khung kế.
 
-Cần mật khẩu kỹ sư để nạp; PSU phải ở SAFE_OFF mới chấp nhận BEGIN.
+1. **INFO** (chờ 1 s): biết PSU đang chạy slot nào và trạng thái trial. Nạp vào slot **còn lại**: đang chạy A thì nạp ảnh slot B, và ngược lại; cần chọn file cho slot đích. Ở **recovery (`R`)** bootloader xóa cả hai slot; app chọn ảnh slot A nếu có, không thì ảnh slot B (giả định, chưa kiểm chứng).
+2. **ERASE** (chờ tối đa 20 s): PSU trả **một ACK duy nhất khi xóa xong** (`Info = 1`). `EraseFail` hoặc trạng thái khác `OK` thì dừng.
+3. **BEGIN** (chờ 2 s): size, CRC32, version; PSU ACK ngay. Gửi BEGIN mà chưa ERASE thì PSU trả `NotErased`.
+4. **DATA** từng gói 256 byte, khung luôn 269 byte, gói cuối đệm `FF` (chờ ACK 800 ms; hết giờ thì gửi lại, tối đa 5 lần). `BadSeq` thì nhảy theo seq PSU báo (`Info + 1`), tối đa 5 lần. `ProgFail` thì dừng.
+5. **END** (chờ 3 s): PSU kiểm CRC32; sai thì báo kèm CRC thiết bị tính được.
+6. **COMMIT** (chờ 2 s): có tùy chọn tự kích hoạt ngay khi CRC32 đúng, hoặc hỏi người dùng trước. Hết giờ chờ ACK COMMIT được coi là thành công có điều kiện (PSU thường reset trước khi trả lời); nên đọc lại INFO để xác nhận.
+7. Hủy giữa chừng không ảnh hưởng firmware đang chạy; slot đích có thể còn dữ liệu dở.
+
+**ROLLBACK** (nút "Rollback (về slot kia)"): gửi `97 97`, chờ ACK 3 s; `OK` nghĩa là PSU đã đánh dấu slot đang chạy hỏng và đang reset; `NoTarget` nghĩa là slot kia không khởi động được; `Refused` nghĩa là PSU chưa ở SAFE_OFF.
+
+Cần mật khẩu kỹ sư để nạp và rollback; PSU phải ở SAFE_OFF mới chấp nhận.
+
+## 6. Khác biệt đã biết với firmware
+
+- CRC tính từ byte CMD (khớp firmware hiện tại). Firmware có macro `PSU_CRC_INCLUDE_CMD` để đổi sang tính từ ADDR; nếu đổi thì phải đổi cả phía app (`core::seal` với `crcStart` của PSU).
+- RTC và 4 cụm DCM: firmware chưa có nguồn dữ liệu nên gửi `00`; giao diện vẫn hiện (toàn 0).
+- Bảng trip code là tạm thời (mục 2.4).
+- Cổng nào là đường Gateway/dự phòng của PSU chưa chốt (firmware hiện nhận mọi lệnh ở cả 3 cổng).

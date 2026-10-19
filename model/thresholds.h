@@ -10,7 +10,8 @@ namespace model {
 struct Limit {
     double min = 0, max = 0;
     bool isSet() const { return min != 0 || max != 0; } // 0/0 = chưa đặt ngưỡng
-    bool violatedBy(double v) const { return isSet() && (v < min || v > max); }
+    // Giá trị 0 ở một phía = tắt phía đó (firmware PSU cũng so như vậy), nên thiếu cận dưới/trên thì không so phía đó.
+    bool violatedBy(double v) const { return (min != 0 && v < min) || (max != 0 && v > max); }
 };
 
 class Thresholds {

@@ -76,11 +76,78 @@ private slots:
         QCOMPARE(t.size(), psumon::kNumFields);
         int end = psumon::kOffAddr + 1;
         for (const Field &f : t.fields()) { QCOMPARE(f.offset, end); end += f.size; }
-        QCOMPARE(end, psumon::kLength - 4 - 24);
+        QCOMPARE(end, psumon::kLength - 4 - 2);                  // còn 2 byte dự phòng chưa dùng sau phần mở rộng firmware
         QCOMPARE(t.fields().at(psumon::clusterField(1, psumon::TempFet)).offset, 5 + 48 + 18 + 6 + 20); // cụm 2, dưới 3 ADC + AMC + 10 XDP
         QCOMPARE(t.fields().at(psumon::kIdxSupply0).offset, 5 + 4 * 48);
         QCOMPARE(t.fields().at(psumon::kIdxTrip0).offset, 5 + 4 * 48 + 24 + 7);
         QCOMPARE(psumon::clusterFieldLabel(psumon::TempFet), QStringLiteral("Nhiệt độ FET"));
+    }
+
+    void monitorFirmwareExtensionLayout()
+    {
+        const FieldTable &t = psumon::table();
+        auto first = [&](int idx) { return t.fields().at(idx).offset + 1; };    // byte đếm từ 1
+        QCOMPARE(first(psumon::kIdxSafeState), 239);
+        QCOMPARE(first(psumon::kIdxCfgSaved), 246);
+        QCOMPARE(first(psumon::kIdxDiagAlrt0), 247);                            // +8..+15: 4 x 2 byte
+        QCOMPARE(t.fields().at(psumon::kIdxDiagAlrt0).size, 2);
+        QCOMPARE(first(psumon::kIdxSlot), 255);                                 // +16
+        QCOMPARE(first(psumon::kIdxTrial), 256);
+        QCOMPARE(first(psumon::kIdxVersion), 257);                              // +18..+21
+        QCOMPARE(t.fields().at(psumon::kIdxVersion).size, 4);
+
+        QList<double> v(psumon::kNumFields, 0.0);
+        v[psumon::kIdxSafeState] = psumon::SafeOn;
+        v[psumon::kIdxSlot] = 'B';
+        v[psumon::kIdxVersion] = 20261013;
+        const QByteArray f = psumon::buildFrame(2, v);
+        QCOMPARE(f.size(), 266);
+        QVERIFY(crcOk(f, 2));
+        const QList<double> back = t.decode(f);
+        QCOMPARE(back.at(psumon::kIdxSafeState), double(psumon::SafeOn));
+        QCOMPARE(back.at(psumon::kIdxSlot), double('B'));
+        QCOMPARE(back.at(psumon::kIdxVersion), 20261013.0);
+        QCOMPARE(psumon::safeStateText(psumon::SafeTripped), QStringLiteral("TRIPPED"));
+    }
+
+    void supplyRawValuesAreSignedForCurrentOnly()
+    {
+        QList<double> v(psumon::kNumFields, 0.0);
+        v[psumon::kIdxSupply0] = -4800;               // I_DCM: 24 bit bù 2
+        v[psumon::kIdxSupply0 + 1] = 0xF00000;        // V_DCM: không dấu, bit cao 1 vẫn là số dương
+        const QList<double> back = psumon::table().decode(psumon::buildFrame(1, v));
+        QCOMPARE(back.at(psumon::kIdxSupply0), -4800.0);
+        QCOMPARE(back.at(psumon::kIdxSupply0 + 1), 15728640.0);
+        QCOMPARE(psumon::supplyShown(0x1230), 0x123 * 1.0);   // dịch phải 4 bit
+        QCOMPARE(psumon::supplyShown(-16), -1.0);
+        QCOMPARE(psumon::supplyShown(-17), -2.0);             // bậc thang xuống như dịch số học
+    }
+
+    void pollFrameAndTripNames()
+    {
+        const QByteArray p = psumon::buildPoll(4);
+        QCOMPARE(p.size(), 13);
+        QCOMPARE(p.mid(2, 3).toHex(), QByteArray("020204"));
+        QVERIFY(crcOk(p, 2));
+        QCOMPARE(psumon::tripBitName(0, 2), QStringLiteral("I_5V vượt MAX"));
+        QCOMPARE(psumon::tripBitName(1, 7), QStringLiteral("V_3V3_2 dưới MIN"));
+        QCOMPARE(psumon::tripBitName(2, 5), QStringLiteral("INA2 SHNTUL"));
+        QCOMPARE(psumon::tripBitName(4, 4), QStringLiteral("DCM1 chân FT báo lỗi"));
+        QVERIFY(psumon::tripBitName(5, 4).isEmpty());
+        QVERIFY(psumon::tripBitName(7, 0).isEmpty());
+    }
+
+    void supplyThresholdUsesSignedCurrentAndZeroDisables()
+    {
+        const FieldTable &c = psucfg::table();
+        QVERIFY(c.fields().at(c.indexOf("Supply - Ngưỡng", "I_DCM_MIN")).isSigned);
+        QVERIFY(!c.fields().at(c.indexOf("Supply - Ngưỡng", "V_DCM_MIN")).isSigned);
+        QList<double> v = psucfg::defaultValues();
+        v[c.indexOf("Supply - Ngưỡng", "I_DCM_MIN")] = -1000;
+        QCOMPARE(c.decode(psucfg::buildWrite(1, v)).at(c.indexOf("Supply - Ngưỡng", "I_DCM_MIN")), -1000.0);
+        QVERIFY(model::Limit({-1000, 5000}).violatedBy(-1001));
+        QVERIFY(!model::Limit({0, 5000}).violatedBy(-1));       // 0 = tắt cận dưới
+        QVERIFY(!model::Limit({10, 0}).violatedBy(99999));      // 0 = tắt cận trên
     }
 
     void configTableLayout()
@@ -309,6 +376,87 @@ private slots:
         const int loads = broadcast ? 3 : 6;                     // gửi riêng: 3 gói x 2 TRB
         QCOMPARE(cmds.mid(0, loads), QList<quint8>(loads, 0x55));   // toàn bộ gói đi trước, không xen lệnh hỏi
         QCOMPARE(cmds.mid(loads), (QList<quint8>{0x88, 0x88}));     // rồi mới hỏi từng TRB
+    }
+
+    // Nạp STM32 theo trình tự mới: INFO -> ERASE (một ACK khi xong) -> BEGIN -> DATA... -> END -> COMMIT.
+    void stmOtaFlowUsesEraseBeforeBegin()
+    {
+        core::FrameRegistry registry;
+        QVERIFY(services::StmOta::registerFrames(registry));
+        auto *tp = new FakeTransport;
+        core::Link link("service", tp, &registry);
+        link.start();
+
+        auto ack = [](quint8 addr, quint8 ackCmd, quint8 status, quint32 info, char slot, quint8 trial) {
+            QByteArray a(17, 0);
+            a.replace(2, 2, stmota::cmdBytes(stmota::kAck));
+            a[4] = char(addr); a[5] = char(ackCmd); a[6] = char(status);
+            for (int i = 0; i < 4; ++i) a[7 + i] = char(info >> (24 - 8 * i));
+            a[11] = slot; a[12] = char(trial);
+            core::seal(a, 2);
+            return a;
+        };
+        QList<quint8> cmds;
+        tp->onWrite = [&](const QByteArray &d) {
+            const quint8 c = quint8(d[2]);
+            cmds << c;
+            switch (c) {
+            case stmota::kInfo:  tp->injectLater(ack(3, c, stmota::Ok, 77, 'A', 0x80)); break;
+            case stmota::kErase: tp->injectLater(ack(3, c, stmota::Ok, 1, 'A', 0)); break;
+            case stmota::kBegin: tp->injectLater(ack(3, c, stmota::Ok, 0, 'A', 0)); break;
+            case stmota::kData:  tp->injectLater(ack(3, c, stmota::Ok, 0, 'A', 0)); break;
+            case stmota::kEnd:   tp->injectLater(ack(3, c, stmota::Ok, 0, 'A', 0)); break;
+            case stmota::kCommit: tp->injectLater(ack(3, c, stmota::Ok, 0, 'A', 0)); break;
+            }
+        };
+
+        services::StmOta ota(&link);
+        QSignalSpy info(&ota, &services::StmOta::deviceInfo), fin(&ota, &services::StmOta::deviceFinished);
+        ota.start({3}, QByteArray(10, 'a'), QByteArray(300, 'b'), 20261013, true);   // đang chạy A: nạp ảnh B (300 byte = 2 gói)
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
+        const QList<quint8> expect{stmota::kInfo, stmota::kErase, stmota::kBegin, stmota::kData, stmota::kData, stmota::kEnd, stmota::kCommit};
+        QCOMPARE(cmds, expect);
+        QCOMPARE(info.size(), 1);
+        QCOMPARE(info.first().at(1).toChar().toLatin1(), 'A');
+        QCOMPARE(info.first().at(3).toUInt(), 0x80u);                       // trial: đã xác nhận
+        QCOMPARE(fin.size(), 1);
+        QVERIFY(fin.first().at(1).toBool());
+    }
+
+    void stmOtaEraseFailureAndRollback()
+    {
+        core::FrameRegistry registry;
+        services::StmOta::registerFrames(registry);
+        auto *tp = new FakeTransport;
+        core::Link link("service", tp, &registry);
+        link.start();
+        auto ack = [](quint8 ackCmd, quint8 status, quint32 info, char slot) {
+            QByteArray a(17, 0);
+            a.replace(2, 2, stmota::cmdBytes(stmota::kAck));
+            a[4] = char(1); a[5] = char(ackCmd); a[6] = char(status); a[10] = char(info); a[11] = slot;
+            core::seal(a, 2);
+            return a;
+        };
+        tp->onWrite = [&](const QByteArray &d) {
+            const quint8 c = quint8(d[2]);
+            if (c == stmota::kInfo) tp->injectLater(ack(c, stmota::Ok, 5, 'R'));                  // recovery
+            else if (c == stmota::kErase) tp->injectLater(ack(c, stmota::EraseFail, 0x55, 'R'));
+            else if (c == stmota::kRollback) tp->injectLater(ack(c, stmota::NoTarget, 0, 'A'));
+        };
+        services::StmOta ota(&link);
+        QSignalSpy fin(&ota, &services::StmOta::deviceFinished);
+        ota.start({1}, QByteArray(100, 'a'), {}, 1, true);            // recovery: dùng ảnh A
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
+        QCOMPARE(fin.size(), 1);
+        QVERIFY(!fin.first().at(1).toBool());
+        QVERIFY(fin.first().at(2).toString().contains("xóa"));
+
+        ota.rollback({1});
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
+        QCOMPARE(fin.size(), 2);
+        QVERIFY(!fin.last().at(1).toBool());
+        QVERIFY(fin.last().at(2).toString().contains("slot còn lại"));
+        QCOMPARE(stmota::statusText(stmota::NotErased), QStringLiteral("chưa ERASE slot đích"));
     }
 
     void allFramesCanBeRegistered()

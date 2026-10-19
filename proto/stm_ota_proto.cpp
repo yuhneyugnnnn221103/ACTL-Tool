@@ -57,6 +57,7 @@ Ack parseAck(const QByteArray &f)
     a.status = quint8(f[6]);
     a.info = quint32(quint8(f[7])) << 24 | quint32(quint8(f[8])) << 16 | quint32(quint8(f[9])) << 8 | quint8(f[10]);
     a.slot = f[11];
+    a.trial = quint8(f[12]);
     return a;
 }
 
@@ -72,6 +73,9 @@ QString statusText(quint8 s)
     case NoCommitPending: return QStringLiteral("chưa có FW_END thành công để commit");
     case EraseFail:       return QStringLiteral("xóa sector thất bại");
     case WrongSlot:       return QStringLiteral("SAI SLOT: ảnh được link cho slot khác");
+    case ProgFail:        return QStringLiteral("lỗi ghi flash");
+    case NoTarget:        return QStringLiteral("slot còn lại không khởi động được");
+    case NotErased:       return QStringLiteral("chưa ERASE slot đích");
     default:              return QStringLiteral("mã lạ %1").arg(s);
     }
 }

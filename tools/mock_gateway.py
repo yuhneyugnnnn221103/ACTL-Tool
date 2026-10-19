@@ -155,12 +155,23 @@ def psu_frame(addr, rng, *, over=None, supply_over=None, trips=None, now=None):
         val = PSU_SUPPLY_NORMAL.get(name, rng.randint(100, 900))
         if name in (supply_over or {}):
             val = supply_over[name]
-        put(f, off, val, 3)
+        # Supply là thanh ghi INA228: dữ liệu ở bit 23..4 (val là giá trị đã dịch), dòng có dấu bù 2 24 bit
+        f[off:off + 3] = ((val << 4) & 0xFFFFFF).to_bytes(3, "big")
         off += 3
     t = time.localtime(now or time.time())
     f[PSU_RTC_OFF:PSU_RTC_OFF + 7] = bytes([t.tm_year % 100, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, 0])
     for k, tr in enumerate(trips or []):
         f[PSU_TRIP_OFF + k] = tr & 0xFF
+    # Vùng mở rộng của firmware (byte 239..: offset 238): trạng thái an toàn, PWR_EN, INA, slot, trial, version
+    ext = PSU_TRIP_OFF + PSU_TRIP_COUNT
+    tripped = any(trips or [])
+    f[ext] = 4 if tripped else 3                  # SafeState: TRIPPED / ON
+    f[ext + 1] = 0 if tripped else 3              # bit0 PWR_EN đang bật, bit1 PC yêu cầu bật
+    f[ext + 2] = 1 if tripped else 0              # số lần trip liên tiếp
+    f[ext + 4] = f[ext + 5] = 0x0F                # INA1..4 tươi và cấu hình đúng
+    f[ext + 7] = 1                                # cấu hình đã lưu Flash
+    f[ext + 16], f[ext + 17] = ord("A"), 0x80     # slot A, đã confirm
+    f[ext + 18:ext + 22] = (20261013).to_bytes(4, "big")
     return seal(f, PSU_CRC_START)
 
 
@@ -452,7 +463,7 @@ def cmd_thresholds(args):
         for k in (1, 2, 3):
             psu[f"C{c}.TEMP_ADC{k}"] = [100, 2000]
         psu[f"C{c}.I_OUT_XDP"] = [100, 5000]
-    psu["SUPPLY.V_5V"] = [4500, 5500]
+    psu["SUPPLY.V_5V"] = [4500 << 4, 5500 << 4]      # ngưỡng cùng đơn vị thô như bản tin (chưa dịch phải 4 bit)
     for name, doc in (("thresholds.json", {"default": trb}), ("psu_thresholds.json", {"default": psu})):
         path = os.path.join(args.dir, name)
         with open(path, "w") as fh:
