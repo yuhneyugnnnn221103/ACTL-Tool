@@ -52,14 +52,16 @@ static FieldTable build()
     }
     for (const char *n : kRtc) add(QStringLiteral("RTC.") + n, 1, QStringLiteral("RTC"));
     for (int i = 1; i <= kNumTrip; ++i) add(QStringLiteral("TRIP%1").arg(i), 1, QStringLiteral("Trip"));
-    // Mở rộng firmware (byte 239..260); 2 byte cuối vùng dự phòng chưa dùng.
+    // Mở rộng firmware (24 byte, byte 239..262): app chỉ dùng 5 trường, các byte còn lại là dự phòng và bỏ qua.
     const QString fw = QStringLiteral("Firmware");
-    for (const char *n : {"SAFE_STATE", "PWR_FLAGS", "TRIP_COUNT", "FAULT_CODE", "INA_FRESH", "INA_CFG_OK", "DCM_FT", "CFG_SAVED"})
-        add(QStringLiteral("FW.") + n, 1, fw);
-    for (int i = 1; i <= 4; ++i) add(QStringLiteral("FW.DIAG_ALRT%1").arg(i), 2, fw);
-    add(QStringLiteral("FW.SLOT"), 1, fw);
-    add(QStringLiteral("FW.TRIAL"), 1, fw);
-    add(QStringLiteral("FW.VERSION"), 4, fw);
+    const int ext = off;
+    auto at = [&](const QString &name, int rel, int size) { t.add(name, ext + rel, size, 1.0, {}, fw); };
+    at(QStringLiteral("FW.SAFE_STATE"), 0, 1);
+    at(QStringLiteral("FW.PWR_FLAGS"), 1, 1);
+    at(QStringLiteral("FW.TRIP_COUNT"), 2, 1);
+    at(QStringLiteral("FW.SLOT"), 16, 1);
+    at(QStringLiteral("FW.VERSION"), 18, 4);
+    off = ext + 22;
     Q_ASSERT(t.size() == kNumFields && off == kLength - 4 - 2);
     return t;
 }

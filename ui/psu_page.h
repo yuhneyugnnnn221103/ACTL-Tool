@@ -33,7 +33,8 @@ private:
     QTableWidget *m_cluster, *m_supply;
     QList<QLabel *> m_rtc;
     QList<BitCells *> m_trip;
-    QCheckBox *m_power, *m_clearTrip;
+    QList<QCheckBox *> m_cluster4;
+    QCheckBox *m_clearTrip;
     QList<QLabel *> m_fw;   // thông tin firmware PSU (vùng mở rộng của bản tin giám sát)
 };
 

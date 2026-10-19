@@ -724,7 +724,7 @@ QString MainWindow::psuTooltip(int addr, int cluster) const
     using namespace proto::psumon;
     const model::PsuState &s = m_ctx.psuStore->psu(addr);
     QString t = QStringLiteral("PSU %1").arg(addr);
-    if (cluster >= 0) t += QStringLiteral(" · Cụm %1").arg(cluster + 1);
+    if (cluster >= 0) t += cluster < kNumCluster ? QStringLiteral(" · Cụm %1").arg(cluster + 1) : QStringLiteral(" · Supply");
     t += QStringLiteral("\nTrạng thái: %1").arg(statusText(cluster >= 0 ? m_ctx.psuStore->clusterStatus(addr, cluster) : s.status));
     if (cluster >= 0 && s.status == Status::Trip)
         t += QStringLiteral("\nPSU đang Trip (chưa xác định được cụm nào, chờ bảng trip code)");

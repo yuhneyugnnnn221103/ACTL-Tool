@@ -5,7 +5,7 @@
 // Giá trị là số thô (chưa có công thức quy đổi). Supply là thanh ghi CURRENT / VBUS của INA228 (3 byte, dữ liệu ở bit 23..4):
 // dòng có dấu (bù 2, 24 bit), áp không dấu. Giá trị lưu trong app là thô đủ 24 bit (so ngưỡng cùng đơn vị với firmware);
 // khi hiển thị thì dịch phải 4 bit (supplyShown).
-// Vùng dự phòng 24 byte (byte 239..262) là mở rộng của firmware APSU: trạng thái an toàn, cờ, INA, slot, version (xem kIdxSafeState...).
+// Vùng dự phòng 24 byte (byte 239..262) là mở rộng của firmware APSU: chỉ dùng trạng thái an toàn, PWR_EN, số lần trip, slot và version; còn lại dự phòng.
 #include "../core/frame.h"
 #include "field_table.h"
 #include <QString>
@@ -32,16 +32,9 @@ constexpr int kIdxExt0 = kIdxTrip0 + kNumTrip;
 constexpr int kIdxSafeState = kIdxExt0;        // SafeState
 constexpr int kIdxPwrFlags = kIdxExt0 + 1;     // bit0 PWR_EN đang bật, bit1 PC đang yêu cầu bật
 constexpr int kIdxTripCount = kIdxExt0 + 2;    // số lần trip liên tiếp
-constexpr int kIdxFaultCode = kIdxExt0 + 3;
-constexpr int kIdxInaFresh = kIdxExt0 + 4;     // mask kênh INA còn tươi (bit c = INA c+1)
-constexpr int kIdxInaCfgOk = kIdxExt0 + 5;     // mask INA cấu hình đúng
-constexpr int kIdxDcmFt = kIdxExt0 + 6;        // mask chân FT của DCM đang báo lỗi
-constexpr int kIdxCfgSaved = kIdxExt0 + 7;     // bit0 = cấu hình đã lưu Flash (0 = đang dùng mặc định)
-constexpr int kIdxDiagAlrt0 = kIdxExt0 + 8;    // DIAG_ALRT tích lũy của INA1..4 (4 trường 2 byte)
-constexpr int kIdxSlot = kIdxExt0 + 12;        // slot đang chạy: 'A' / 'B'
-constexpr int kIdxTrial = kIdxExt0 + 13;       // bit7 đã confirm, bit6..0 boot_count
-constexpr int kIdxVersion = kIdxExt0 + 14;     // version ảnh đang chạy (4 byte)
-constexpr int kNumFields = kIdxExt0 + 15;
+constexpr int kIdxSlot = kIdxExt0 + 3;         // slot đang chạy: 'A' / 'B' (/ 'R' recovery)
+constexpr int kIdxVersion = kIdxExt0 + 4;      // version ảnh đang chạy (4 byte)
+constexpr int kNumFields = kIdxExt0 + 5;
 
 enum SafeState { SafeBoot = 0, SafeOff = 1, SafeArming = 2, SafeOn = 3, SafeTripped = 4, SafeLockout = 5 };
 QString safeStateText(int state);           // "BOOT", "OFF", ...

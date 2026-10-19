@@ -75,8 +75,8 @@ private slots:
         const FieldTable &t = psumon::table();
         QCOMPARE(t.size(), psumon::kNumFields);
         int end = psumon::kOffAddr + 1;
-        for (const Field &f : t.fields()) { QCOMPARE(f.offset, end); end += f.size; }
-        QCOMPARE(end, psumon::kLength - 4 - 2);                  // còn 2 byte dự phòng chưa dùng sau phần mở rộng firmware
+        for (int i = 0; i < psumon::kIdxExt0; ++i) { const Field &f = t.fields().at(i); QCOMPARE(f.offset, end); end += f.size; }
+        QCOMPARE(end, psumon::kLength - 4 - 2 - 22);             // hết Trip; vùng mở rộng firmware 24 byte (chỉ dùng 5 trường) nằm sau
         QCOMPARE(t.fields().at(psumon::clusterField(1, psumon::TempFet)).offset, 5 + 48 + 18 + 6 + 20); // cụm 2, dưới 3 ADC + AMC + 10 XDP
         QCOMPARE(t.fields().at(psumon::kIdxSupply0).offset, 5 + 4 * 48);
         QCOMPARE(t.fields().at(psumon::kIdxTrip0).offset, 5 + 4 * 48 + 24 + 7);
@@ -88,11 +88,9 @@ private slots:
         const FieldTable &t = psumon::table();
         auto first = [&](int idx) { return t.fields().at(idx).offset + 1; };    // byte đếm từ 1
         QCOMPARE(first(psumon::kIdxSafeState), 239);
-        QCOMPARE(first(psumon::kIdxCfgSaved), 246);
-        QCOMPARE(first(psumon::kIdxDiagAlrt0), 247);                            // +8..+15: 4 x 2 byte
-        QCOMPARE(t.fields().at(psumon::kIdxDiagAlrt0).size, 2);
+        QCOMPARE(first(psumon::kIdxPwrFlags), 240);
+        QCOMPARE(first(psumon::kIdxTripCount), 241);
         QCOMPARE(first(psumon::kIdxSlot), 255);                                 // +16
-        QCOMPARE(first(psumon::kIdxTrial), 256);
         QCOMPARE(first(psumon::kIdxVersion), 257);                              // +18..+21
         QCOMPARE(t.fields().at(psumon::kIdxVersion).size, 4);
 

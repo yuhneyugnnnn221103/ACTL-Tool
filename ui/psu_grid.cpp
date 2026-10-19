@@ -13,7 +13,7 @@ using model::Status;
 
 namespace {
 constexpr int kLeft = 64, kTop = 26, kGap = 3, kRowHeight = 28;
-constexpr int kClusters = proto::psumon::kNumCluster;
+constexpr int kClusters = proto::psumon::kNumCluster + 1;   // 4 cụm DCM + cột Supply
 }
 
 PsuGrid::PsuGrid(const model::PsuStore *store, QWidget *parent) : QWidget(parent), m_store(store)
@@ -57,7 +57,7 @@ void PsuGrid::paintEvent(QPaintEvent *)
     p.setPen(labelColor);
     for (int c = 0; c < kClusters; ++c) {
         const QRectF r = cellRect(0, c);
-        p.drawText(QRectF(r.left(), 0, r.width(), kTop - 4), Qt::AlignCenter, QStringLiteral("Cụm %1").arg(c + 1));
+        p.drawText(QRectF(r.left(), 0, r.width(), kTop - 4), Qt::AlignCenter, c < proto::psumon::kNumCluster ? QStringLiteral("Cụm %1").arg(c + 1) : QStringLiteral("Supply"));
     }
 
     QFont markFont = font();

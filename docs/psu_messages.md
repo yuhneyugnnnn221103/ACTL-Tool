@@ -60,7 +60,7 @@ Bố cục: `[AB CD][81 81][Addr][CỤM 1..4: 4 x 48 B][SUPPLY 24 B][RTC 7 B][TR
 | 198-221 | Supply | 8 giá trị x 3 byte |
 | 222-228 | RTC | 7 byte, mỗi trường 1 byte |
 | 229-238 | Trip | 10 trip code, mỗi cái 1 byte |
-| 239-262 | Mở rộng firmware | 24 byte (xem 2.5): trạng thái an toàn, cờ, INA, slot, version |
+| 239-262 | Mở rộng firmware | 24 byte (xem 2.5): ACTL chỉ dùng trạng thái an toàn, PWR_EN, số lần trip, slot, version; còn lại dự phòng |
 | 263-264 | CRC | CRC16 từ byte 3 đến byte 262 |
 | 265-266 | Đuôi | `E1 E2` |
 
@@ -156,14 +156,7 @@ Vùng dự phòng 24 byte được firmware APSU dùng làm vùng mở rộng. O
 | +0 | 239 | 1 | `FW.SAFE_STATE` | 0 BOOT, 1 OFF, 2 ARMING, 3 ON, 4 TRIPPED, 5 LOCKOUT |
 | +1 | 240 | 1 | `FW.PWR_FLAGS` | bit0 PWR_EN đang bật; bit1 PC đang yêu cầu bật |
 | +2 | 241 | 1 | `FW.TRIP_COUNT` | Số lần trip liên tiếp |
-| +3 | 242 | 1 | `FW.FAULT_CODE` | Mã lỗi (như LED) |
-| +4 | 243 | 1 | `FW.INA_FRESH` | Mask kênh INA còn tươi (bit c = INA c+1) |
-| +5 | 244 | 1 | `FW.INA_CFG_OK` | Mask INA cấu hình đúng |
-| +6 | 245 | 1 | `FW.DCM_FT` | Mask chân FT của DCM đang báo lỗi |
-| +7 | 246 | 1 | `FW.CFG_SAVED` | bit0 = cấu hình đã lưu Flash (0 = đang dùng mặc định) |
-| +8..+15 | 247-254 | 4 x 2 | `FW.DIAG_ALRT1..4` | DIAG_ALRT tích lũy của INA1..4 |
 | +16 | 255 | 1 | `FW.SLOT` | Slot đang chạy `A` / `B` |
-| +17 | 256 | 1 | `FW.TRIAL` | bit7 đã confirm, bit6..0 boot_count |
 | +18..+21 | 257-260 | 4 | `FW.VERSION` | Version ảnh đang chạy |
 | +22..+23 | 261-262 | 2 | | 0 |
 
@@ -349,7 +342,6 @@ Kênh CH0 (CH1..CH7 cùng bố cục, tên `CHk_...`):
 2. **Ghi:** (nếu chỉ sửa một số ô thì app đọc cấu hình hiện tại trước, áp thay đổi lên bản đọc được) gửi `04 04` với Mask `FF FF`, chờ `config/writeGapMs` (mặc định 300 ms) cho PSU lưu, rồi **đọc lại** bằng `03 03` (cũng thử tối đa 3 lần).
 3. **Kiểm tra:** so từng trường của bản đọc lại với bản vừa ghi; khác thì báo "đọc lại KHÔNG khớp" kèm tối đa 5 tên trường đầu.
 4. Làm lần lượt từng PSU. Mật khẩu kỹ sư chỉ được hỏi khi ghi.
-5. **Firmware chỉ nhận cấu hình khi SAFE_OFF**, ngoài ra bỏ qua im lặng (không ACK). Giao diện cảnh báo trước khi ghi nếu PSU đang báo trạng thái khác OFF, và thông báo "đọc lại KHÔNG khớp" có ghi chú này. 904 byte dữ liệu được PSU lưu nguyên vào Flash; chưa lưu thì `82 82` trả cấu hình mặc định (xem `FW.CFG_SAVED`).
 6. Nút "Mặc định" điền giá trị hãng gợi ý: `OPERATION` = `0x80`, `ENABLE_FAULTS` = `0x3EFF`, `MASK_FAULTS` = `0x3EFF`, `RETRY` = `0x3FBF`, các trường khác = 0. Nếu có `psu_default_config.json` cạnh file chạy thì giá trị trong file thay cho mặc định cài sẵn.
 
 ### 4.4 Ngưỡng cảnh báo phía app

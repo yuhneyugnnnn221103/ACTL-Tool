@@ -9,9 +9,12 @@ PsuStore::PsuStore(int firstAddr, int count, QObject *parent)
 QList<int> PsuStore::clusterAlarms(int addr, int cluster) const
 {
     QList<int> out;
-    const int first = proto::psumon::clusterField(cluster, proto::psumon::ClusterField(0));
+    using namespace proto::psumon;
+    const bool supply = cluster == kNumCluster;   // cột thứ 5 của tổng quan là nhóm Supply
+    const int first = supply ? kIdxSupply0 : clusterField(cluster, ClusterField(0));
+    const int n = supply ? kNumSupply : kClusterFields;
     for (int f : psu(addr).alarms)
-        if (f >= first && f < first + proto::psumon::kClusterFields) out.append(f);
+        if (f >= first && f < first + n) out.append(f);
     return out;
 }
 

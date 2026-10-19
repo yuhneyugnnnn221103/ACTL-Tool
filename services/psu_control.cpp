@@ -26,7 +26,7 @@ void PsuControl::sendControl(int addr, const proto::psuctl::ControlCmd &c)
     m_pending.insert(m_link->send(r), text);
 }
 
-void PsuControl::sendClearTripThenOn(int addr, int gapMs)
+void PsuControl::sendClearTripThenOn(int addr, quint8 onMask, int gapMs)
 {
     core::Request clear;
     proto::psuctl::ControlCmd c;
@@ -38,7 +38,7 @@ void PsuControl::sendClearTripThenOn(int addr, int gapMs)
     m_pending.insert(m_link->send(clear), QStringLiteral("Điều khiển PSU %1 [Clear trip, tắt]").arg(addr));
 
     core::Request on;
-    c.clusterMask = proto::psuctl::kMaskOn;
+    c.clusterMask = onMask;
     c.clearTrip = false;
     on.data = proto::psuctl::buildControl(addr, c);
     on.priority = 10;

@@ -162,15 +162,13 @@ def psu_frame(addr, rng, *, over=None, supply_over=None, trips=None, now=None):
     f[PSU_RTC_OFF:PSU_RTC_OFF + 7] = bytes([t.tm_year % 100, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, 0])
     for k, tr in enumerate(trips or []):
         f[PSU_TRIP_OFF + k] = tr & 0xFF
-    # Vùng mở rộng của firmware (byte 239..: offset 238): trạng thái an toàn, PWR_EN, INA, slot, trial, version
+    # Vùng mở rộng của firmware (offset 238): chỉ dùng trạng thái an toàn, PWR_EN, số lần trip, slot, version
     ext = PSU_TRIP_OFF + PSU_TRIP_COUNT
     tripped = any(trips or [])
     f[ext] = 4 if tripped else 3                  # SafeState: TRIPPED / ON
     f[ext + 1] = 0 if tripped else 3              # bit0 PWR_EN đang bật, bit1 PC yêu cầu bật
     f[ext + 2] = 1 if tripped else 0              # số lần trip liên tiếp
-    f[ext + 4] = f[ext + 5] = 0x0F                # INA1..4 tươi và cấu hình đúng
-    f[ext + 7] = 1                                # cấu hình đã lưu Flash
-    f[ext + 16], f[ext + 17] = ord("A"), 0x80     # slot A, đã confirm
+    f[ext + 16] = ord("A")                        # slot đang chạy
     f[ext + 18:ext + 22] = (20261013).to_bytes(4, "big")
     return seal(f, PSU_CRC_START)
 

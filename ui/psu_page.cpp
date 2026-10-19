@@ -136,21 +136,25 @@ QWidget *PsuPage::buildMonitor()
         m_trip[i]->setTooltipTitle(n == QStringLiteral("Dự phòng") ? QStringLiteral("Trip %1").arg(i + 1) : QStringLiteral("Trip %1: %2").arg(i + 1).arg(n));
     }
 
-    // Thông tin firmware PSU (vùng mở rộng 24 byte của bản tin giám sát).
-    auto *fw = new QGroupBox(QStringLiteral("Firmware PSU"));
-    auto *fg = new QGridLayout(fw);
-    const char *fwNames[] = {"Trạng thái an toàn", "Nguồn (PWR_EN)", "Trip liên tiếp / mã lỗi", "INA tươi / cấu hình đúng",
-                             "DCM chân FT lỗi", "Cấu hình PSU", "DIAG_ALRT INA1..4", "Slot / version"};
-    for (int i = 0; i < 8; ++i) {
+    // Thẻ trạng thái firmware (vùng mở rộng của bản tin giám sát), một hàng gọn để không chiếm chỗ của bảng 4 cụm DCM.
+    auto *fw = new QWidget;
+    auto *fl = new QHBoxLayout(fw);
+    fl->setContentsMargins(0, 0, 0, 0);
+    const char *fwNames[] = {"Trạng thái an toàn", "PWR_EN", "Trip liên tiếp", "Slot", "Version"};
+    for (int i = 0; i < 5; ++i) {
         auto *name = new QLabel(QString::fromUtf8(fwNames[i]));
+        theme::setRole(name, "muted");
         auto *value = new QLabel(kDash);
+        value->setAlignment(Qt::AlignCenter);
+        value->setFrameShape(QFrame::StyledPanel);
+        value->setMinimumWidth(i == 4 ? 90 : 60);
         value->setTextInteractionFlags(Qt::TextSelectableByMouse);
         m_fw << value;
-        fg->addWidget(name, i % 4, i / 4 * 2);
-        fg->addWidget(value, i % 4, i / 4 * 2 + 1);
+        fl->addWidget(name);
+        fl->addWidget(value);
+        fl->addSpacing(8);
     }
-    fg->setColumnStretch(1, 1);
-    fg->setColumnStretch(3, 1);
+    fl->addStretch(1);
 
     auto *tables = new QHBoxLayout;
     tables->addWidget(titled(QStringLiteral("4 cụm DCM"), m_cluster), 3);
@@ -159,8 +163,8 @@ QWidget *PsuPage::buildMonitor()
     auto *w = new QWidget;
     auto *l = new QVBoxLayout(w);
     l->setContentsMargins(0, 0, 0, 0);
-    l->addLayout(tables, 1);
     l->addWidget(fw);
+    l->addLayout(tables, 1);
     l->addWidget(flags);
     return w;
 }
@@ -169,12 +173,10 @@ QWidget *PsuPage::buildControl()
 {
     auto *ctl = new QGroupBox(QStringLiteral("Điều khiển"));
     auto *form = new QFormLayout(ctl);
-    auto *note = new QLabel(QStringLiteral("PSU có một chân PWR_EN đóng cả 4 cụm DCM. Mỗi lệnh ghi đè trạng thái: chọn = bật, bỏ chọn = tắt. "
-                                           "Trạng thái hiện tại xem ở khung Firmware PSU."));
-    note->setWordWrap(true);
-    form->addRow(note);
-    m_power = new QCheckBox(QStringLiteral("Bật nguồn PSU (PWR_EN)"));
-    form->addRow(m_power);
+    for (int c = 0; c < 4; ++c) {
+        m_cluster4 << new QCheckBox(QStringLiteral("Bật cụm %1").arg(c + 1));
+        form->addRow(m_cluster4.last());
+    }
     m_clearTrip = new QCheckBox(QStringLiteral("Clear trip (PSU xóa hết trip code)"));
     form->addRow(m_clearTrip);
     auto *send = new QPushButton(QStringLiteral("Gửi lệnh điều khiển"));
@@ -195,9 +197,12 @@ void PsuPage::setDevice(int addr)
 {
     if (!m_ctx.psuStore->contains(addr)) return;
     m_addr = addr;
-    // Điền sẵn ô bật nguồn theo trạng thái PWR_EN firmware báo, để lệnh "Clear trip" không vô tình tắt nguồn đang bật.
+    // Điền sẵn ô bật nguồn theo trạng thái PWR_EN firmware báo (cả 4 cụm chung một chân), để lệnh "Clear trip" không vô tình tắt nguồn đang bật.
     const model::PsuState &st = m_ctx.psuStore->psu(addr);
-    if (st.frames > 0) m_power->setChecked(int(st.values.at(psumon::kIdxPwrFlags)) & 1);
+    if (st.frames > 0) {
+        const bool pwr = int(st.values.at(psumon::kIdxPwrFlags)) & 1;
+        for (QCheckBox *c : m_cluster4) c->setChecked(pwr);
+    }
     refresh();
 }
 
@@ -258,29 +263,17 @@ void PsuPage::refresh()
     }
 
     for (int i = 0; i < m_rtc.size(); ++i) m_rtc[i]->setText(val(psumon::kIdxRtc0 + i));
-    auto ext = [&](int idx) { return has ? int(s.values.at(idx)) : 0; };
-    auto mask4 = [&](int idx) {   // bit c = INA/DCM c+1, hiện các số đang bật
-        QStringList on;
-        for (int c = 0; c < 4; ++c) if (ext(idx) >> c & 1) on << QString::number(c + 1);
-        return on.isEmpty() ? QStringLiteral("không") : on.join(QStringLiteral(","));
-    };
     if (has) {
-        const int st = ext(psumon::kIdxSafeState), pf = ext(psumon::kIdxPwrFlags), trial = ext(psumon::kIdxTrial);
+        const int st = int(s.values.at(psumon::kIdxSafeState)), pf = int(s.values.at(psumon::kIdxPwrFlags));
+        const int slot = int(s.values.at(psumon::kIdxSlot));
         m_fw[0]->setText(psumon::safeStateText(st));
-        m_fw[1]->setText(QStringLiteral("%1 · PC yêu cầu: %2").arg(pf & 1 ? QStringLiteral("đang bật") : QStringLiteral("tắt"), pf & 2 ? QStringLiteral("bật") : QStringLiteral("tắt")));
-        m_fw[2]->setText(QStringLiteral("%1 / %2").arg(ext(psumon::kIdxTripCount)).arg(ext(psumon::kIdxFaultCode)));
-        m_fw[3]->setText(QStringLiteral("%1 / %2").arg(mask4(psumon::kIdxInaFresh), mask4(psumon::kIdxInaCfgOk)));
-        m_fw[4]->setText(mask4(psumon::kIdxDcmFt));
-        m_fw[5]->setText(ext(psumon::kIdxCfgSaved) & 1 ? QStringLiteral("đã lưu Flash") : QStringLiteral("đang dùng mặc định"));
-        QStringList alrt;
-        for (int i = 0; i < 4; ++i) alrt << QStringLiteral("%1").arg(ext(psumon::kIdxDiagAlrt0 + i), 4, 16, QLatin1Char('0')).toUpper();
-        m_fw[6]->setText(alrt.join(QStringLiteral(" ")));
-        const int slot = ext(psumon::kIdxSlot);
-        m_fw[7]->setText(QStringLiteral("%1 (%2) · version %3").arg(slot == 'A' || slot == 'B' || slot == 'R' ? QString(QChar(slot)) : QStringLiteral("?"),
-                         trial & 0x80 ? QStringLiteral("đã xác nhận") : QStringLiteral("đang thử, lần boot %1").arg(trial & 0x7F))
-                         .arg(num(s.values.at(psumon::kIdxVersion))));
+        m_fw[1]->setText(pf & 1 ? QStringLiteral("Bật") : QStringLiteral("Tắt"));
+        m_fw[1]->setToolTip(QStringLiteral("PC đang yêu cầu: %1").arg(pf & 2 ? QStringLiteral("bật") : QStringLiteral("tắt")));
+        m_fw[2]->setText(num(s.values.at(psumon::kIdxTripCount)));
+        m_fw[3]->setText(slot == 'A' || slot == 'B' || slot == 'R' ? QString(QChar(slot)) : QStringLiteral("?"));
+        m_fw[4]->setText(num(s.values.at(psumon::kIdxVersion)));
     } else {
-        for (QLabel *l : m_fw) l->setText(kDash);
+        for (QLabel *l : m_fw) { l->setText(kDash); l->setToolTip({}); }
     }
     for (int i = 0; i < m_trip.size(); ++i)
         m_trip[i]->setValue(has ? int(s.values.at(psumon::kIdxTrip0 + i)) : 0, has);
@@ -291,7 +284,9 @@ void PsuPage::sendControl()
     const model::PsuState &st = m_ctx.psuStore->psu(m_addr);
     const bool known = st.frames > 0;
     const int safe = known ? int(st.values.at(psumon::kIdxSafeState)) : -1;
-    const bool on = m_power->isChecked(), clear = m_clearTrip->isChecked();
+    quint8 mask = 0;
+    for (int c = 0; c < m_cluster4.size(); ++c) if (m_cluster4.at(c)->isChecked()) mask |= quint8(1 << c);
+    const bool on = mask != 0, clear = m_clearTrip->isChecked();
 
     // Firmware APSU: LOCKOUT bỏ qua mọi lệnh; TRIPPED từ chối lệnh bật cho tới khi Clear trip (và lệnh bật phải ở khung sau Clear trip).
     if (safe == psumon::SafeLockout) {
@@ -307,16 +302,16 @@ void PsuPage::sendControl()
     }
 
     // PSU là nguồn công suất nên luôn cho người vận hành xem lại trước khi gửi.
-    QString text = QStringLiteral("Gửi tới PSU %1:\n  • %2").arg(m_addr).arg(on ? QStringLiteral("BẬT nguồn (PWR_EN)") : QStringLiteral("TẮT nguồn (PWR_EN)"));
+    QString text = QStringLiteral("Gửi tới PSU %1:\n  • %2").arg(m_addr).arg(on ? QStringLiteral("BẬT nguồn (mask %1)").arg(mask, 4, 2, QLatin1Char('0')) : QStringLiteral("TẮT nguồn"));
     if (clear) text += QStringLiteral("\n  • Clear trip");
     if (twoStep) text += QStringLiteral("\n\nPSU đang TRIPPED: app gửi Clear trip trước, rồi gửi lệnh bật ở khung sau.");
     if (QMessageBox::question(this, QStringLiteral("Điều khiển PSU"), text) != QMessageBox::Yes) return;
 
     if (twoStep) {
-        m_ctx.psuControl->sendClearTripThenOn(m_addr);
+        m_ctx.psuControl->sendClearTripThenOn(m_addr, mask);
     } else {
         psuctl::ControlCmd c;
-        c.clusterMask = on ? psuctl::kMaskOn : psuctl::kMaskOff;
+        c.clusterMask = mask;
         c.clearTrip = clear;
         m_ctx.psuControl->sendControl(m_addr, c);
     }
