@@ -333,8 +333,14 @@ QString PsuConfigPage::notOffNote(const QList<int> &addrs) const
     for (int a : addrs) {
         const model::PsuState &st = m_ctx.psuStore->psu(a);
         if (st.frames == 0) continue;                                    // chưa biết trạng thái: không cảnh báo
-        const int safe = int(st.values.at(proto::psumon::kIdxSafeState));
-        if (safe != proto::psumon::SafeOff) bad << QStringLiteral("PSU %1 (%2)").arg(a).arg(proto::psumon::safeStateText(safe));
+        QStringList states;
+        bool allOff = true;
+        for (int c = 0; c < proto::psumon::kNumCluster; ++c) {
+            const int safe = int(st.values.at(proto::psumon::kIdxSafeState0 + c));
+            allOff = allOff && safe == proto::psumon::SafeOff;
+            states << proto::psumon::safeStateText(safe);
+        }
+        if (!allOff) bad << QStringLiteral("PSU %1 (cụm 1..4: %2)").arg(a).arg(states.join(QStringLiteral("/")));
     }
     if (bad.isEmpty()) return {};
     return QStringLiteral("\n\nCẢNH BÁO: %1 không ở SAFE_OFF. Firmware chỉ nhận cấu hình khi SAFE_OFF và bỏ qua im lặng ở trạng thái khác, "

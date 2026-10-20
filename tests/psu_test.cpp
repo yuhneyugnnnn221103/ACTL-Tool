@@ -87,22 +87,24 @@ private slots:
     {
         const FieldTable &t = psumon::table();
         auto first = [&](int idx) { return t.fields().at(idx).offset + 1; };    // byte đếm từ 1
-        QCOMPARE(first(psumon::kIdxSafeState), 239);
-        QCOMPARE(first(psumon::kIdxPwrFlags), 240);
-        QCOMPARE(first(psumon::kIdxTripCount), 241);
+        QCOMPARE(first(psumon::kIdxSafeState0), 239);                           // +0..+3
+        QCOMPARE(first(psumon::kIdxSafeState0 + 3), 242);
+        QCOMPARE(first(psumon::kIdxEn0), 243);                                  // +4..+7
+        QCOMPARE(first(psumon::kIdxTripCount0), 247);                           // +8..+11
+        QCOMPARE(first(psumon::kIdxTripCount0 + 3), 250);
         QCOMPARE(first(psumon::kIdxSlot), 255);                                 // +16
         QCOMPARE(first(psumon::kIdxVersion), 257);                              // +18..+21
         QCOMPARE(t.fields().at(psumon::kIdxVersion).size, 4);
 
         QList<double> v(psumon::kNumFields, 0.0);
-        v[psumon::kIdxSafeState] = psumon::SafeOn;
+        v[psumon::kIdxSafeState0 + 2] = psumon::SafeOn;
         v[psumon::kIdxSlot] = 'B';
         v[psumon::kIdxVersion] = 20261013;
         const QByteArray f = psumon::buildFrame(2, v);
         QCOMPARE(f.size(), 266);
         QVERIFY(crcOk(f, 2));
         const QList<double> back = t.decode(f);
-        QCOMPARE(back.at(psumon::kIdxSafeState), double(psumon::SafeOn));
+        QCOMPARE(back.at(psumon::kIdxSafeState0 + 2), double(psumon::SafeOn));
         QCOMPARE(back.at(psumon::kIdxSlot), double('B'));
         QCOMPARE(back.at(psumon::kIdxVersion), 20261013.0);
         QCOMPARE(psumon::safeStateText(psumon::SafeTripped), QStringLiteral("TRIPPED"));

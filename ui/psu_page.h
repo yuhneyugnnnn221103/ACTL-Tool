@@ -35,7 +35,9 @@ private:
     QList<BitCells *> m_trip;
     QList<QCheckBox *> m_cluster4;
     QCheckBox *m_clearTrip;
-    QList<QLabel *> m_fw;   // thông tin firmware PSU (vùng mở rộng của bản tin giám sát)
+    QList<QLabel *> m_safe, m_en, m_tripCount;   // theo cụm DCM 1..4
+    QList<QLabel *> m_fw;                        // slot, version
+    //   // thông tin firmware PSU (vùng mở rộng của bản tin giám sát)
 };
 
 } // namespace ui

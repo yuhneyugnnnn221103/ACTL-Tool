@@ -60,7 +60,7 @@ Bố cục: `[AB CD][81 81][Addr][CỤM 1..4: 4 x 48 B][SUPPLY 24 B][RTC 7 B][TR
 | 198-221 | Supply | 8 giá trị x 3 byte |
 | 222-228 | RTC | 7 byte, mỗi trường 1 byte |
 | 229-238 | Trip | 10 trip code, mỗi cái 1 byte |
-| 239-262 | Mở rộng firmware | 24 byte (xem 2.5): ACTL chỉ dùng trạng thái an toàn, PWR_EN, số lần trip, slot, version; còn lại dự phòng |
+| 239-262 | Mở rộng firmware | 24 byte (xem 2.5): ACTL chỉ dùng 4 trạng thái an toàn, 4 cờ EN, 4 bộ đếm trip (theo cụm), slot, version; còn lại dự phòng |
 | 263-264 | CRC | CRC16 từ byte 3 đến byte 262 |
 | 265-266 | Đuôi | `E1 E2` |
 
@@ -153,12 +153,13 @@ Vùng dự phòng 24 byte được firmware APSU dùng làm vùng mở rộng. O
 
 | Offset | Byte | Dài | Tên trường | Ý nghĩa |
 |---|---|---|---|---|
-| +0 | 239 | 1 | `FW.SAFE_STATE` | 0 BOOT, 1 OFF, 2 ARMING, 3 ON, 4 TRIPPED, 5 LOCKOUT |
-| +1 | 240 | 1 | `FW.PWR_FLAGS` | bit0 PWR_EN đang bật; bit1 PC đang yêu cầu bật |
-| +2 | 241 | 1 | `FW.TRIP_COUNT` | Số lần trip liên tiếp |
+| +0..+3 | 239-242 | 4 x 1 | `FW.SAFE_STATE1..4` | Trạng thái an toàn của cụm DCM 1..4: 0 BOOT, 1 OFF, 2 ARMING, 3 ON, 4 TRIPPED, 5 LOCKOUT |
+| +4..+7 | 243-246 | 4 x 1 | `FW.EN1..4` | Chân EN của cụm 1..4: bit0 đang bật; bit1 PC đang yêu cầu bật |
+| +8..+11 | 247-250 | 4 x 1 | `FW.TRIP_COUNT1..4` | Số lần trip liên tiếp của cụm 1..4 |
+| +12..+15 | 251-254 | 4 | | Dự phòng |
 | +16 | 255 | 1 | `FW.SLOT` | Slot đang chạy `A` / `B` |
 | +18..+21 | 257-260 | 4 | `FW.VERSION` | Version ảnh đang chạy |
-| +22..+23 | 261-262 | 2 | | 0 |
+| +22..+23 | 261-262 | 2 | | Dự phòng |
 
 Giao diện hiện các giá trị này ở khung "Firmware PSU" trên trang PSU. Hai trạng thái **TRIPPED** và **LOCKOUT** ảnh hưởng tới điều khiển (mục 3).
 
@@ -179,13 +180,13 @@ Giao diện hiện các giá trị này ở khung "Firmware PSU" trên trang PSU
 | 1-2 | 2 | Header | `AB CD` |
 | 3-4 | 2 | CMD | `01 01` |
 | 5 | 1 | Addr | Địa chỉ PSU |
-| 6 | 1 | Mask | Bit 0..3 = cụm 1..4; **1 = bật, 0 = tắt**. Phần cứng hiện chỉ có **một chân PWR_EN** (đóng cả 4 DCM) và chỉ lấy **bit0**; bit 1..3 bị bỏ qua. App gửi `0F` khi bật, `00` khi tắt |
+| 6 | 1 | Mask | Bit 0..3 = cụm 1..4; **1 = bật, 0 = tắt**. Mỗi cụm (3 DCM) có một chân EN riêng, bit k điều khiển EN cụm k+1 (firmware APSU hiện tại mới lấy bit0, chờ cập nhật theo cụm). App gửi mask theo 4 ô đã tích |
 | 7 | 1 | ClearTrip | `0x01` = PSU xóa các trip code trong bản tin giám sát; `0x00` = không |
 | 8-9 | 2 | Dự phòng | `00 00` |
 | 10-11 | 2 | CRC | CRC16 từ byte 3 đến byte 9 |
 | 12-13 | 2 | Đuôi | `E1 E2` |
 
-- Mỗi lệnh **ghi đè trạng thái bật/tắt**, nên giao diện luôn hỏi xác nhận trước khi gửi. Khi chọn PSU, ô "Bật nguồn" được điền sẵn theo `FW.PWR_FLAGS` bit0.
+- Mỗi lệnh **ghi đè trạng thái bật/tắt**, nên giao diện luôn hỏi xác nhận trước khi gửi. Mỗi cụm DCM (3 DCM) có một chân EN riêng; bit k của Mask điều khiển chân EN cụm k+1. Khi chọn PSU, 4 ô "Bật cụm" được điền sẵn theo `FW.EN1..4` bit0. **Bố cục theo cụm là đề xuất của ACTL, firmware cần cập nhật theo.**
 - **ClearTrip = `01`:** đang TRIPPED thì xóa trip code và các cờ, về OFF; **lệnh bật trong cùng khung bị bỏ qua** (phải gửi ở khung sau). App tự gửi Clear trip (tắt) rồi, sau 300 ms, gửi lệnh bật ở khung riêng khi PSU đang TRIPPED. Ở trạng thái khác thì xóa trip code và bật/tắt theo Mask trong một khung.
 - **LOCKOUT** (≥ 3 lần trip liên tiếp): mọi lệnh bị bỏ qua, trip code giữ nguyên, chỉ reset phần cứng mới thoát; giao diện chặn gửi và báo rõ.
 - Lệnh bật bị từ chối (đang TRIPPED/LOCKOUT hoặc đang nạp code) thì PSU bỏ qua im lặng.
