@@ -112,7 +112,7 @@ void BeamEthPage::send()
     const QString error = validate(p);
     if (!error.isEmpty()) { m_result->setText(error); return; }
     core::Request r;
-    r.data = buildFrame(p);                       // không có trả lời: gửi xong là xong
+    r.data = proto::ctlframe::wrap(proto::ctlframe::SecBeam, buildFrame(p));                       // không có trả lời: gửi xong là xong
     m_ctx.monitorLink->send(r);
     const QString text = QStringLiteral("Esp %1, Beta %2, Freq %3 MHz, Mode %4 (3 khung, byte 10 = 01, 10, 11)")
                              .arg(p.esp, 0, 'f', 1).arg(p.beta, 0, 'f', 1).arg(p.freqMhz).arg(p.modeValue);

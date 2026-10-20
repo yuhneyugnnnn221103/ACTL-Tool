@@ -24,7 +24,7 @@ void FrameParser::feed(const QByteArray &data, const std::function<void(const Fr
 
         const quint8 *f = d + pos;
         const int len = spec->length;
-        bool ok = f[len - 2] == kTailer1 && f[len - 1] == kTailer2;
+        bool ok = !spec->tailer || (f[len - 2] == kTailer1 && f[len - 1] == kTailer2);
         if (ok && spec->emptyFrom > 0) {
             bool zeros = true;
             for (int i = spec->emptyFrom; i < len - 2 && zeros; ++i) zeros = f[i] == 0;

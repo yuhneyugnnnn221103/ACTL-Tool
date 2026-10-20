@@ -306,32 +306,41 @@ def scenario_frames(name, ctx):
 # ----------------------------------------------------------------------------- TCP (giả Gateway)
 
 
+CTL_LEN = 105
+CTL_SECTIONS = [(0, 14), (1, 17), (2, 42), (3, 13)]   # bit mask, độ dài: A2, 14, beam, PSU
+
+
+def decode_section(bit, f):
+    if bit == 0:
+        ctl = f[7]
+        return (f"điều khiển TRB MB{f[4] + 1}/TRB{f[5] + 1}: PA={f[6]:04b} start={ctl >> 1 & 1} clear={ctl & 1} "
+                f"beamsync={ctl >> 2 & 1} debug={ctl >> 4 & 1}" + (" (broadcast)" if f[4] == 0xFF else ""))
+    if bit == 1:
+        return f"beam TRB MB{f[4] + 1}/TRB{f[5] + 1}: phaseTX={f[6]} phaseRX={f[7]} ampTX={f[8]} ampRX={f[9]} CH={f[10]:04b} ADAR={f[11]:08b}"
+    if bit == 2:
+        def s16(lo): return int.from_bytes(f[lo:lo + 2], "little", signed=True)
+        modes = " ".join(f"{f[k * 14 + 9]:02X}" for k in range(3))
+        crc_ok = all(crc16(bytes(f[k * 14:k * 14 + 10])) == int.from_bytes(f[k * 14 + 10:k * 14 + 12], "little") for k in range(3))
+        return (f"điều khiển beam: Esp={s16(2) / 10:.1f} Beta={s16(4) / 10:.1f} Freq={int.from_bytes(f[6:8], 'little')} MHz "
+                f"Mode={f[8]} byte10 = {modes}, CRC (từ header) {'đúng' if crc_ok else 'SAI'}")
+    return f"điều khiển PSU {f[4]}: bật cụm={f[5]:04b} clearTrip={f[6]}"
+
+
 def decode_control(buf):
-    """Tách các lệnh app gửi xuống Gateway; trả về (danh sách mô tả, phần dư)."""
+    """Tách khung điều khiển tổng 105 byte (AB CD EF Mask ...) app gửi xuống Gateway; trả về (danh sách mô tả, phần dư)."""
     out = []
-    while len(buf) >= 4:
-        if buf[0] != H1 or buf[1] != H2:
+    while len(buf) >= 3:
+        if buf[0] != H1 or buf[1] != H2 or buf[2] != 0xEF:
             buf = buf[1:]
             continue
-        cmd2 = bytes(buf[2:4])
-        if cmd2 == b"\xA2\xA2" and len(buf) >= 14:
-            f = buf[:14]
-            ctl = f[7]
-            out.append(f"điều khiển TRB MB{f[4] + 1}/TRB{f[5] + 1}: PA={f[6]:04b} start={ctl >> 1 & 1} clear={ctl & 1} "
-                       f"beamsync={ctl >> 2 & 1} debug={ctl >> 4 & 1}" + (" (broadcast)" if f[4] == 0xFF else ""))
-            buf = buf[14:]
-        elif cmd2 == b"\x14\x14" and len(buf) >= 17:
-            f = buf[:17]
-            out.append(f"beam MB{f[4] + 1}/TRB{f[5] + 1}: phaseTX={f[6]} phaseRX={f[7]} ampTX={f[8]} ampRX={f[9]} CH={f[10]:04b} ADAR={f[11]:08b}")
-            buf = buf[17:]
-        elif cmd2 == b"\x01\x01" and len(buf) >= 13:
-            f = buf[:13]
-            out.append(f"điều khiển PSU {f[4]}: bật cụm={f[5]:04b} clearTrip={f[6]}")
-            buf = buf[13:]
-        elif cmd2 in (b"\xA2\xA2", b"\x14\x14", b"\x01\x01"):
+        if len(buf) < CTL_LEN:
             break                                      # chưa đủ byte
-        else:
-            buf = buf[1:]
+        mask, off = buf[3], 4
+        for bit, n in CTL_SECTIONS:
+            if mask >> bit & 1:
+                out.append(decode_section(bit, buf[off:off + n]))
+            off += n
+        buf = buf[CTL_LEN:]
     return out, buf
 
 
@@ -610,12 +619,25 @@ def cmd_selftest(_args):
     check(len(sc_lost(ctx)) == len(sc_normal(ctx)) - 8 - 2, "'lost' bỏ 8 TRB của MB0 và 2 PSU trong giai đoạn mất kết nối")
 
     print("giải mã lệnh app gửi xuống:")
+    def wrap(bit, inner):
+        f = bytearray(CTL_LEN); f[0], f[1], f[2], f[3] = H1, H2, 0xEF, 1 << bit
+        off = 4 + sum(n for b_, n in CTL_SECTIONS if b_ < bit)
+        f[off:off + len(inner)] = inner
+        return bytes(f)
     ctl = bytearray(14); ctl[2] = ctl[3] = 0xA2; ctl[4], ctl[5], ctl[6], ctl[7] = 7, 3, 5, 0x03
-    lines, rest = decode_control(seal(ctl, 4))
-    check(len(lines) == 1 and "MB7/TRB3" in lines[0] and rest == b"", "điều khiển TRB")
+    lines, rest = decode_control(wrap(0, seal(ctl, 4)))
+    check(len(lines) == 1 and "MB8/TRB4" in lines[0] and rest == b"", "điều khiển TRB (khung tổng 105 byte, bit0)")
     pc = bytearray(13); pc[2] = pc[3] = 0x01; pc[4], pc[5], pc[6] = 4, 0b1010, 1
-    lines, _ = decode_control(seal(pc, 2))
-    check(len(lines) == 1 and "PSU 4" in lines[0] and "1010" in lines[0], "điều khiển PSU")
+    lines, _ = decode_control(wrap(3, seal(pc, 2)))
+    check(len(lines) == 1 and "PSU 4" in lines[0] and "1010" in lines[0], "điều khiển PSU (bit3)")
+    bm = bytearray()
+    for m in (0x01, 0x10, 0x11):
+        k = bytearray(14); k[0], k[1] = H1, H2; k[2:4] = (123).to_bytes(2, "little"); k[4:6] = (-45).to_bytes(2, "little", signed=True)
+        k[6:8] = (2400).to_bytes(2, "little"); k[8], k[9] = 5, m
+        k[10:12] = crc16(bytes(k[:10])).to_bytes(2, "little"); k[12], k[13] = 0xEF, 0xFF
+        bm += k
+    lines, _ = decode_control(wrap(2, bytes(bm)))
+    check(len(lines) == 1 and "Esp=12.3" in lines[0] and "Beta=-4.5" in lines[0] and "01 10 11" in lines[0] and "đúng" in lines[0], "điều khiển beam (bit2, CRC từ header)")
 
     print("RS485 giả (cấu hình):")
     r = SerialResponder(rng=random.Random(2), log=lambda *_: None)

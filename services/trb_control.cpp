@@ -63,7 +63,7 @@ void TrbControl::sendControlUnchecked(int mb, int trb, const ControlCmd &c)
                       c.debugMode ? QStringLiteral("Debug") : QStringLiteral("Normal")};
     if (c.clearTrip) parts << QStringLiteral("Clear trip");
     if (c.beamSync) parts << QStringLiteral("Beamsync");
-    submit(buildControl(mb, trb, c), QStringLiteral("Điều khiển %1 [%2]").arg(target(mb, trb), parts.join(", ")),
+    submit(proto::ctlframe::wrap(proto::ctlframe::SecTrbControl, buildControl(mb, trb, c)), QStringLiteral("Điều khiển %1 [%2]").arg(target(mb, trb), parts.join(", ")),
            [this, mb, trb, c] { applyDebugState(mb, trb, c); });
 }
 
@@ -84,7 +84,7 @@ void TrbControl::applyDebugState(int mb, int trb, const ControlCmd &c)
 
 void TrbControl::sendBeam(int mb, int trb, const BeamCmd &b)
 {
-    submit(buildBeam(mb, trb, b),
+    submit(proto::ctlframe::wrap(proto::ctlframe::SecTrbBeam, buildBeam(mb, trb, b)),
            QStringLiteral("Beam %1 [PhaseTX=%2, PhaseRX=%3, AmpTX=%4, AmpRX=%5, CH=%6, ADAR=%7]")
                .arg(target(mb, trb)).arg(b.phaseTx).arg(b.phaseRx).arg(b.ampTx).arg(b.ampRx)
                .arg(b.chMask & 0x0F, 4, 2, QLatin1Char('0')).arg(b.adarMask, 8, 2, QLatin1Char('0')));

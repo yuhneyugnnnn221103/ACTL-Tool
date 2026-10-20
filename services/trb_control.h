@@ -1,5 +1,6 @@
 #pragma once
 #include "../core/link.h"
+#include "../proto/control_frame_proto.h"
 #include "../proto/trb_control_proto.h"
 #include <QHash>
 #include <QPair>

@@ -7,8 +7,10 @@
 #include "../proto/trb_config_proto.h"
 #include "../proto/trb_control_proto.h"
 #include "../proto/beam_eth_proto.h"
+#include "../proto/control_frame_proto.h"
 #include "../proto/trb_monitor_proto.h"
 #include "../services/alarm_engine.h"
+#include "../sim/sim_world.h"
 #include "../services/csv_logger.h"
 #include "../services/trb_config.h"
 #include "../services/trb_control.h"
@@ -249,6 +251,42 @@ private slots:
         QCOMPARE(names.size(), 14);
     }
 
+    // ---------- Khung điều khiển tổng ----------
+    void controlFrameLayout()
+    {
+        namespace cf = proto::ctlframe;
+        QCOMPARE(cf::sectionOffset(cf::SecTrbControl), 4);
+        QCOMPARE(cf::sectionOffset(cf::SecTrbBeam), 18);
+        QCOMPARE(cf::sectionOffset(cf::SecBeam), 35);
+        QCOMPARE(cf::sectionOffset(cf::SecPsu), 77);
+        QCOMPARE(cf::sectionOffset(cf::SecPsu) + 13 + cf::kReserved + 1, 105);
+
+        const QByteArray a2 = trbctl::buildControl(1, 2, trbctl::ControlCmd{});
+        const QByteArray w = cf::wrap(cf::SecTrbControl, a2);
+        QCOMPARE(w.size(), 105);
+        QCOMPARE(w.left(4).toHex(), QByteArray("abcdef01"));
+        QCOMPARE(w.mid(4, 14), a2);
+        QVERIFY(w.mid(18).count(char(0)) == w.size() - 18);                 // mọi phần khác đệm 00
+        QCOMPARE(cf::section(w, cf::SecTrbControl), a2);
+        QVERIFY(cf::section(w, cf::SecPsu).isEmpty());                      // bit mask phần PSU không bật
+
+        const QByteArray psu = proto::psuctl::buildControl(3, proto::psuctl::ControlCmd{});
+        const QByteArray p = cf::wrap(cf::SecPsu, psu);
+        QCOMPARE(quint8(p.at(3)), quint8(0x08));
+        QCOMPARE(p.mid(77, 13), psu);
+        proto::beameth::Params bp;
+        QCOMPARE(quint8(cf::wrap(cf::SecBeam, proto::beameth::buildFrame(bp)).at(3)), quint8(0x04));
+        QCOMPARE(quint8(cf::wrap(cf::SecTrbBeam, trbctl::buildBeam(0, 0, trbctl::BeamCmd{})).at(3)), quint8(0x02));
+        QVERIFY(cf::wrap(cf::SecPsu, a2).isEmpty());                        // sai độ dài khung con
+
+        core::FrameRegistry reg;                                            // bên nhận (sim) ghép khung 105 byte không cần đuôi/CRC
+        sim::registerRequestFrames(reg, true);
+        core::FrameParser parser(&reg);
+        int n = 0;
+        parser.feed(w + w, [&](const core::Frame &f) { ++n; QCOMPARE(f.raw.size(), 105); });
+        QCOMPARE(n, 2);
+    }
+
     // ---------- Beam Ethernet ----------
     void beamEthFrame()
     {
@@ -266,8 +304,8 @@ private slots:
             QCOMPARE(f.left(9).toHex(), QByteArray("abcd" "7b00" "d3ff" "6009" "05"));   // cùng dữ liệu, byte 9 = số nhập
             QCOMPARE(quint8(f[9]), modes[k]);                                          // byte 10 lần lượt 01, 10, 11
             QCOMPARE(f.right(2).toHex(), QByteArray("efff"));                          // mỗi khung có đuôi EF FF
-            // CRC16 từng khung tính từ ESP tới hết MODE (byte 3..10), ghi byte thấp trước
-            const quint16 crc = core::crc16(reinterpret_cast<const quint8 *>(f.constData()) + 2, 8);
+            // CRC16 từng khung tính từ HEADER tới hết MODE (byte 1..10), ghi byte thấp trước
+            const quint16 crc = core::crc16(reinterpret_cast<const quint8 *>(f.constData()), 10);
             QCOMPARE(quint8(f[10]), quint8(crc & 0xFF));
             QCOMPARE(quint8(f[11]), quint8(crc >> 8));
         }
@@ -335,7 +373,8 @@ private slots:
         QVERIFY(done.last().at(0).toString().contains("MB3 / TRB5"));
         QVERIFY(done.last().at(0).toString().contains("Start"));
         QCOMPARE(rig.transport->written.size(), 1);
-        QCOMPARE(rig.transport->written.first(), trbctl::buildControl(2, 4, c));
+        QCOMPARE(rig.transport->written.first(), proto::ctlframe::wrap(proto::ctlframe::SecTrbControl, trbctl::buildControl(2, 4, c)));
+        QCOMPARE(rig.transport->written.first().size(), 105);
 
         control.sendControl(trbctl::kBroadcast, trbctl::kBroadcast, {});
         QVERIFY(done.wait(1000));
@@ -385,7 +424,8 @@ private slots:
         QCOMPARE(control.sendControlSwitchDebug(2, 2, debug), Check::Ok);
         settle(4);
         QCOMPARE(control.debugTrb().value(), services::TrbControl::Device(2, 2));
-        const QList<QByteArray> w = rig.transport->written;
+        QList<QByteArray> w;                                           // bóc khung con A2 ra khỏi khung điều khiển tổng
+        for (const QByteArray &f : rig.transport->written) w << proto::ctlframe::section(f, proto::ctlframe::SecTrbControl);
         trbctl::ControlCmd released = debug;
         released.debugMode = false;
         QCOMPARE(w.at(w.size() - 2), trbctl::buildControl(1, 1, released));

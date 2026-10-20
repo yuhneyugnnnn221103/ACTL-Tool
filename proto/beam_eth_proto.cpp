@@ -37,7 +37,7 @@ QByteArray buildFrame(const Params &p)
         put16(6, quint16(p.freqMhz));
         f[8] = char(p.modeValue);
         f[9] = char(modeByte(k));
-        put16(10, core::crc16(reinterpret_cast<const quint8 *>(f.constData()) + 2, 8));
+        put16(10, core::crc16(reinterpret_cast<const quint8 *>(f.constData()), 10));   // CRC phủ cả header (AB CD) tới hết MODE
         f[12] = char(0xEF);
         f[13] = char(0xFF);
         all += f;

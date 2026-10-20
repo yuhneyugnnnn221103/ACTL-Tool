@@ -21,7 +21,7 @@ void PsuControl::sendControl(int addr, const proto::psuctl::ControlCmd &c)
     if (c.clearTrip) text += QStringLiteral(" [Clear trip]");
 
     core::Request r;
-    r.data = proto::psuctl::buildControl(addr, c);
+    r.data = proto::ctlframe::wrap(proto::ctlframe::SecPsu, proto::psuctl::buildControl(addr, c));
     r.priority = 10; // lệnh của người vận hành đi trước mọi thứ khác trong hàng đợi
     m_pending.insert(m_link->send(r), text);
 }
@@ -32,7 +32,7 @@ void PsuControl::sendClearTripThenOn(int addr, quint8 onMask, int gapMs)
     proto::psuctl::ControlCmd c;
     c.clusterMask = proto::psuctl::kMaskOff;
     c.clearTrip = true;
-    clear.data = proto::psuctl::buildControl(addr, c);
+    clear.data = proto::ctlframe::wrap(proto::ctlframe::SecPsu, proto::psuctl::buildControl(addr, c));
     clear.priority = 10;
     clear.gapMs = gapMs;   // chờ PSU xử lý xong Clear trip rồi mới tới lệnh bật
     m_pending.insert(m_link->send(clear), QStringLiteral("Điều khiển PSU %1 [Clear trip, tắt]").arg(addr));
@@ -40,7 +40,7 @@ void PsuControl::sendClearTripThenOn(int addr, quint8 onMask, int gapMs)
     core::Request on;
     c.clusterMask = onMask;
     c.clearTrip = false;
-    on.data = proto::psuctl::buildControl(addr, c);
+    on.data = proto::ctlframe::wrap(proto::ctlframe::SecPsu, proto::psuctl::buildControl(addr, c));
     on.priority = 10;
     m_pending.insert(m_link->send(on), QStringLiteral("Điều khiển PSU %1 [bật nguồn, sau Clear trip]").arg(addr));
 }

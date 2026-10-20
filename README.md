@@ -172,3 +172,5 @@ Gateway hỏi `AB CD 11 11 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giá
 - ACK cho lệnh điều khiển TRB.
 - Công thức quy đổi giá trị thô sang đơn vị vật lý cho TRB; hiện hiển thị số thô.
 - Trạng thái "Đang nạp" trên lưới tổng quan khi nạp FPGA.
+
+Mọi lệnh điều khiển (TRB `A2`, TRB `14`, beam, PSU) đi trong khung điều khiển tổng 105 byte `AB CD EF <mask> ...`, xem `docs/control_frame.md`.

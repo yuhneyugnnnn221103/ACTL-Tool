@@ -18,6 +18,7 @@ struct FrameSpec {
     bool checkCrc = true;
     QString name;
     int emptyFrom = 0;     // > 0: khung "rỗng" của Gateway (thiết bị không phản hồi) có mọi byte từ emptyFrom tới hết CRC bằng 0x00; nhận không cần CRC, Frame::empty = true
+    bool tailer = true;    // false: khung không có đuôi E1 E2 (khung điều khiển tổng PC -> Gateway)
 };
 
 struct Frame {
