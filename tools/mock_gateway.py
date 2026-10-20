@@ -306,7 +306,7 @@ def scenario_frames(name, ctx):
 # ----------------------------------------------------------------------------- TCP (giả Gateway)
 
 
-CTL_LEN = 105
+CTL_LEN = 104
 CTL_SECTIONS = [(0, 14), (1, 17), (2, 42), (3, 13)]   # bit mask, độ dài: A2, 14, beam, PSU
 
 
@@ -327,7 +327,7 @@ def decode_section(bit, f):
 
 
 def decode_control(buf):
-    """Tách khung điều khiển tổng 105 byte (AB CD EF Mask ...) app gửi xuống Gateway; trả về (danh sách mô tả, phần dư)."""
+    """Tách khung điều khiển tổng 104 byte (AB CD EF Mask ...) app gửi xuống Gateway; trả về (danh sách mô tả, phần dư)."""
     out = []
     while len(buf) >= 3:
         if buf[0] != H1 or buf[1] != H2 or buf[2] != 0xEF:
@@ -626,7 +626,7 @@ def cmd_selftest(_args):
         return bytes(f)
     ctl = bytearray(14); ctl[2] = ctl[3] = 0xA2; ctl[4], ctl[5], ctl[6], ctl[7] = 7, 3, 5, 0x03
     lines, rest = decode_control(wrap(0, seal(ctl, 4)))
-    check(len(lines) == 1 and "MB8/TRB4" in lines[0] and rest == b"", "điều khiển TRB (khung tổng 105 byte, bit0)")
+    check(len(lines) == 1 and "MB8/TRB4" in lines[0] and rest == b"", "điều khiển TRB (khung tổng 104 byte, bit0)")
     pc = bytearray(13); pc[2] = pc[3] = 0x01; pc[4], pc[5], pc[6] = 4, 0b1010, 1
     lines, _ = decode_control(wrap(3, seal(pc, 2)))
     check(len(lines) == 1 and "PSU 4" in lines[0] and "1010" in lines[0], "điều khiển PSU (bit3)")

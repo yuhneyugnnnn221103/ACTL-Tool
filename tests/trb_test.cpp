@@ -259,11 +259,11 @@ private slots:
         QCOMPARE(cf::sectionOffset(cf::SecTrbBeam), 18);
         QCOMPARE(cf::sectionOffset(cf::SecBeam), 35);
         QCOMPARE(cf::sectionOffset(cf::SecPsu), 77);
-        QCOMPARE(cf::sectionOffset(cf::SecPsu) + 13 + cf::kReserved + 1, 105);
+        QCOMPARE(cf::sectionOffset(cf::SecPsu) + 13 + cf::kReserved, 104);
 
         const QByteArray a2 = trbctl::buildControl(1, 2, trbctl::ControlCmd{});
         const QByteArray w = cf::wrap(cf::SecTrbControl, a2);
-        QCOMPARE(w.size(), 105);
+        QCOMPARE(w.size(), 104);
         QCOMPARE(w.left(4).toHex(), QByteArray("abcdef01"));
         QCOMPARE(w.mid(4, 14), a2);
         QVERIFY(w.mid(18).count(char(0)) == w.size() - 18);                 // mọi phần khác đệm 00
@@ -279,11 +279,11 @@ private slots:
         QCOMPARE(quint8(cf::wrap(cf::SecTrbBeam, trbctl::buildBeam(0, 0, trbctl::BeamCmd{})).at(3)), quint8(0x02));
         QVERIFY(cf::wrap(cf::SecPsu, a2).isEmpty());                        // sai độ dài khung con
 
-        core::FrameRegistry reg;                                            // bên nhận (sim) ghép khung 105 byte không cần đuôi/CRC
+        core::FrameRegistry reg;                                            // bên nhận (sim) ghép khung 104 byte không cần đuôi/CRC
         sim::registerRequestFrames(reg, true);
         core::FrameParser parser(&reg);
         int n = 0;
-        parser.feed(w + w, [&](const core::Frame &f) { ++n; QCOMPARE(f.raw.size(), 105); });
+        parser.feed(w + w, [&](const core::Frame &f) { ++n; QCOMPARE(f.raw.size(), 104); });
         QCOMPARE(n, 2);
     }
 
@@ -374,7 +374,7 @@ private slots:
         QVERIFY(done.last().at(0).toString().contains("Start"));
         QCOMPARE(rig.transport->written.size(), 1);
         QCOMPARE(rig.transport->written.first(), proto::ctlframe::wrap(proto::ctlframe::SecTrbControl, trbctl::buildControl(2, 4, c)));
-        QCOMPARE(rig.transport->written.first().size(), 105);
+        QCOMPARE(rig.transport->written.first().size(), 104);
 
         control.sendControl(trbctl::kBroadcast, trbctl::kBroadcast, {});
         QVERIFY(done.wait(1000));
