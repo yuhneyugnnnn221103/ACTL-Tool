@@ -52,15 +52,18 @@ static FieldTable build()
     }
     for (const char *n : kRtc) add(QStringLiteral("RTC.") + n, 1, QStringLiteral("RTC"));
     for (int i = 1; i <= kNumTrip; ++i) add(QStringLiteral("TRIP%1").arg(i), 1, QStringLiteral("Trip"));
-    // Mở rộng firmware (24 byte, byte 239..262): app chỉ dùng 14 trường, các byte còn lại là dự phòng và bỏ qua.
+    // Mở rộng firmware (24 byte, byte 239..262): app chỉ dùng 14 trường (từng cụm 3 byte, slot, version), các byte còn lại là dự phòng và bỏ qua.
     const QString fw = QStringLiteral("Firmware");
     const int ext = off;
     auto at = [&](const QString &name, int rel, int size) { t.add(name, ext + rel, size, 1.0, {}, fw); };
-    for (int c = 1; c <= kNumCluster; ++c) at(QStringLiteral("FW.SAFE_STATE%1").arg(c), c - 1, 1);
-    for (int c = 1; c <= kNumCluster; ++c) at(QStringLiteral("FW.EN%1").arg(c), 3 + c, 1);
-    for (int c = 1; c <= kNumCluster; ++c) at(QStringLiteral("FW.TRIP_COUNT%1").arg(c), 7 + c, 1);
-    at(QStringLiteral("FW.SLOT"), 16, 1);
-    at(QStringLiteral("FW.VERSION"), 18, 4);
+    for (int c = 1; c <= kNumCluster; ++c) {
+        const int rel = (c - 1) * kFwPerCluster;
+        at(QStringLiteral("FW.SAFE_STATE%1").arg(c), rel, 1);
+        at(QStringLiteral("FW.EN%1").arg(c), rel + 1, 1);
+        at(QStringLiteral("FW.TRIP_COUNT%1").arg(c), rel + 2, 1);
+    }
+    at(QStringLiteral("FW.SLOT"), 12, 1);
+    at(QStringLiteral("FW.VERSION"), 13, 4);
     off = ext + 22;
     Q_ASSERT(t.size() == kNumFields && off == kLength - 4 - 2);
     return t;

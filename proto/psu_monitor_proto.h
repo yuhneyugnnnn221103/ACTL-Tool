@@ -29,13 +29,14 @@ constexpr int kIdxRtc0 = kIdxSupply0 + kNumSupply;
 constexpr int kIdxTrip0 = kIdxRtc0 + kNumRtc;
 // Mở rộng firmware trong vùng dự phòng (theo thứ tự byte từ 239).
 constexpr int kIdxExt0 = kIdxTrip0 + kNumTrip;
-// Theo từng cụm DCM (mỗi cụm một chân EN riêng): 4 trạng thái an toàn, 4 cờ EN, 4 bộ đếm trip.
-constexpr int kIdxSafeState0 = kIdxExt0;       // +0..+3 SafeState cụm 1..4
-constexpr int kIdxEn0 = kIdxExt0 + 4;          // +4..+7 bit0 chân EN đang bật, bit1 PC đang yêu cầu bật (cụm 1..4)
-constexpr int kIdxTripCount0 = kIdxExt0 + 8;   // +8..+11 số lần trip liên tiếp cụm 1..4
-constexpr int kIdxSlot = kIdxExt0 + 12;        // +16 slot đang chạy: 'A' / 'B' (/ 'R' recovery)
-constexpr int kIdxVersion = kIdxExt0 + 13;     // +18..+21 version ảnh đang chạy (4 byte)
-constexpr int kNumFields = kIdxExt0 + 14;
+// Theo từng cụm DCM (mỗi cụm một chân EN riêng), mỗi cụm 3 byte: safe_state, PWR_EN (1/0), trip count.
+constexpr int kFwPerCluster = 3;
+constexpr int kIdxSafeState(int c) { return kIdxExt0 + c * kFwPerCluster; }
+constexpr int kIdxEn(int c) { return kIdxExt0 + c * kFwPerCluster + 1; }
+constexpr int kIdxTripCount(int c) { return kIdxExt0 + c * kFwPerCluster + 2; }
+constexpr int kIdxSlot = kIdxExt0 + kNumCluster * kFwPerCluster;   // byte +12: slot đang chạy: 'A' / 'B' (/ 'R' recovery)
+constexpr int kIdxVersion = kIdxSlot + 1;                   // +13..+16 version ảnh đang chạy (u32 BE)
+constexpr int kNumFields = kIdxVersion + 1;
 
 enum SafeState { SafeBoot = 0, SafeOff = 1, SafeArming = 2, SafeOn = 3, SafeTripped = 4, SafeLockout = 5 };
 QString safeStateText(int state);           // "BOOT", "OFF", ...

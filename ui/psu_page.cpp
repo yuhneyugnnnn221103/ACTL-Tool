@@ -216,7 +216,7 @@ void PsuPage::setDevice(int addr)
     // Điền sẵn các ô bật theo chân EN từng cụm firmware báo, để lệnh "Clear trip" không vô tình tắt nguồn đang bật.
     const model::PsuState &st = m_ctx.psuStore->psu(addr);
     if (st.frames > 0) {
-        for (int c = 0; c < m_cluster4.size(); ++c) m_cluster4[c]->setChecked(int(st.values.at(psumon::kIdxEn0 + c)) & 1);
+        for (int c = 0; c < m_cluster4.size(); ++c) m_cluster4[c]->setChecked(int(st.values.at(psumon::kIdxEn(c))) & 1);
     }
     refresh();
 }
@@ -279,13 +279,13 @@ void PsuPage::refresh()
     for (int i = 0; i < m_rtc.size(); ++i) m_rtc[i]->setText(val(psumon::kIdxRtc0 + i));
     if (has) {
         for (int c = 0; c < psumon::kNumCluster; ++c) {
-            const int st = int(s.values.at(psumon::kIdxSafeState0 + c)), en = int(s.values.at(psumon::kIdxEn0 + c));
+            const int st = int(s.values.at(psumon::kIdxSafeState(c))), en = int(s.values.at(psumon::kIdxEn(c)));
             m_safe[c]->setText(psumon::safeStateText(st));
             m_safe[c]->setStyleSheet(st == psumon::SafeTripped || st == psumon::SafeLockout ? QStringLiteral("background:#E24B4A; color:#ffffff; font-weight:bold;")
                                      : st == psumon::SafeOn ? QStringLiteral("background:#639922; color:#ffffff;") : QString());
             m_en[c]->setText(en & 1 ? QStringLiteral("Bật") : QStringLiteral("Tắt"));
-            m_en[c]->setToolTip(QStringLiteral("PC đang yêu cầu: %1").arg(en & 2 ? QStringLiteral("bật") : QStringLiteral("tắt")));
-            m_tripCount[c]->setText(num(s.values.at(psumon::kIdxTripCount0 + c)));
+            m_en[c]->setToolTip(QStringLiteral("PWR_EN = %1").arg(en & 1));
+            m_tripCount[c]->setText(num(s.values.at(psumon::kIdxTripCount(c))));
         }
         const int slot = int(s.values.at(psumon::kIdxSlot));
         m_fw[0]->setText(slot == 'A' || slot == 'B' || slot == 'R' ? QString(QChar(slot)) : QStringLiteral("?"));
@@ -305,7 +305,7 @@ void PsuPage::sendControl()
     quint8 mask = 0;
     for (int c = 0; c < m_cluster4.size(); ++c) if (m_cluster4.at(c)->isChecked()) mask |= quint8(1 << c);
     const bool on = mask != 0, clear = m_clearTrip->isChecked();
-    auto state = [&](int c) { return known ? int(st.values.at(psumon::kIdxSafeState0 + c)) : -1; };
+    auto state = [&](int c) { return known ? int(st.values.at(psumon::kIdxSafeState(c))) : -1; };
 
     // Firmware APSU: LOCKOUT bỏ qua mọi lệnh; TRIPPED từ chối lệnh bật cho tới khi Clear trip (và lệnh bật phải ở khung sau Clear trip).
     QStringList lockout, needClear;

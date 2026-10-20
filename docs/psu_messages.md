@@ -153,15 +153,15 @@ Vùng dự phòng 24 byte được firmware APSU dùng làm vùng mở rộng. O
 
 | Offset | Byte | Dài | Tên trường | Ý nghĩa |
 |---|---|---|---|---|
-| +0..+3 | 239-242 | 4 x 1 | `FW.SAFE_STATE1..4` | Trạng thái an toàn của cụm DCM 1..4: 0 BOOT, 1 OFF, 2 ARMING, 3 ON, 4 TRIPPED, 5 LOCKOUT |
-| +4..+7 | 243-246 | 4 x 1 | `FW.EN1..4` | Chân EN của cụm 1..4: bit0 đang bật; bit1 PC đang yêu cầu bật |
-| +8..+11 | 247-250 | 4 x 1 | `FW.TRIP_COUNT1..4` | Số lần trip liên tiếp của cụm 1..4 |
-| +12..+15 | 251-254 | 4 | | Dự phòng |
-| +16 | 255 | 1 | `FW.SLOT` | Slot đang chạy `A` / `B` |
-| +18..+21 | 257-260 | 4 | `FW.VERSION` | Version ảnh đang chạy |
-| +22..+23 | 261-262 | 2 | | Dự phòng |
+| +0..+2 | 239-241 | 3 x 1 | `FW.SAFE_STATE1`, `FW.EN1`, `FW.TRIP_COUNT1` | Cụm 1: trạng thái an toàn (0 BOOT, 1 OFF, 2 ARMING, 3 ON, 4 TRIPPED, 5 LOCKOUT), PWR_EN (1/0), số lần trip liên tiếp |
+| +3..+5 | 242-244 | 3 x 1 | `FW.SAFE_STATE2`, `FW.EN2`, `FW.TRIP_COUNT2` | Cụm 2 (cùng 3 byte) |
+| +6..+8 | 245-247 | 3 x 1 | `FW.SAFE_STATE3`, `FW.EN3`, `FW.TRIP_COUNT3` | Cụm 3 |
+| +9..+11 | 248-250 | 3 x 1 | `FW.SAFE_STATE4`, `FW.EN4`, `FW.TRIP_COUNT4` | Cụm 4 |
+| +12 | 251 | 1 | `FW.SLOT` | Slot đang chạy `A` / `B` |
+| +13..+16 | 252-255 | 4 | `FW.VERSION` | Version ảnh đang chạy (u32 BE) |
+| +17..+23 | 256-262 | 7 | | 0 (dự phòng) |
 
-Giao diện hiện các giá trị này ở khung "Firmware PSU" trên trang PSU. Hai trạng thái **TRIPPED** và **LOCKOUT** ảnh hưởng tới điều khiển (mục 3).
+Giao diện hiện các giá trị này ở khung "Trạng thái PSU" (cột phải) trên trang PSU. Hai trạng thái **TRIPPED** và **LOCKOUT** ảnh hưởng tới điều khiển (mục 3).
 
 ### 2.6 Cách app xử lý
 
@@ -186,7 +186,7 @@ Giao diện hiện các giá trị này ở khung "Firmware PSU" trên trang PSU
 | 10-11 | 2 | CRC | CRC16 từ byte 3 đến byte 9 |
 | 12-13 | 2 | Đuôi | `E1 E2` |
 
-- Mỗi lệnh **ghi đè trạng thái bật/tắt**, nên giao diện luôn hỏi xác nhận trước khi gửi. Mỗi cụm DCM (3 DCM) có một chân EN riêng; bit k của Mask điều khiển chân EN cụm k+1. Khi chọn PSU, 4 ô "Bật cụm" được điền sẵn theo `FW.EN1..4` bit0. **Bố cục theo cụm là đề xuất của ACTL, firmware cần cập nhật theo.**
+- Mỗi lệnh **ghi đè trạng thái bật/tắt**, nên giao diện luôn hỏi xác nhận trước khi gửi. Mỗi cụm DCM (3 DCM) có một chân EN riêng; bit k của Mask điều khiển chân EN cụm k+1. Khi chọn PSU, 4 ô "Bật cụm" được điền sẵn theo `FW.EN1..4` bit0. ****
 - **ClearTrip = `01`:** đang TRIPPED thì xóa trip code và các cờ, về OFF; **lệnh bật trong cùng khung bị bỏ qua** (phải gửi ở khung sau). App tự gửi Clear trip (tắt) rồi, sau 300 ms, gửi lệnh bật ở khung riêng khi PSU đang TRIPPED. Ở trạng thái khác thì xóa trip code và bật/tắt theo Mask trong một khung.
 - **LOCKOUT** (≥ 3 lần trip liên tiếp): mọi lệnh bị bỏ qua, trip code giữ nguyên, chỉ reset phần cứng mới thoát; giao diện chặn gửi và báo rõ.
 - Lệnh bật bị từ chối (đang TRIPPED/LOCKOUT hoặc đang nạp code) thì PSU bỏ qua im lặng.

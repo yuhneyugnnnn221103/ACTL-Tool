@@ -336,7 +336,7 @@ QString PsuConfigPage::notOffNote(const QList<int> &addrs) const
         QStringList states;
         bool allOff = true;
         for (int c = 0; c < proto::psumon::kNumCluster; ++c) {
-            const int safe = int(st.values.at(proto::psumon::kIdxSafeState0 + c));
+            const int safe = int(st.values.at(proto::psumon::kIdxSafeState(c)));
             allOff = allOff && safe == proto::psumon::SafeOff;
             states << proto::psumon::safeStateText(safe);
         }
