@@ -110,14 +110,16 @@ void StmOta::onFrame(const core::Frame &frame)
         emit deviceInfo(m_addr, a.slot, a.info, a.trial);
         const QString trial = a.trial & 0x80 ? QStringLiteral("đã xác nhận") : QStringLiteral("đang thử, lần boot %1").arg(a.trial & 0x7F);
         if (m_infoOnly) { done(true, QStringLiteral("slot %1, version %2 (%3)").arg(a.slot).arg(a.info).arg(a.slot == 'R' ? QStringLiteral("bootloader recovery") : trial)); return; }
-        // Đang chạy A thì nạp ảnh slot B và ngược lại; ở recovery ('R') cả hai slot hỏng, bootloader xóa cả hai nên chọn ảnh A trước.
-        const char target = a.slot == 'A' ? 'B' : 'A';
+        // Đang chạy A thì nạp ảnh slot B và ngược lại. Ở recovery ('R', golden image, cả hai slot A/B hỏng) bootloader nhận và ghi luôn
+        // firmware tại chỗ (ERASE xóa cả hai slot): không có "slot kia", app dùng ảnh slot A nếu có, không thì ảnh slot B.
+        const bool recovery = a.slot == 'R';
+        const char target = recovery ? (m_imageA.isEmpty() ? 'B' : 'A') : (a.slot == 'A' ? 'B' : 'A');
         m_image = target == 'A' ? m_imageA : m_imageB;
-        if (m_image.isEmpty() && a.slot == 'R') m_image = m_imageB;
-        if (m_image.isEmpty()) { done(false, QStringLiteral("đang chạy slot %1 nhưng chưa chọn file cho slot %2").arg(a.slot).arg(target)); return; }
+        if (m_image.isEmpty()) { done(false, recovery ? QStringLiteral("đang ở recovery nhưng chưa chọn file .bin nào") : QStringLiteral("đang chạy slot %1 nhưng chưa chọn file cho slot %2").arg(a.slot).arg(target)); return; }
         m_chunks = (m_image.size() + stmota::kChunk - 1) / stmota::kChunk;
         m_seq = m_retries = 0;
-        emit deviceProgress(m_addr, 0, QStringLiteral("Xóa slot đích (ảnh slot %1), có thể mất vài giây").arg(target));
+        emit deviceProgress(m_addr, 0, recovery ? QStringLiteral("Recovery: xóa flash để nạp trực tiếp (ảnh slot %1), có thể mất vài giây").arg(target)
+                                                : QStringLiteral("Xóa slot đích (ảnh slot %1), có thể mất vài giây").arg(target));
         send(stmota::buildCtrl(quint8(m_addr), stmota::kErase), State::Erase, 20000);
         break;
     }
