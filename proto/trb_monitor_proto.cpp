@@ -11,13 +11,18 @@ core::FrameSpec spec(bool checkCrc)
 }
 
 // Hệ số quy đổi đang là 1 (giá trị thô) như tool cũ; có công thức thì sửa scale/unit tại đây.
+static const char *const kDebugNames[kNumDebug] = {
+    "MEM_ERR_1", "MEM_ERR_2", "MEM_ERR_CODE", "MEM_ERR_CNT_HI", "MEM_ERR_CNT_LO", "BEAM_DONE_CNT", "BEAM_NOT_READY_CNT",
+    "BEAM_LAST_TIME", "FREQ_IDX", "TEMP_IDX_1", "TEMP_IDX_2", "MODE_AMP", "LUT_ERR_TIMEOUT_CNT", "CALIB_AMP_RETRY_FAIL_CNT",
+    "WRITE_DROP_BUSY_CNT", "ID_TRB", "STATUS_TEMP"};
+
 static FieldTable build()
 {
     FieldTable t;
     int off = 6;
     auto u16 = [&](const QString &name) { t.add(name, off, 2); off += 2; };
     auto u8 = [&](const QString &name) { t.add(name, off, 1); off += 1; };
-    auto u24 = [&](const QString &name) { t.add(name, off, 3); off += 3; };
+    auto u32 = [&](const QString &name) { t.add(name, off, 4); off += 4; };
 
     for (int m = 1; m <= kNumTrm; ++m) {
         const QString p = QStringLiteral("TRM%1.").arg(m);
@@ -39,11 +44,13 @@ static FieldTable build()
     u16(QStringLiteral("HUMIDITY POWER"));
     u8(QStringLiteral("INIT DATA"));                       // byte 240 (đếm từ 1)
     for (int i = 1; i <= kNumErr; ++i) u16(QStringLiteral("BẢN TIN LỖI %1").arg(i));   // 12 x 2 byte = 24 byte (241..264)
-    u24(QStringLiteral("PERIOD TXEN"));
-    u16(QStringLiteral("PULSE TXEN"));
-    u24(QStringLiteral("PERIOD BEAMSYNC"));
-    u16(QStringLiteral("PULSE BEAMSYNC"));
-    Q_ASSERT(t.size() == kNumFields && off == kLength - 4 - 32);   // còn 32 byte dự phòng, CRC, E1 E2
+    u32(QStringLiteral("PERIOD TXEN"));                    // byte 265-268
+    u16(QStringLiteral("PULSE TXEN"));                     // 269-270
+    u32(QStringLiteral("PERIOD BEAMSYNC"));                // 271-274
+    u16(QStringLiteral("PULSE BEAMSYNC"));                 // 275-276
+    // Từ byte 277: 17 trường debug, mỗi trường 1 byte, chỉ ghi log (CSV) và không hiện trên giao diện.
+    for (const char *n : kDebugNames) u8(QString::fromLatin1(n));
+    Q_ASSERT(t.size() == kNumFields && off == kLength - 4 - 13);   // còn 13 byte dự phòng, CRC, E1 E2
     return t;
 }
 
