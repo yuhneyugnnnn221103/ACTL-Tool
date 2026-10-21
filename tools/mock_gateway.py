@@ -70,9 +70,10 @@ TRB_V, TRB_I, TRB_TEMP = 206, 208, 210
 TRB_TRIP0, TRB_STATE0 = 212, 228
 TRB_ADAR, TRB_PA, TRB_PG, TRB_MCU, TRB_HUM = 232, 233, 234, 235, 237
 # Sau độ ẩm: INIT DATA 1 byte (239), rồi 12 bộ đếm bản tin lỗi x 2 byte (240..263), PERIOD TXEN 4 byte (264), PULSE TXEN 2 byte (268),
-# PERIOD BEAMSYNC 4 byte (270), PULSE BEAMSYNC 2 byte (274), 17 byte debug (276..292), 13 byte dự phòng, CRC, E1 E2.
+# PERIOD BEAMSYNC 4 byte (270), PULSE BEAMSYNC 2 byte (274), 17 trường debug 19 byte (276..294), 11 byte dự phòng, CRC, E1 E2.
 TRB_INIT_DATA, TRB_ERR0, TRB_ERR_COUNT, TRB_PERIOD_TXEN, TRB_PULSE_TXEN, TRB_PERIOD_BEAM, TRB_PULSE_BEAM = 239, 240, 12, 264, 268, 270, 274
-TRB_DEBUG0, TRB_DEBUG_COUNT = 276, 17
+TRB_DEBUG0 = 276
+TRB_DEBUG_SIZES = [1, 1, 1, 1, 1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1]   # BEAM_DONE_CNT và BEAM_LAST_TIME 2 byte
 TRB_TRIP_COUNT = 16
 
 # Trong khối TRM: I_SEN1..8 (+0), DET1..8 (+16), TEMP1..4 (+32), I_PA1..4 (+40), I_LNA (+48); mỗi trường 2 byte.
@@ -114,8 +115,10 @@ def trb_frame(mb, trb, rng, *, isen=None, v=150, i=500, power_temp=40, mcu=50, h
     put(f, TRB_PULSE_TXEN, 100, 2)
     put(f, TRB_PERIOD_BEAM, 2000, 4)
     put(f, TRB_PULSE_BEAM, 200, 2)
-    for k in range(TRB_DEBUG_COUNT):            # 17 byte debug: giá trị mẫu tăng dần
-        f[TRB_DEBUG0 + k] = k + 1
+    off = TRB_DEBUG0
+    for k, n in enumerate(TRB_DEBUG_SIZES):     # 17 trường debug: giá trị mẫu tăng dần
+        put(f, off, k + 1, n)
+        off += n
     return seal(f, TRB_CRC_START)
 
 

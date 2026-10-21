@@ -1,7 +1,7 @@
 #pragma once
 // Bản tin giám sát TRB, 310 byte (theo cfg_protocol.h):
 // [AB CD][11 11][MB][TRB][TRM1..4: 4x50B][TRB 6B][Trip 16B][State 4B]
-// [INIT_ADAR][PA][PG][Nhiệt MCU 2B][Độ ẩm power 2B][INIT DATA][12 bộ đếm lỗi][PERIOD/PULSE][17 byte debug][Dự phòng 13B][CRC 2B][E1 E2]
+// [INIT_ADAR][PA][PG][Nhiệt MCU 2B][Độ ẩm power 2B][INIT DATA][12 bộ đếm lỗi][PERIOD/PULSE][17 trường debug 19B][Dự phòng 11B][CRC 2B][E1 E2]
 #include "../core/frame.h"
 #include "field_table.h"
 
@@ -17,7 +17,7 @@ constexpr int kIdxTrip0 = kIdxTrbV + 3;
 constexpr int kIdxState0 = kIdxTrip0 + kNumTrip;
 constexpr int kIdxInitAdar = kIdxState0 + kNumTrm, kIdxPa = kIdxInitAdar + 1, kIdxPg = kIdxInitAdar + 2;
 constexpr int kIdxMcuTemp = kIdxInitAdar + 3, kIdxHumidity = kIdxInitAdar + 4;
-// Sau độ ẩm power: INIT DATA (1 byte), rồi 12 bộ đếm "bản tin lỗi" (mỗi bộ 2 byte, đếm số bản tin lỗi từng loại), PERIOD (4 byte)/PULSE (2 byte) của TXEN và BEAMSYNC, 17 trường debug 1 byte (từ byte 277, chỉ ghi log), 13 byte dự phòng, CRC, E1 E2.
+// Sau độ ẩm power: INIT DATA (1 byte), rồi 12 bộ đếm "bản tin lỗi" (mỗi bộ 2 byte, đếm số bản tin lỗi từng loại), PERIOD (4 byte)/PULSE (2 byte) của TXEN và BEAMSYNC, 17 trường debug (19 byte, từ byte 277, chỉ ghi log), 11 byte dự phòng, CRC, E1 E2.
 constexpr int kNumErr = 12;
 constexpr int kIdxInitData = kIdxHumidity + 1;
 constexpr int kIdxErr0 = kIdxInitData + 1;

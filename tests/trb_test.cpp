@@ -99,7 +99,7 @@ private slots:
             QCOMPARE(f.offset, end);
             end += f.size;
         }
-        QCOMPARE(end, trbmon::kLength - 4 - 13);              // 13 byte dự phòng rồi CRC, tailer
+        QCOMPARE(end, trbmon::kLength - 4 - 11);              // 11 byte dự phòng rồi CRC, tailer
         QCOMPARE(trbmon::kLength, 310);
         QCOMPARE(t.fields().at(trbmon::kIdxTrm0).name, QStringLiteral("TRM1.I SEN1"));
         QCOMPARE(t.fields().at(trbmon::kIdxTrm0 + trbmon::kTrmFields).offset, 6 + 50);     // TRM2 sau 50 byte
@@ -110,7 +110,7 @@ private slots:
         QCOMPARE(t.fields().at(trbmon::kIdxInitData).name, QStringLiteral("INIT DATA"));
         QCOMPARE(t.fields().at(trbmon::kIdxInitData).offset + 1, 240);   // số byte tính từ 1
         QCOMPARE(t.fields().at(trbmon::kIdxInitData).size, 1);
-        // Số byte tính từ 1: lỗi 241-264, PERIOD TXEN 265-268, PULSE TXEN 269-270, PERIOD BEAMSYNC 271-274, PULSE BEAMSYNC 275-276, debug 277-293.
+        // Số byte tính từ 1: lỗi 241-264, PERIOD TXEN 265-268, PULSE TXEN 269-270, PERIOD BEAMSYNC 271-274, PULSE BEAMSYNC 275-276, debug 277-295.
         auto first = [&](int idx) { return t.fields().at(idx).offset + 1; };
         QCOMPARE(t.fields().at(trbmon::kIdxErr0).name, QStringLiteral("BẢN TIN LỖI 1"));
         QCOMPARE(first(trbmon::kIdxErr0), 241);
@@ -129,7 +129,14 @@ private slots:
         QCOMPARE(first(trbmon::kIdxDebug0), 277);                                           // 17 trường debug, mỗi trường 1 byte
         QCOMPARE(t.fields().at(trbmon::kIdxDebug0).name, QStringLiteral("MEM_ERR_1"));
         QCOMPARE(t.fields().at(trbmon::kIdxDebug0 + 4).name, QStringLiteral("MEM_ERR_CNT_LO"));
-        QCOMPARE(first(trbmon::kIdxDebug0 + trbmon::kNumDebug - 1), 293);
+        QCOMPARE(t.fields().at(trbmon::kIdxDebug0 + 5).name, QStringLiteral("BEAM_DONE_CNT"));   // 282-283
+        QCOMPARE(first(trbmon::kIdxDebug0 + 5), 282);
+        QCOMPARE(t.fields().at(trbmon::kIdxDebug0 + 5).size, 2);
+        QCOMPARE(first(trbmon::kIdxDebug0 + 6), 284);                                       // BEAM_NOT_READY_CNT
+        QCOMPARE(t.fields().at(trbmon::kIdxDebug0 + 7).name, QStringLiteral("BEAM_LAST_TIME"));
+        QCOMPARE(first(trbmon::kIdxDebug0 + 7), 285);                                       // 285-286
+        QCOMPARE(t.fields().at(trbmon::kIdxDebug0 + 7).size, 2);
+        QCOMPARE(first(trbmon::kIdxDebug0 + trbmon::kNumDebug - 1), 295);
         QCOMPARE(t.fields().at(trbmon::kIdxDebug0 + trbmon::kNumDebug - 1).name, QStringLiteral("STATUS_TEMP"));
         QCOMPARE(t.fields().at(trbmon::kIdxDebug0 + trbmon::kNumDebug - 1).size, 1);
         QCOMPARE(t.size(), trbmon::kNumFields);
