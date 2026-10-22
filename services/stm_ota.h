@@ -34,6 +34,7 @@ signals:
 private:
     enum class State { Idle, Info, Erase, Begin, Data, End, AwaitUser, Commit, Rollback };
     static constexpr int kMaxRetries = 5;
+    static constexpr int kReplyMs = 200;   // chờ ACK của INFO, BEGIN, DATA, COMMIT, ROLLBACK (ERASE 20 s và END 3 s vì firmware xóa flash / tính CRC32 cả ảnh)
 
     void nextDevice();
     void send(const QByteArray &frame, State state, int timeoutMs);

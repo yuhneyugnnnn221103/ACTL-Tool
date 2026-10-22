@@ -48,7 +48,7 @@ struct Settings {
         s.serviceBaud = get("service/baud", 1000000).toInt();
         s.trbCheckCrc = get("trb/checkCrc", true).toBool();
         s.psuCheckCrc = get("psu/checkCrc", true).toBool();
-        s.cfgReadTimeoutMs = get("config/readTimeoutMs", 3000).toInt();
+        s.cfgReadTimeoutMs = get("config/replyTimeoutMs", 200).toInt(); // khóa mới: khóa cũ config/readTimeoutMs đã bị ghi 3000 vào file ini ở các lần chạy trước
         s.cfgWriteGapMs = get("config/writeGapMs", 300).toInt();
         s.logEnabled = get("log/enabled", true).toBool();
         s.logAutoStart = get("log/autoStart", true).toBool(); // false: mở app ở trạng thái chưa ghi, bấm "Bắt đầu ghi" hoặc hẹn giờ

@@ -63,8 +63,8 @@ void StmOta::nextDevice()
         return;
     }
     m_addr = m_queue.takeFirst();
-    if (m_rollback) send(stmota::buildCtrl(quint8(m_addr), stmota::kRollback), State::Rollback, 3000);
-    else send(stmota::buildCtrl(quint8(m_addr), stmota::kInfo), State::Info, 1000);
+    if (m_rollback) send(stmota::buildCtrl(quint8(m_addr), stmota::kRollback), State::Rollback, kReplyMs);
+    else send(stmota::buildCtrl(quint8(m_addr), stmota::kInfo), State::Info, kReplyMs);
 }
 
 void StmOta::send(const QByteArray &frame, State state, int timeoutMs)
@@ -79,7 +79,7 @@ void StmOta::send(const QByteArray &frame, State state, int timeoutMs)
 void StmOta::sendChunk()
 {
     send(stmota::buildData(quint8(m_addr), quint16(m_seq), m_image.mid(m_seq * stmota::kChunk, stmota::kChunk)),
-         State::Data, 800);
+         State::Data, kReplyMs);
 }
 
 void StmOta::done(bool ok, const QString &message)
@@ -93,7 +93,7 @@ void StmOta::done(bool ok, const QString &message)
 void StmOta::confirmCommit(bool commit)
 {
     if (m_state != State::AwaitUser) return;
-    if (commit) send(stmota::buildCtrl(quint8(m_addr), stmota::kCommit), State::Commit, 2000);
+    if (commit) send(stmota::buildCtrl(quint8(m_addr), stmota::kCommit), State::Commit, kReplyMs);
     else done(true, QStringLiteral("đã nạp và kiểm tra CRC32, CHƯA kích hoạt"));
 }
 
@@ -128,7 +128,7 @@ void StmOta::onFrame(const core::Frame &frame)
         if (a.status == stmota::EraseFail) { done(false, QStringLiteral("xóa sector thất bại (mã HAL 0x%1)").arg(a.info, 8, 16, QLatin1Char('0'))); return; }
         if (a.status != stmota::Ok) { done(false, QStringLiteral("ERASE bị từ chối: ") + why); return; }
         emit deviceProgress(m_addr, 0, QStringLiteral("Gửi BEGIN"));
-        send(stmota::buildBegin(quint8(m_addr), quint32(m_image.size()), stmota::crc32(m_image), m_version), State::Begin, 2000);
+        send(stmota::buildBegin(quint8(m_addr), quint32(m_image.size()), stmota::crc32(m_image), m_version), State::Begin, kReplyMs);
         break;
 
     case State::Begin:
@@ -167,7 +167,7 @@ void StmOta::onFrame(const core::Frame &frame)
         if (a.ackCmd != stmota::kEnd) return;
         if (a.status != stmota::Ok) { done(false, QStringLiteral("END: %1 (CRC thiết bị tính = 0x%2)").arg(why).arg(a.info, 8, 16, QLatin1Char('0'))); return; }
         emit deviceProgress(m_addr, 100, QStringLiteral("CRC32 đúng"));
-        if (m_autoCommit) { send(stmota::buildCtrl(quint8(m_addr), stmota::kCommit), State::Commit, 2000); return; }
+        if (m_autoCommit) { send(stmota::buildCtrl(quint8(m_addr), stmota::kCommit), State::Commit, kReplyMs); return; }
         m_timer.stop();
         m_state = State::AwaitUser;
         emit commitRequested(m_addr);

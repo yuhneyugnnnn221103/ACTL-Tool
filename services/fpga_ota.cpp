@@ -55,7 +55,7 @@ void FpgaOta::query()
     core::Request r;
     r.data = fpgaota::buildQuery(m_nodes.at(m_node).dev.first, m_nodes.at(m_node).dev.second);
     r.replyCmd = fpgaota::replyCmd();
-    r.timeoutMs = 300;
+    r.timeoutMs = 200;
     r.retries = kMaxTries;
     m_waitId = m_link->send(r);
 }
