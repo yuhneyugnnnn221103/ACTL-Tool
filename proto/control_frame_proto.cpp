@@ -18,6 +18,7 @@ QByteArray wrap(Section s, const QByteArray &inner)
     f[1] = char(core::kHeader2);
     f[2] = char(kCmd);
     f[kOffMask] = char(1 << s);
+    for (int i = 0; i < kTailLength; ++i) f[kLength - kTailLength + i] = char(kTail[i]);
     f.replace(sectionOffset(s), inner.size(), inner);
     return f;
 }

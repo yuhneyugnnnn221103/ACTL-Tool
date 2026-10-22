@@ -1,6 +1,6 @@
-# Khung điều khiển tổng PC -> Gateway (104 byte)
+# Khung điều khiển tổng PC -> Gateway (107 byte)
 
-Mọi lệnh điều khiển của app đi trong một khung cố định 104 byte. **Không có CRC tổng và không có đuôi.**
+Mọi lệnh điều khiển của app đi trong một khung cố định 107 byte. **Không có CRC tổng; đuôi 3 byte `E1 E2 E3`.**
 
 | Byte (đếm từ 1) | Dài | Nội dung |
 |---|---|---|
@@ -11,9 +11,10 @@ Mọi lệnh điều khiển của app đi trong một khung cố định 104 by
 | 36-77 | 42 | Bản tin điều khiển beam (3 khung x 14 byte, mục dưới) |
 | 78-90 | 13 | Bản tin điều khiển PSU `01 01` |
 | 91-104 | 14 | Dự phòng cho một module sau này |
+| 105-107 | 3 | Đuôi `E1 E2 E3` |
 
 - Mỗi lần gửi chỉ **một** phần có lệnh: phần đó chứa nguyên khung con (giữ header, CRC, đuôi riêng của nó), bit mask tương ứng = 1, các bit còn lại = 0, mọi phần khác đệm `00`.
-- Tổng 4 + 14 + 17 + 42 + 13 + 14 = 104 byte (`kLength` trong `proto/control_frame_proto.h`).
+- Tổng 4 + 14 + 17 + 42 + 13 + 14 + 3 (đuôi) = 107 byte (`kLength` trong `proto/control_frame_proto.h`).
 - Khung con TRB tính CRC từ byte địa chỉ (như cũ); khung PSU tính từ CMD (như cũ).
 
 ## Phần điều khiển beam (42 byte)

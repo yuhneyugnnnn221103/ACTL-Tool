@@ -16,7 +16,7 @@ bool registerRequestFrames(core::FrameRegistry &registry, bool checkCrc)
     ok &= registry.add({QByteArray::fromHex("A1A1"), trbcfg::kLength, 4, checkCrc, QStringLiteral("TRB ghi cấu hình")});
     ok &= registry.add({QByteArray::fromHex("A3A3"), 10, 4, checkCrc, QStringLiteral("TRB hỏi cấu hình")});
     core::FrameSpec control{QByteArray(1, char(ctlframe::kCmd)), ctlframe::kLength, 0, false, QStringLiteral("Điều khiển tổng")};
-    control.tailer = false;                          // khung điều khiển tổng không có CRC tổng và không có đuôi
+    control.tailer = false;                          // khung điều khiển tổng không có CRC tổng, đuôi 3 byte E1 E2 E3 nên không dùng kiểm tra đuôi 2 byte của parser
     ok &= registry.add(control);
     return ok;
 }
