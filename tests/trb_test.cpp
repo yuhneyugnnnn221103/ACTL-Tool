@@ -750,10 +750,15 @@ private slots:
         QCOMPARE(updated.size(), 6);
         QCOMPARE(store.trb(0, 3).status, model::Status::NoData);
         QCOMPARE(store.trb(0, 4).status, model::Status::Ok);
+        QVERIFY(store.trb(0, 3).noReply);                    // khung rỗng: đánh dấu X ngay, dù chưa có dữ liệu
+        QVERIFY(store.trb(0, 6).noReply);
+        QVERIFY(!store.trb(0, 4).noReply);
 
         rig.transport->inject(burst({}));                    // cả 8 TRB có số liệu
         QCOMPARE(store.count(model::Status::Ok), 8);
-        rig.transport->inject(burst({3}));                   // 1 và 2 lần liên tiếp: chưa đủ ngưỡng
+        QVERIFY(!store.trb(0, 3).noReply);                   // có bản tin thật: hết X
+        rig.transport->inject(burst({3}));                   // 1 và 2 lần liên tiếp: chưa đủ ngưỡng nhưng X hiện ngay
+        QVERIFY(store.trb(0, 3).noReply);
         rig.transport->inject(burst({3}));
         QCOMPARE(store.trb(0, 3).status, model::Status::Ok);
         rig.transport->inject(burst({3}));                   // lần thứ 3 liên tiếp: mất kết nối, số liệu cuối còn nguyên

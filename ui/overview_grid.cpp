@@ -77,13 +77,15 @@ void OverviewGrid::paintEvent(QPaintEvent *)
             p.setPen(Qt::NoPen);
             p.setBrush(statusColor(s));
             p.drawRoundedRect(c, 6, 6);
-            if (m_store->trb(mb, trb).status == Status::Lost) {   // quá hạn không có bản tin mới: dấu ?
+            const model::TrbState &ts = m_store->trb(mb, trb);
+            // X: Gateway vừa báo TRB không phản hồi (khung rỗng), hiện ngay dù đã có dữ liệu hay chưa. ?: quá hạn không có bản tin mới (dữ liệu cũ).
+            if (ts.noReply || ts.status == Status::Lost) {
                 QFont f = font();
                 f.setBold(true);
                 f.setPixelSize(qBound(9, int(qMin(c.height(), c.width()) * 0.6), 20));
                 p.setFont(f);
                 p.setPen(theme::statusTextColor(s));
-                p.drawText(c, Qt::AlignCenter, QStringLiteral("?"));
+                p.drawText(c, Qt::AlignCenter, ts.noReply ? QStringLiteral("X") : QStringLiteral("?"));
             }
             if (mb == m_dbgMb && trb == m_dbgTrb) {   // viền xanh dương: TRB đang Debug
                 p.setPen(QPen(theme::statusColor(Status::Updating).darker(130), 3));

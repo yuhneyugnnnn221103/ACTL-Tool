@@ -23,7 +23,8 @@ void TrbMonitor::onFrame(const core::Frame &frame)
     if (!m_store->contains(mb, trb)) { ++m_badAddress; return; }
 
     int &empty = m_emptyRun[mb << 8 | trb];
-    if (frame.empty) {                    // Gateway báo TRB này không phản hồi: đủ m_emptyLimit lần liên tiếp thì coi là mất kết nối
+    if (frame.empty) {                    // Gateway báo TRB này không phản hồi: đánh dấu X ngay; đủ m_emptyLimit lần liên tiếp thì coi là mất kết nối
+        m_store->setNoReply(mb, trb, true);
         if (++empty >= m_emptyLimit) m_store->markSilent(mb, trb);
         return;
     }

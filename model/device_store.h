@@ -16,6 +16,7 @@ struct TrbState {
     Status lastLive = Status::NoData;   // trạng thái gần nhất khác Lost (Ok, Warning, Trip, Updating): biết trước khi mất kết nối là gì
     qint64 lastSeenMs = 0;
     quint64 frames = 0;
+    bool noReply = false;   // Gateway vừa báo TRB không phản hồi (khung rỗng) và chưa có bản tin thật nào sau đó: ô tổng quan hiện "X" ngay, kể cả khi chưa có dữ liệu
     QList<double> values;   // theo thứ tự bảng trường proto::trbmon::table()
     QList<int> alarms;      // chỉ số các trường đang vượt ngưỡng
     QByteArray raw;
@@ -42,6 +43,7 @@ public:
     void updateTrb(int mb, int trb, const QList<double> &values, const QByteArray &raw,
                    qint64 timestampMs, Status status, const QList<int> &alarms = {});
     void markStale(qint64 nowMs, int staleMs); // quá hạn -> Lost
+    void setNoReply(int mb, int trb, bool on); // đặt/xóa cờ noReply (xem TrbState)
     void markSilent(int mb, int trb);          // Gateway báo thiết bị không phản hồi: Ok/Warning/Trip -> Lost (giữ số liệu cuối)
 
 signals:

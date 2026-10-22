@@ -750,6 +750,8 @@ QString MainWindow::trbTooltip(int mb, int trb) const
     QString t = QStringLiteral("%1\nTrạng thái: %2").arg(trbName(mb, trb), statusText(s.status));
     if (s.status == Status::Lost && s.lastLive != Status::NoData)
         t += QStringLiteral(" (trước đó: %1)").arg(statusText(s.lastLive));
+    if (s.noReply) t += QStringLiteral("\nX: Gateway vừa báo TRB không phản hồi (khung rỗng)");
+    else if (s.status == Status::Lost) t += QStringLiteral("\n?: quá hạn không có bản tin mới, số liệu bên dưới là số liệu cũ");
     if (const auto d = m_ctx.trbControl->debugTrb(); d && d->first == mb && d->second == trb)
         t += QStringLiteral("\nĐang ở chế độ Debug");
     if (s.frames == 0) return t;

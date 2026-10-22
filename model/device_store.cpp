@@ -60,6 +60,7 @@ void DeviceStore::updateTrb(int mb, int trb, const QList<double> &values, const 
     s.alarms = alarms;
     s.lastSeenMs = timestampMs;
     ++s.frames;
+    s.noReply = false;                          // có bản tin thật: hết sự cố
     setStatus(mb, trb, status);
 }
 
@@ -71,6 +72,11 @@ void DeviceStore::markStale(qint64 nowMs, int staleMs)
         if (live && nowMs - s.lastSeenMs > staleMs)
             setStatus(i / m_trbPerMb, i % m_trbPerMb, Status::Lost);
     }
+}
+
+void DeviceStore::setNoReply(int mb, int trb, bool on)
+{
+    if (contains(mb, trb)) m_trbs[mb * m_trbPerMb + trb].noReply = on;
 }
 
 void DeviceStore::markSilent(int mb, int trb)
