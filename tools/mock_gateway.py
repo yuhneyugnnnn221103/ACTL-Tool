@@ -508,35 +508,36 @@ class SerialResponder:
         return frame[n - 2] == T1 and frame[n - 1] == T2 and crc16(bytes(frame[start:n - 4])) == (frame[n - 4] << 8 | frame[n - 3])
 
     def feed(self, data):
-        """Nhận byte, trả về danh sách bytes cần gửi lại."""
+        """Nhận byte, trả về danh sách bytes cần gửi lại. Vai Gateway: khung PC gửi xuống có byte thiết bị sau AB CD
+        (0x01 = TRB, 0x02 = PSU, 0x03 = TRSU); bỏ byte đó đi, ghép lại khung gốc rồi mới xử lý như TRB/PSU."""
         self.buf += data
         replies = []
-        while len(self.buf) >= 4:
+        while len(self.buf) >= 5:
             b = self.buf
             if b[0] != H1 or b[1] != H2:
                 del b[0]
                 continue
-            cmd2 = bytes(b[2:4])
-            if cmd2 == b"\xA1\xA1":
+            dev, cmd2 = b[2], bytes(b[3:5])
+            if dev == 1 and cmd2 == b"\xA1\xA1":
                 n, kind = TRB_CFG_LEN, "ghi TRB"
-            elif cmd2 == b"\xA3\xA3":
+            elif dev == 1 and cmd2 == b"\xA3\xA3":
                 n, kind = TRB_CFG_READ_LEN, "đọc TRB"
-            elif cmd2 == b"\x04\x04":
+            elif dev == 2 and cmd2 == b"\x04\x04":
                 n, kind = PSU_CFG_LEN, "ghi PSU"
-            elif cmd2 == b"\x03\x03":
+            elif dev == 2 and cmd2 == b"\x03\x03":
                 n, kind = PSU_CFG_READ_LEN, "đọc PSU"
             else:
                 del b[0]
                 continue
-            if len(b) < n:
+            if len(b) < n + 1:
                 break
-            frame = bytes(b[:n])
+            frame = bytes(b[:2] + b[3:n + 1])                 # bỏ byte thiết bị: khung gốc dài n
             start = 4 if kind.endswith("TRB") else 2
             if not self._crc_ok(frame, start):
                 self.log(f"  khung {kind} sai CRC/tailer, bỏ qua 1 byte")
                 del b[0]
                 continue
-            del b[:n]
+            del b[:n + 1]
             replies += self._handle(kind, frame)
         return replies
 
@@ -649,26 +650,31 @@ def cmd_selftest(_args):
     lines, _ = decode_control(wrap(2, bytes(bm)))
     check(len(lines) == 1 and "Esp=12.3" in lines[0] and "Beta=-4.5" in lines[0] and "01 10 11" in lines[0] and "đúng" in lines[0], "điều khiển beam (bit2, CRC từ header)")
 
-    print("RS485 giả (cấu hình):")
+    print("RS485 giả (cấu hình, có byte thiết bị sau AB CD):")
+    def dev(d, f):
+        f = bytes(f)
+        return f[:2] + bytes([d]) + f[2:]
     r = SerialResponder(rng=random.Random(2), log=lambda *_: None)
     w = bytearray(TRB_CFG_LEN); w[2] = w[3] = 0xA1; w[4], w[5] = 6, 2; w[10:14] = b"\x01\x02\x03\x04"
-    check(r.feed(seal(w, 4)) == [], "ghi TRB không có trả lời")
+    check(r.feed(dev(1, seal(w, 4))) == [], "ghi TRB không có trả lời")
     rd = bytearray(TRB_CFG_READ_LEN); rd[2] = rd[3] = 0xA3; rd[4], rd[5] = 6, 2
-    out = r.feed(seal(rd, 4))
+    out = r.feed(dev(1, seal(rd, 4)))
     check(len(out) == 1 and len(out[0]) == TRB_CFG_LEN and out[0][2:4] == b"\xA4\xA4" and out[0][10:14] == b"\x01\x02\x03\x04"
           and crc16(out[0][4:516]) == (out[0][516] << 8 | out[0][517]), "đọc TRB trả đúng cấu hình đã ghi (A4A4)")
     w = bytearray(PSU_CFG_LEN); w[2] = w[3] = 0x04; w[PSU_ADDR] = 3; w[5] = w[6] = 0xFF; w[500:504] = b"\xDE\xAD\xBE\xEF"
-    r.feed(seal(w, 2))
+    r.feed(dev(2, seal(w, 2)))
     rd = bytearray(PSU_CFG_READ_LEN); rd[2] = rd[3] = 0x03; rd[PSU_ADDR] = 3
-    out = r.feed(seal(rd, 2))
+    out = r.feed(dev(2, seal(rd, 2)))
     check(len(out) == 1 and len(out[0]) == PSU_CFG_LEN and out[0][2:4] == b"\x82\x82" and out[0][500:504] == b"\xDE\xAD\xBE\xEF"
           and crc16(out[0][2:911]) == (out[0][911] << 8 | out[0][912]), "đọc PSU trả đúng cấu hình đã ghi (82 82)")
     noisy = SerialResponder(drop=1.0, rng=random.Random(3), log=lambda *_: None)
-    check(noisy.feed(seal(bytearray(rd), 2)) == [], "--drop 1.0: không trả lời")
-    chunks = seal(bytearray(rd), 2)
+    check(noisy.feed(dev(2, seal(bytearray(rd), 2))) == [], "--drop 1.0: không trả lời")
+    chunks = dev(2, seal(bytearray(rd), 2))
     split = [r.feed(chunks[:5]), r.feed(chunks[5:])]
     check(split[0] == [] and len(split[1]) == 1, "nhận khung bị chia mảnh")
-    junk = r.feed(b"\x00\xFF\xAB" + seal(bytearray(rd), 2))
+    check(r.feed(seal(bytearray(rd), 2)) == [], "khung PSU thiếu byte thiết bị bị bỏ qua")
+    check(r.feed(dev(1, seal(bytearray(rd), 2))) == [], "byte thiết bị sai loại (TRB cho khung PSU) bị bỏ qua")
+    junk = r.feed(b"\x00\xFF\xAB" + dev(2, seal(bytearray(rd), 2)))
     check(len(junk) == 1, "bỏ qua byte rác phía trước")
 
     print("không có lỗi" if not check.failed else f"{check.failed} lỗi")

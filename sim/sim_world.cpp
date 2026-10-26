@@ -13,8 +13,9 @@ bool registerRequestFrames(core::FrameRegistry &registry, bool checkCrc)
     bool ok = registry.add(trbmon::pollSpec(checkCrc));
     ok &= registry.add({QByteArray::fromHex("A2A2"), 14, 4, checkCrc, QStringLiteral("TRB điều khiển")});
     ok &= registry.add({QByteArray::fromHex("1414"), 17, 4, checkCrc, QStringLiteral("TRB beam")});
-    ok &= registry.add({QByteArray::fromHex("A1A1"), trbcfg::kLength, 4, checkCrc, QStringLiteral("TRB ghi cấu hình")});
-    ok &= registry.add({QByteArray::fromHex("A3A3"), 10, 4, checkCrc, QStringLiteral("TRB hỏi cấu hình")});
+    // Khung cấu hình có thêm byte thiết bị (0x01 = TRB) sau AB CD: khóa tra cứu là {DEV, byte CMD đầu}, CRC vẫn tính từ byte địa chỉ (lùi 1 vì có DEV).
+    ok &= registry.add({QByteArray::fromHex("01A1"), trbcfg::kLength + 1, 5, checkCrc, QStringLiteral("TRB ghi cấu hình")});
+    ok &= registry.add({QByteArray::fromHex("01A3"), 10 + 1, 5, checkCrc, QStringLiteral("TRB hỏi cấu hình")});
     core::FrameSpec control{QByteArray(1, char(ctlframe::kCmd)), ctlframe::kLength, 0, false, QStringLiteral("Điều khiển tổng")};
     control.tailer = false;                          // khung điều khiển tổng không có CRC tổng, đuôi 3 byte E1 E2 E3 nên không dùng kiểm tra đuôi 2 byte của parser
     ok &= registry.add(control);

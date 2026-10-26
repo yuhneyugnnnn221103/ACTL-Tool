@@ -174,3 +174,5 @@ Gateway hỏi `AB CD 11 11 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giá
 - Trạng thái "Đang nạp" trên lưới tổng quan khi nạp FPGA.
 
 Mọi lệnh điều khiển (TRB `A2`, TRB `14`, beam, PSU) đi trong khung điều khiển tổng 107 byte `AB CD EF <mask> ...`, xem `docs/control_frame.md`.
+
+Bản tin cấu hình và nạp code (TRB `A1/A3`, PSU `03 03/04 04`, nạp FPGA, nạp STM32) có thêm 1 byte thiết bị sau `AB CD` (`01` TRB, `02` PSU, `03` TRSU) để Gateway biết gửi cho thiết bị nào rồi bỏ byte đó đi, xem `docs/control_frame.md`.

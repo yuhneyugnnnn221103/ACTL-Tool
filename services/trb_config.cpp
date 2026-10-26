@@ -1,4 +1,5 @@
 #include "trb_config.h"
+#include "../proto/device_select_proto.h"
 #include "../proto/trb_config_proto.h"
 
 namespace services {
@@ -85,7 +86,7 @@ void TrbConfig::sendRead(Stage stage)
 {
     m_stage = stage;
     core::Request r;
-    r.data = trbcfg::buildReadRequest(m_task.dev.first, m_task.dev.second);
+    r.data = devsel::add(devsel::Trb, trbcfg::buildReadRequest(m_task.dev.first, m_task.dev.second));   // byte chọn thiết bị cho Gateway
     r.replyCmd = trbcfg::readReplyCmd();
     r.timeoutMs = m_readTimeoutMs;
     r.retries = 2; // hết thời gian chờ thì hỏi lại tối đa 2 lần nữa (tổng 3 lần)
@@ -96,7 +97,7 @@ void TrbConfig::sendWrite()
 {
     m_stage = Stage::Write;
     core::Request r;
-    r.data = trbcfg::buildWrite(m_task.dev.first, m_task.dev.second, m_task.values);
+    r.data = devsel::add(devsel::Trb, trbcfg::buildWrite(m_task.dev.first, m_task.dev.second, m_task.values));
     r.gapMs = m_writeGapMs; // chờ thiết bị lưu xong trước khi đọc lại
     m_waitId = m_link->send(r);
 }

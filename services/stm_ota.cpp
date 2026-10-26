@@ -1,4 +1,5 @@
 #include "stm_ota.h"
+#include "../proto/device_select_proto.h"
 
 namespace services {
 
@@ -70,7 +71,7 @@ void StmOta::nextDevice()
 void StmOta::send(const QByteArray &frame, State state, int timeoutMs)
 {
     core::Request r;
-    r.data = frame;
+    r.data = devsel::add(devsel::Psu, frame);   // mọi khung nạp STM32 đều gửi cho PSU
     m_link->send(r);
     m_state = state;
     m_timer.start(timeoutMs);

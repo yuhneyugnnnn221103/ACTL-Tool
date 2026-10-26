@@ -4,6 +4,7 @@
 #include "../core/link.h"
 #include "../model/device_store.h"
 #include "../model/thresholds.h"
+#include "../proto/device_select_proto.h"
 #include "../proto/trb_config_proto.h"
 #include "../proto/trb_control_proto.h"
 #include "../proto/beam_eth_proto.h"
@@ -65,7 +66,9 @@ struct FakeTrb {
 
     void attach(FakeTransport *t)
     {
-        t->onWrite = [this, t](const QByteArray &d) {
+        t->onWrite = [this, t](const QByteArray &raw) {
+            QVERIFY(quint8(raw.at(2)) == devsel::Trb);                      // byte thiết bị; vai Gateway bỏ đi rồi mới tới TRB
+            const QByteArray d = devsel::strip(raw);
             const int mb = quint8(d.at(4)), trb = quint8(d.at(5));
             if (quint8(d.at(2)) == 0xA1) {
                 ++writes;
@@ -263,6 +266,31 @@ private slots:
         for (int i = 0; i < trbmon::kNumTrip; ++i)
             if (trbmon::tripName(i) != QStringLiteral("Dự phòng")) names.insert(trbmon::tripName(i));
         QCOMPARE(names.size(), 14);
+    }
+
+    // ---------- Byte chọn thiết bị ----------
+    void deviceSelectByte()
+    {
+        namespace ds = proto::devsel;
+        const QByteArray orig = trbcfg::buildReadRequest(2, 3);
+        const QByteArray w = ds::add(ds::Psu, orig);
+        QCOMPARE(w.size(), orig.size() + 1);
+        QCOMPARE(w.left(3).toHex(), QByteArray("abcd02"));                 // AB CD DEV
+        QCOMPARE(w.mid(3), orig.mid(2));                                    // CMD và phần sau giữ nguyên
+        QCOMPARE(ds::strip(w), orig);                                       // Gateway bỏ DEV: khung gốc, CRC vẫn đúng
+        QVERIFY(crcOk(ds::strip(w), 4));
+        QCOMPARE(quint8(ds::add(ds::Trb, orig).at(2)), quint8(0x01));
+        QCOMPARE(quint8(ds::add(ds::Trsu, orig).at(2)), quint8(0x03));
+
+        Rig rig("service");                                                 // các service cấu hình/nạp code đều thêm DEV đúng loại
+        services::TrbConfig::registerFrames(rig.registry, true);
+        rig.link.start();
+        services::TrbConfig cfg(&rig.link, nullptr, QString(), 50, 0);
+        cfg.readDevices({{1, 2}});
+        QTRY_VERIFY_WITH_TIMEOUT(!rig.transport->written.isEmpty(), 1000);
+        const QByteArray sent = rig.transport->written.first();
+        QCOMPARE(quint8(sent.at(2)), quint8(0x01));
+        QCOMPARE(ds::strip(sent), trbcfg::buildReadRequest(1, 2));
     }
 
     // ---------- Khung điều khiển tổng ----------
