@@ -5,11 +5,9 @@ namespace services {
 
 using namespace proto;
 
-bool TrbMonitor::registerFrames(core::FrameRegistry &registry, bool checkCrc, bool acceptLegacyCmd)
+bool TrbMonitor::registerFrames(core::FrameRegistry &registry, bool checkCrc)
 {
-    bool ok = registry.add(trbmon::spec(checkCrc));
-    if (acceptLegacyCmd) ok &= registry.add(trbmon::legacySpec(checkCrc));
-    return ok;
+    return registry.add(trbmon::spec(checkCrc));
 }
 
 TrbMonitor::TrbMonitor(core::Link *link, model::DeviceStore *store, AlarmEngine *alarms, QObject *parent)
@@ -20,7 +18,7 @@ TrbMonitor::TrbMonitor(core::Link *link, model::DeviceStore *store, AlarmEngine 
 
 void TrbMonitor::onFrame(const core::Frame &frame)
 {
-    if (frame.cmd != trbmon::cmd() && frame.cmd != trbmon::legacyCmd()) return;
+    if (frame.cmd != trbmon::cmd()) return;
     const int mb = frame.at(trbmon::kOffMb), trb = frame.at(trbmon::kOffTrb);
     if (!m_store->contains(mb, trb)) { ++m_badAddress; return; }
 

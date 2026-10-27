@@ -47,10 +47,8 @@ inline int pgFaultBits(double pgByte) { return ~int(pgByte) & kPgMask; }
 QString tripName(int i);                 // tên ngắn, ví dụ "Max I_SEN TRM1"
 QString tripBitName(int i, int bit);     // ý nghĩa một bit, ví dụ "TRM2 PA3"; rỗng nếu dự phòng
 
-QByteArray cmd();                        // 23 23
-QByteArray legacyCmd();                  // 11 11: CMD cũ của khung giám sát, vẫn nhận (cùng bố cục) để chạy với Gateway/TRB chưa đổi sang 23 23
+QByteArray cmd();
 core::FrameSpec spec(bool checkCrc);
-core::FrameSpec legacySpec(bool checkCrc);
 const FieldTable &table();
 
 // Khung Gateway hỏi giám sát, 12 byte: [AB CD][23 23][MB][TRB][00 00][CRC][E1 E2], CRC phủ từ byte địa chỉ.

@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
 
     // Mọi service đăng ký CMD nhận của mình tại đây, trước khi link chạy.
     core::FrameRegistry registry;
-    services::TrbMonitor::registerFrames(registry, cfg.trbCheckCrc, cfg.trbAcceptOldCmd);
+    services::TrbMonitor::registerFrames(registry, cfg.trbCheckCrc);
     services::TrbConfig::registerFrames(registry, cfg.trbCheckCrc);
     services::PsuMonitor::registerFrames(registry, cfg.psuCheckCrc);
     services::PsuConfig::registerFrames(registry, cfg.psuCheckCrc);

@@ -10,7 +10,7 @@ namespace services {
 class TrbMonitor : public QObject {
     Q_OBJECT
 public:
-    static bool registerFrames(core::FrameRegistry &registry, bool checkCrc, bool acceptLegacyCmd = true);   // acceptLegacyCmd: nhận cả CMD cũ 11 11
+    static bool registerFrames(core::FrameRegistry &registry, bool checkCrc);
 
     TrbMonitor(core::Link *link, model::DeviceStore *store, AlarmEngine *alarms = nullptr,
                QObject *parent = nullptr);
