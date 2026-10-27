@@ -35,7 +35,7 @@ namespace {
 QByteArray monitorFrame(int mb, int trb, const QList<double> &values)
 {
     QByteArray f(trbmon::kLength, 0);
-    f[2] = f[3] = char(0x11);
+    f[2] = f[3] = char(0x23);
     f[trbmon::kOffMb] = char(mb);
     f[trbmon::kOffTrb] = char(trb);
     trbmon::table().encode(values, f);
@@ -595,7 +595,7 @@ private slots:
         core::FrameRegistry r;
         QVERIFY(r.add(trbmon::spec(true)));
         QVERIFY(!r.add(trbmon::spec(true)));                                       // trùng CMD
-        QVERIFY(!r.add({QByteArray(1, char(0x11)), 20, 2, true, "trùng byte đầu"})); // CMD 1 byte trùng byte đầu CMD 2 byte
+        QVERIFY(!r.add({QByteArray(1, char(0x23)), 20, 2, true, "trùng byte đầu"})); // CMD 1 byte trùng byte đầu CMD 2 byte
         QVERIFY(r.add({QByteArray(1, char(0x7E)), 20, 2, true, "khác"}));
     }
 
@@ -764,10 +764,10 @@ private slots:
         QSignalSpy updated(&mon, &services::TrbMonitor::trbUpdated);
         QList<double> v = zeros(trbmon::kNumFields);
         v[trbmon::kIdxPg] = 0x0F;
-        // Khung rỗng của Gateway: AB CD 11 11 MB TRB, data và CRC toàn 0x00, E1 E2.
+        // Khung rỗng của Gateway: AB CD 23 23 MB TRB, data và CRC toàn 0x00, E1 E2.
         auto empty = [](int mb, int trb) {
             QByteArray f(trbmon::kLength, '\0');
-            f[0] = char(0xAB); f[1] = char(0xCD); f[2] = f[3] = char(0x11);
+            f[0] = char(0xAB); f[1] = char(0xCD); f[2] = f[3] = char(0x23);
             f[4] = char(mb); f[5] = char(trb);
             f[trbmon::kLength - 2] = char(0xE1); f[trbmon::kLength - 1] = char(0xE2);
             return f;

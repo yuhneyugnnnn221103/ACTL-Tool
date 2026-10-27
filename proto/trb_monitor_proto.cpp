@@ -2,11 +2,11 @@
 
 namespace proto::trbmon {
 
-QByteArray cmd() { return QByteArray::fromHex("1111"); }
+QByteArray cmd() { return QByteArray::fromHex("2323"); }
 
 core::FrameSpec spec(bool checkCrc)
 {
-    // Gateway thay khung của TRB không phản hồi / sai CRC / lỗi bằng khung chỉ có địa chỉ: AB CD 11 11 MB TRB, data và CRC toàn 0x00, E1 E2.
+    // Gateway thay khung của TRB không phản hồi / sai CRC / lỗi bằng khung chỉ có địa chỉ: AB CD 23 23 MB TRB, data và CRC toàn 0x00, E1 E2.
     return {cmd(), kLength, kCrcStart, checkCrc, QStringLiteral("TRB giám sát"), 6};
 }
 
@@ -124,7 +124,7 @@ core::FrameSpec pollSpec(bool checkCrc)
 QByteArray buildPoll(int mb, int trb)
 {
     QByteArray f(kPollLength, 0);
-    f[2] = f[3] = char(0x11);
+    f[2] = f[3] = char(0x23);
     f[kOffMb] = char(mb);
     f[kOffTrb] = char(trb);
     core::seal(f, kCrcStart);
@@ -134,7 +134,7 @@ QByteArray buildPoll(int mb, int trb)
 QByteArray buildFrame(int mb, int trb, const QList<double> &values)
 {
     QByteArray f(kLength, 0);
-    f[2] = f[3] = char(0x11);
+    f[2] = f[3] = char(0x23);
     f[kOffMb] = char(mb);
     f[kOffTrb] = char(trb);
     table().encode(values, f);

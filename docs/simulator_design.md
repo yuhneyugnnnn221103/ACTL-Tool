@@ -14,7 +14,7 @@ ACTL Tool  <──TCP (app là client, Gateway là server) + RS485 (service)─�
   cấu hình, nạp code)                             chuyển tiếp)                          kịch bản, bơm lỗi)
 ```
 
-- Gateway tự hỏi vòng giám sát; `actl_sim` trả lời bằng khung giám sát (`11 11`, `81 81`) của từng thiết bị, Gateway chuyển lên app.
+- Gateway tự hỏi vòng giám sát; `actl_sim` trả lời bằng khung giám sát (`23 23`, `81 81`) của từng thiết bị, Gateway chuyển lên app.
 - Điều khiển, cấu hình, nạp code đi từ app qua Gateway xuống `actl_sim`; `actl_sim` xử lý và trả lời; Gateway chuyển lên app.
 - Khung hỏi/đáp giữa Gateway và thiết bị giống khung app thấy (xác nhận của bạn), nên dùng lại nguyên bộ mã hóa/giải mã trong `proto/`.
 
@@ -29,7 +29,7 @@ Không làm: mô phỏng vật lý (nhiệt, dòng thật); đóng vai Gateway (
 | Dùng lại | Dùng làm gì |
 |---|---|
 | `core/` (`Transport`, `SerialTransport`, `TcpServerTransport`, `FrameParser`, `Link`) | Nhận byte, tách khung, kiểm CRC; thêm `TcpClientTransport` |
-| `proto/*` (bảng trường, `FieldTable::encode`, `build*`) | Dựng khung giám sát/cấu hình/trả lời, đọc yêu cầu từ Gateway. Chỗ thiếu: hàm dựng `11 11`, `81 81`, `A4 A4`, `82 82`, `99 99`, ACK STM32 (thêm vào `proto/`, cũng dùng cho test) |
+| `proto/*` (bảng trường, `FieldTable::encode`, `build*`) | Dựng khung giám sát/cấu hình/trả lời, đọc yêu cầu từ Gateway. Chỗ thiếu: hàm dựng `23 23`, `81 81`, `A4 A4`, `82 82`, `99 99`, ACK STM32 (thêm vào `proto/`, cũng dùng cho test) |
 
 Giao thức đổi trong `proto/` thì app và giả lập đổi theo, không có bảng offset thứ hai để lệch.
 
@@ -101,7 +101,7 @@ Mỗi giai đoạn chạy được và có test riêng; GĐ 5 có thể làm son
 ## 9. Đã xác nhận và điểm còn mở
 
 Đã xác nhận:
-1. **Khung hỏi giám sát** (12 byte): `AB CD | 11 11 | MB TRB | 00 00 | CRC CRC | E1 E2`, CRC phủ từ byte địa chỉ. Cùng CMD với khung trả lời 280 byte nhưng ngắn hơn, nên `actl_sim` dùng registry riêng (`registerRequestFrames`) cho khung nhận từ Gateway.
+1. **Khung hỏi giám sát** (12 byte): `AB CD | 23 23 | MB TRB | 00 00 | CRC CRC | E1 E2`, CRC phủ từ byte địa chỉ. Cùng CMD với khung trả lời 280 byte nhưng ngắn hơn, nên `actl_sim` dùng registry riêng (`registerRequestFrames`) cho khung nhận từ Gateway.
 2. **Cổng phía Gateway** chia theo loại thiết bị (TRB / PSU); làm TRB trước, PSU sau khi phần PSU chỉnh xong.
 4. **Chưa có ACK** từ thiết bị cho điều khiển.
 5. **Địa chỉ** đúng như app thấy.

@@ -83,7 +83,7 @@ QByteArray SimWorld::handle(const core::Frame &frame)
     if (list.isEmpty()) { ++m_stats.ignored; return {}; }
 
     switch (cmd) {
-    case 0x11:                                       // hỏi giám sát: chỉ một thiết bị trả lời
+    case 0x23:                                       // hỏi giám sát: chỉ một thiết bị trả lời
         ++m_stats.polls;
         if (list.size() != 1 || !list.first()->online()) return {};
         return list.first()->monitorFrame();

@@ -57,7 +57,7 @@ private slots:
     {
         const QByteArray p = trbmon::buildPoll(3, 5);
         QCOMPARE(p.size(), 12);
-        QCOMPARE(p.left(4), QByteArray::fromHex("ABCD1111"));
+        QCOMPARE(p.left(4), QByteArray::fromHex("ABCD2323"));
         QCOMPARE(quint8(p.at(4)), quint8(3));
         QCOMPARE(quint8(p.at(5)), quint8(5));
         QCOMPARE(p.mid(6, 2), QByteArray(2, '\0'));

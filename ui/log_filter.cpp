@@ -28,7 +28,7 @@ FrameClass classifyFrame(const QByteArray &raw)
     if (raw.size() < 4) return c;
     const quint16 cmd = quint16(quint8(raw.at(2)) << 8 | quint8(raw.at(3)));
     switch (cmd) {
-    case 0x1111:            // giám sát TRB
+    case 0x2323:            // giám sát TRB
     case 0xA2A2:            // điều khiển TRB
     case 0x1414:            // beam
         c.group = LogTrbMonitor;

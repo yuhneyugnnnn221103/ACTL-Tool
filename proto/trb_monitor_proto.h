@@ -1,6 +1,6 @@
 #pragma once
 // Bản tin giám sát TRB, 310 byte (theo cfg_protocol.h):
-// [AB CD][11 11][MB][TRB][TRM1..4: 4x50B][TRB 6B][Trip 16B][State 4B]
+// [AB CD][23 23][MB][TRB][TRM1..4: 4x50B][TRB 6B][Trip 16B][State 4B]
 // [INIT_ADAR][PA][PG][Nhiệt MCU 2B][Độ ẩm power 2B][INIT DATA][12 bộ đếm lỗi][PERIOD/PULSE][17 trường debug 19B][Dự phòng 11B][CRC 2B][E1 E2]
 #include "../core/frame.h"
 #include "field_table.h"
@@ -51,7 +51,7 @@ QByteArray cmd();
 core::FrameSpec spec(bool checkCrc);
 const FieldTable &table();
 
-// Khung Gateway hỏi giám sát, 12 byte: [AB CD][11 11][MB][TRB][00 00][CRC][E1 E2], CRC phủ từ byte địa chỉ.
+// Khung Gateway hỏi giám sát, 12 byte: [AB CD][23 23][MB][TRB][00 00][CRC][E1 E2], CRC phủ từ byte địa chỉ.
 // Cùng CMD với khung trả lời nhưng ngắn hơn, nên mỗi bên dùng một FrameRegistry riêng.
 constexpr int kPollLength = 12;
 core::FrameSpec pollSpec(bool checkCrc);

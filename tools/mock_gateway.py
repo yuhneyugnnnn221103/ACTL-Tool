@@ -5,7 +5,7 @@ Các lệnh (python3 tools/mock_gateway.py <lệnh> -h để xem tùy chọn):
 
   list         Liệt kê các kịch bản.
   tcp          Giả Gateway: là TCP server (mặc định 0.0.0.0:5000), chờ app (TCP client) nối vào rồi bơm bản tin giám sát
-               TRB (1111) và PSU (81) theo kịch bản. In ra lệnh điều khiển/beam mà app gửi xuống.
+               TRB (2323) và PSU (81) theo kịch bản. In ra lệnh điều khiển/beam mà app gửi xuống.
   hex          Ghi file hex để app phát lại: đặt monitor/replayFile=<file> trong actl_tool.ini.
   thresholds   Ghi thresholds.json và psu_thresholds.json mẫu để kịch bản "warning" có giá trị vượt ngưỡng.
   serial       Tạo cổng giả RS485 (pty, chỉ Linux/macOS): trả lời lệnh đọc cấu hình TRB (A3A3) và PSU (03),
@@ -83,7 +83,7 @@ def trb_frame(mb, trb, rng, *, isen=None, v=150, i=500, power_temp=40, mcu=50, h
               trips=None, state=None, adar=0xFF, pa=0x0F, pg=0x0F, trm_extra=None):
     """isen: {(trm 0..3, kênh 0..7): giá trị} ghi đè I_SEN; trips: list 16 byte; trm_extra: {(trm, offset): giá trị}."""
     f = bytearray(TRB_LEN)
-    f[2] = f[3] = 0x11
+    f[2] = f[3] = 0x23
     f[4], f[5] = mb, trb
     for trm in range(4):
         base = TRB_TRM_OFF + trm * TRB_TRM_SIZE
@@ -377,9 +377,9 @@ def cmd_tcp(args):
 
 
 def empty_frame(mb, t):
-    """Khung Gateway tạo cho TRB không phản hồi: AB CD 11 11 MB TRB, data và CRC toàn 0x00, E1 E2."""
+    """Khung Gateway tạo cho TRB không phản hồi: AB CD 23 23 MB TRB, data và CRC toàn 0x00, E1 E2."""
     f = bytearray(TRB_LEN)
-    f[0], f[1], f[2], f[3], f[4], f[5] = H1, H2, 0x11, 0x11, mb, t
+    f[0], f[1], f[2], f[3], f[4], f[5] = H1, H2, 0x23, 0x23, mb, t
     f[-2], f[-1] = T1, T2
     return bytes(f)
 
@@ -390,7 +390,7 @@ def burst_frames(frames, mb_count, trb_count):
     trb, rest = {}, []
     for item in frames:
         data, pause = item if isinstance(item, tuple) else (item, 0)
-        if len(data) > 5 and data[2:4] == b"\x11\x11" and not pause:
+        if len(data) > 5 and data[2:4] == b"\x23\x23" and not pause:
             trb[(data[4], data[5])] = data
         else:
             rest.append((data, pause))
@@ -622,7 +622,7 @@ def cmd_selftest(_args):
     rng = random.Random(1)
     print("bản tin giám sát:")
     t = trb_frame(3, 5, rng, trips=[1] * 16)
-    check(len(t) == TRB_LEN and t[:4] == bytes([H1, H2, 0x11, 0x11]), "TRB 310 byte, CMD 1111")
+    check(len(t) == TRB_LEN and t[:4] == bytes([H1, H2, 0x23, 0x23]), "TRB 310 byte, CMD 2323")
     check(crc16(t[4:TRB_LEN - 4]) == (t[TRB_LEN - 4] << 8 | t[TRB_LEN - 3]) and t[TRB_LEN - 2:] == bytes([T1, T2]), "TRB CRC từ byte 4, tailer E1 E2")
     check(t[4] == 3 and t[5] == 5 and t[TRB_TRIP0:TRB_TRIP0 + 16] == bytes([1] * 16), "địa chỉ và trip code đúng vị trí")
     p = psu_frame(2, rng, trips=[0xAA] * 10)
