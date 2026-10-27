@@ -45,6 +45,7 @@ private:
     void refresh();
     void rebuildAbnormalList();
     void logHex(const QString &link, const char *dir, const QByteArray &raw);
+    void logHexError(const QString &link, const QString &label, const QByteArray &raw);   // byte bị loại: hiện ở mọi trang
     void refilterLogs();
     QString trbTooltip(int mb, int trb) const;
     QString psuTooltip(int addr, int cluster) const;

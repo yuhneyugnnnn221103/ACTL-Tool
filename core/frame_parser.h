@@ -11,7 +11,11 @@ public:
 
     explicit FrameParser(const FrameRegistry *registry) : m_registry(registry) {}
 
-    void feed(const QByteArray &data, const std::function<void(const Frame &)> &onFrame);
+    // onDiscard (tùy chọn): báo các byte bị loại để hiện ở hex thô: Junk = đoạn byte rác/CMD lạ (không tính byte 0x00 đệm của Gateway),
+    // BadCrc / BadTail = nguyên một khung đủ độ dài nhưng sai CRC / sai đuôi.
+    enum DiscardKind { Junk, BadCrc, BadTail };
+    using DiscardFn = std::function<void(const QByteArray &, DiscardKind)>;
+    void feed(const QByteArray &data, const std::function<void(const Frame &)> &onFrame, const DiscardFn &onDiscard = {});
     void reset();                       // bỏ phần dở dang (gọi khi đường truyền im lặng quá lâu)
     bool hasPending() const { return !m_buf.isEmpty(); }
     const Stats &stats() const { return m_stats; }
@@ -34,6 +38,7 @@ private:
     Stats m_stats;
     Rejected m_rejected;
     QByteArray m_lastDropped;
+    int m_covered = 0;     // số byte đầu bộ đệm đã được báo (thuộc một khung sai) nên không báo lại như byte rác
     void noteDropped(quint8 b) { ++m_stats.droppedBytes; m_lastDropped.append(char(b)); if (m_lastDropped.size() > 40) m_lastDropped.remove(0, m_lastDropped.size() - 40); }
 };
 

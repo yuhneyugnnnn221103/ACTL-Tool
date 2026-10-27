@@ -590,6 +590,50 @@ private slots:
         QVERIFY(rejected.last().at(0).toString().contains("HEX"));
     }
 
+    // Hex thô hiện cả byte bị loại: nguyên khung sai CRC/đuôi (một lần, không báo lại từng byte của nó như rác) và đoạn rác / CMD lạ.
+    void parserReportsDiscardedBytes()
+    {
+        core::FrameRegistry registry;
+        services::TrbMonitor::registerFrames(registry, true);
+        core::FrameParser parser(&registry);
+        struct Item { core::FrameParser::DiscardKind kind; QByteArray bytes; };
+        QList<Item> items;
+        int frames = 0;
+        auto onFrame = [&](const core::Frame &) { ++frames; };
+        auto onDiscard = [&](const QByteArray &b, core::FrameParser::DiscardKind k) { items.append({k, b}); };
+
+        const QByteArray good = monitorFrame(1, 2, zeros(trbmon::kNumFields));
+        QByteArray badCrc = good;
+        badCrc[100] = char(badCrc.at(100) ^ 0x55);
+        QByteArray badTail = good;
+        badTail[trbmon::kLength - 1] = char(0x00);
+        QByteArray unknown = QByteArray::fromHex("ABCD7777") + QByteArray(40, char(0x5A));   // CMD không đăng ký
+        parser.feed(QByteArray::fromHex("5555AA") + good + badCrc + good + badTail + unknown + good, onFrame, onDiscard);
+
+        QCOMPARE(frames, 3);
+        QVERIFY(items.size() >= 4);
+        QCOMPARE(int(items.at(0).kind), int(core::FrameParser::Junk));
+        QCOMPARE(items.at(0).bytes, QByteArray::fromHex("5555AA"));
+        QCOMPARE(int(items.at(1).kind), int(core::FrameParser::BadCrc));
+        QCOMPARE(items.at(1).bytes, badCrc);                                   // nguyên khung 310 byte, một lần
+        QCOMPARE(int(items.at(2).kind), int(core::FrameParser::BadTail));
+        QCOMPARE(items.at(2).bytes, badTail);
+        int junkBytes = 0;
+        for (int i = 3; i < items.size(); ++i) { QCOMPARE(int(items.at(i).kind), int(core::FrameParser::Junk)); junkBytes += items.at(i).bytes.size(); }
+        QCOMPARE(junkBytes, unknown.size());                                   // khung CMD lạ hiện như rác, không thiếu byte nào
+
+        items.clear();                                                         // byte 0x00 đệm của Gateway không phải rác
+        parser.feed(QByteArray(20, '\0') + good, onFrame, onDiscard);
+        QVERIFY(items.isEmpty());
+        QCOMPARE(frames, 4);
+
+        parser.feed(QByteArray("AB CD 23 23"), onFrame, onDiscard);            // chữ ASCII: toàn bộ là rác
+        parser.feed(QByteArray(" 00 01 02 03 04 05"), onFrame, onDiscard);
+        int ascii = 0;
+        for (const Item &it : items) ascii += it.bytes.size();
+        QVERIFY(ascii >= 20);
+    }
+
     // ---------- Tách khung ----------
     void parserResyncsAfterGarbageAndSplitChunks()
     {

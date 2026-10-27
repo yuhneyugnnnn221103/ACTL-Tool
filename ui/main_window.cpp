@@ -405,6 +405,11 @@ void MainWindow::watchLink(core::Link *link, const QString &title, StatusPill *p
     auto hex = [=](const char *dir, const QByteArray &d) { logHex(link->name(), dir, d); };
     connect(link, &core::Link::frameReceived, this, [=](const core::Frame &f) { hex("RX", f.raw); });
     connect(link, &core::Link::rawSent, this, [=](const QByteArray &d) { hex("TX", d); });
+    connect(link, &core::Link::rxDiscarded, this, [=](const QByteArray &d, int kind) {
+        using K = core::FrameParser::DiscardKind;
+        const QString label = kind == K::BadCrc ? QStringLiteral("RX LỖI CRC (%1 byte)") : kind == K::BadTail ? QStringLiteral("RX LỖI ĐUÔI (%1 byte)") : QStringLiteral("RX BỎ QUA (%1 byte, không khớp khung nào)");
+        logHexError(link->name(), label.arg(d.size()), d);
+    });
 }
 
 void MainWindow::toggleTcp()
@@ -598,6 +603,15 @@ void MainWindow::logHex(const QString &link, const char *dir, const QByteArray &
               {QDateTime::currentDateTime().toString("HH:mm:ss.zzz ") + QStringLiteral("[%1] %2 ").arg(link, QLatin1String(dir))
                    + QString::fromLatin1(raw.toHex(' ').toUpper()),
                fc.group, fc.mb, fc.trb});
+}
+
+void MainWindow::logHexError(const QString &link, const QString &label, const QByteArray &raw)
+{
+    if (!m_hexEnable->isChecked()) return;
+    appendLog(m_hexLog, m_hexBuffer,
+              {QDateTime::currentDateTime().toString("HH:mm:ss.zzz ") + QStringLiteral("[%1] %2: ").arg(link, label)
+                   + QString::fromLatin1(raw.left(1024).toHex(' ').toUpper()) + (raw.size() > 1024 ? QStringLiteral(" …") : QString()),
+               LogSystem, -1, -1});
 }
 
 // Dòng có nhóm LogSystem hiện ở mọi trang; còn lại chỉ hiện ở trang có nhóm đó. Trang chi tiết TRB

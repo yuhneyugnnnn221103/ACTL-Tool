@@ -98,7 +98,7 @@ void Link::onBytes(const QByteArray &data)
             finish(true, f);
         }
         emit frameReceived(f);
-    });
+    }, [this](const QByteArray &bytes, FrameParser::DiscardKind kind) { emit rxDiscarded(bytes, int(kind)); });
     const auto &st = m_parser.stats();
     if (st.crcErrors + st.droppedBytes + st.tailerErrors != m_reportedErrors) {
         m_reportedErrors = st.crcErrors + st.droppedBytes + st.tailerErrors;

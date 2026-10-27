@@ -178,3 +178,5 @@ Mọi lệnh điều khiển (TRB `A2`, TRB `14`, beam, PSU) đi trong khung đi
 Bản tin cấu hình và nạp code (TRB `A1/A3`, PSU `03 03/04 04`, nạp FPGA, nạp STM32) có thêm 1 byte thiết bị sau `AB CD` (`01` TRB, `02` PSU, `03` TRSU) để Gateway biết gửi cho thiết bị nào rồi bỏ byte đó đi, xem `docs/control_frame.md`.
 
 Điều khiển và beam của TRB (bản tin `A2` và `14`) gửi qua đường **RS485** (cổng COM, cùng đường với cấu hình và nạp code), vẫn trong khung điều khiển tổng 107 byte có mask. Điều khiển PSU và beam Ethernet vẫn đi đường Ethernet giám sát. Trang Chi tiết TRB nhắc khi chưa mở cổng RS485.
+
+Tab Hex thô cũng hiện các byte bị loại, hiện ở mọi trang: `RX LỖI CRC` và `RX LỖI ĐUÔI` (nguyên khung đủ độ dài nhưng sai CRC hoặc đuôi, một dòng cho cả khung), `RX BỎ QUA` (đoạn byte rác hoặc khung CMD lạ). Byte `0x00` đệm của Gateway không tính là rác nên không hiện.

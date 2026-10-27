@@ -42,6 +42,7 @@ signals:
     void rawSent(const QByteArray &data);
     void errorOccurred(const QString &message);
     void rxErrorsChanged(quint64 crcErrors, quint64 droppedBytes, quint64 tailerErrors);
+    void rxDiscarded(const QByteArray &bytes, int kind);          // byte bị loại cho hex thô; kind = FrameParser::DiscardKind
     void frameRejected(const QString &description);               // một khung đủ độ dài nhưng sai đuôi hoặc CRC bị loại (mô tả chẩn đoán)
 
 private:
