@@ -320,10 +320,19 @@ QWidget *TrbDetailPage::buildControl()
     auto *tf = new QFormLayout;
     tf->addRow(QStringLiteral("Gửi tới"), m_target);
     l->addLayout(tf);
+    m_linkHint = new QLabel(QStringLiteral("Lệnh điều khiển và beam TRB gửi qua RS485: chưa mở cổng COM (bấm thẻ kết nối, chọn dòng RS485)."));
+    m_linkHint->setWordWrap(true);
+    theme::setRole(m_linkHint, "muted");
+    l->addWidget(m_linkHint);
     l->addWidget(ctl);
     l->addWidget(beam);
     l->addStretch(1);
     return w;
+}
+
+void TrbDetailPage::setControlLinkConnected(bool connected)
+{
+    m_linkHint->setVisible(!connected);
 }
 
 void TrbDetailPage::setDevice(int mb, int trb)

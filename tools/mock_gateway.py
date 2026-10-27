@@ -519,6 +519,17 @@ class SerialResponder:
             if b[0] != H1 or b[1] != H2:
                 del b[0]
                 continue
+            if b[2] == 0xEF:                                  # khung điều khiển tổng 107 byte (điều khiển TRB A2/14 đi đường RS485)
+                if len(b) < CTL_LEN:
+                    break
+                lines, _ = decode_control(bytes(b[:CTL_LEN]))
+                if lines:
+                    for line in lines:
+                        self.log(f"  {line}")
+                    del b[:CTL_LEN]
+                else:
+                    del b[0]
+                continue
             dev, cmd2 = b[2], bytes(b[3:5])
             if dev == 1 and cmd2 == b"\xA1\xA1":
                 n, kind = TRB_CFG_LEN, "ghi TRB"
@@ -675,6 +686,10 @@ def cmd_selftest(_args):
     chunks = dev(2, seal(bytearray(rd), 2))
     split = [r.feed(chunks[:5]), r.feed(chunks[5:])]
     check(split[0] == [] and len(split[1]) == 1, "nhận khung bị chia mảnh")
+    logged = []
+    ctl_r = SerialResponder(rng=random.Random(4), log=logged.append)
+    ctl = bytearray(14); ctl[2] = ctl[3] = 0xA2; ctl[4], ctl[5], ctl[6], ctl[7] = 7, 3, 5, 0x03
+    check(ctl_r.feed(wrap(0, seal(ctl, 4))) == [] and any("điều khiển TRB MB8/TRB4" in l for l in logged), "RS485 nhận khung điều khiển tổng 107 byte (A2)")
     check(r.feed(seal(bytearray(rd), 2)) == [], "khung PSU thiếu byte thiết bị bị bỏ qua")
     check(r.feed(dev(1, seal(bytearray(rd), 2))) == [], "byte thiết bị sai loại (TRB cho khung PSU) bị bỏ qua")
     junk = r.feed(b"\x00\xFF\xAB" + dev(2, seal(bytearray(rd), 2)))

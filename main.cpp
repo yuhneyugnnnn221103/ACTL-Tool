@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
     services::AlarmEngine alarms(&thresholds, &proto::trbmon::table());
     services::TrbMonitor trbMonitor(ctx.monitorLink, &store, &alarms);
     trbMonitor.setEmptyLimit(cfg.emptyFramesToLost);
-    services::TrbControl trbControl(ctx.monitorLink);
+    services::TrbControl trbControl(ctx.serviceLink);   // điều khiển và beam TRB (A2, 14) gửi qua RS485, không qua Ethernet
     services::TrbConfig trbConfig(ctx.serviceLink, &thresholds, cfg.thresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
     services::AlarmEngine psuAlarms(&psuThresholds, &proto::psumon::table());
     services::PsuMonitor psuMonitor(ctx.monitorLink, &psuStore, &psuAlarms);

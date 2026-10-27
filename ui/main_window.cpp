@@ -106,7 +106,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     setWindowTitle(QStringLiteral("ACTL Tool"));
     setMinimumSize(1100, 560);   // đặt sẵn để layout không tự nới cửa sổ quá màn hình; trang nào lớn hơn thì cuộn
     // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
-    // Đường kết nối của từng trang: 0 giám sát (Ethernet; điều khiển TRB/PSU và beam cũng đi đường này), 1 cấu hình/nạp code (RS485), -1 không có.
+    // Đường kết nối của từng trang: 0 giám sát (Ethernet; điều khiển PSU và beam cũng đi đường này), 1 RS485 (cấu hình, nạp code, điều khiển và beam TRB), -1 không có.
     m_pageConn = {0, 0, 1, 0, 1, 1, 0, -1};
     m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogBeam, LogSystem};
 
@@ -150,11 +150,13 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     connect(m_nav, &QListWidget::currentRowChanged, m_pages, &QStackedWidget::setCurrentIndex);
     connect(m_nav, &QListWidget::currentRowChanged, this, [this] { refilterLogs(); });
     m_nav->setCurrentRow(0);
+    connect(ctx.serviceLink, &core::Link::stateChanged, this, [this](core::Transport::State s) { m_detail->setControlLinkConnected(s == core::Transport::State::Connected); });
+    m_detail->setControlLinkConnected(false);
     connect(m_detail, &TrbDetailPage::deviceChanged, m_grid, &OverviewGrid::select);
     connect(m_detail, &TrbDetailPage::deviceChanged, this, [this] { refilterLogs(); });   // trang chi tiết chỉ hiện log của TRB đang xem
     connect(ctx.trbControl, &services::TrbControl::commandFinished, this, [this](const QString &d, bool sent) {
         logEvent(tagged(sent ? EventKind::Ctrl : EventKind::Err,
-                         (sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d),
+                         (sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa mở cổng RS485: ")) + d),
                  LogTrbMonitor);
     });
     connect(ctx.trbConfig, &services::TrbConfig::deviceFinished, this, [this](int mb, int trb, bool ok, const QString &m) {
@@ -262,7 +264,7 @@ QWidget *MainWindow::buildTopBar()
     m_sparePill = new StatusPill;
     m_sparePill->setPill(theme::statusMark(Status::NoData) + QStringLiteral(" RS485 #2"), theme::statusColor(Status::NoData), theme::statusTextColor(Status::NoData));
     m_sparePill->setToolTip(QStringLiteral("RS485 #2: dành cho chức năng chưa bổ sung"));
-    StatusPill *rowPill[] = {m_tcpPill, m_comPill, m_sparePill};   // thứ tự dòng: giám sát (Ethernet, dùng chung cho điều khiển và beam), RS485 cấu hình, RS485 #2
+    StatusPill *rowPill[] = {m_tcpPill, m_comPill, m_sparePill};   // thứ tự dòng: giám sát (Ethernet, dùng chung cho điều khiển PSU và beam), RS485 (cấu hình, nạp code, điều khiển TRB), RS485 #2
     for (int r = 0; r < 3; ++r) pl->addWidget(rowPill[r], r, 0);
     const int rowOf[2] = {0, 1};         // chỉ số "ô" (0 giám sát, 1 RS485 cấu hình) -> dòng trong cửa sổ
     auto box = [&](int index) {

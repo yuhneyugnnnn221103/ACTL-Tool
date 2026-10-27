@@ -1,6 +1,6 @@
 # Khung điều khiển tổng PC -> Gateway (107 byte)
 
-Mọi lệnh điều khiển của app đi trong một khung cố định 107 byte. **Không có CRC tổng; đuôi 3 byte `E1 E2 E3`.**
+Mọi lệnh điều khiển của app đi trong một khung cố định 107 byte; điều khiển TRB (`A2`, `14`) gửi qua **RS485**, điều khiển PSU và beam gửi qua **Ethernet** giám sát. **Không có CRC tổng; đuôi 3 byte `E1 E2 E3`.**
 
 | Byte (đếm từ 1) | Dài | Nội dung |
 |---|---|---|
