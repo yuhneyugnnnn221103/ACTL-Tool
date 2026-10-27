@@ -60,7 +60,7 @@ private:
     QList<Pending> m_queue;
     Pending m_current;
     bool m_busy = false;
-    quint64 m_reportedRejected = 0;
+    quint64 m_reportedRejected = 0, m_reportedDropped = 0;
     QTimer m_timer; // timeout trả lời hoặc khoảng nghỉ sau khi gửi
     QTimer m_idle;  // đường truyền im lặng -> bỏ khung dở
     QAtomicInteger<quint64> m_nextId{1};

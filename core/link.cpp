@@ -104,6 +104,15 @@ void Link::onBytes(const QByteArray &data)
         m_reportedErrors = st.crcErrors + st.droppedBytes + st.tailerErrors;
         emit rxErrorsChanged(st.crcErrors, st.droppedBytes, st.tailerErrors);
     }
+    if (st.droppedBytes != m_reportedDropped) {          // byte rác: nếu toàn ký tự hex ASCII thì nhiều khả năng bên gửi dùng nhầm chế độ ASCII thay vì HEX
+        m_reportedDropped = st.droppedBytes;
+        const QByteArray &d = m_parser.lastDropped();
+        int hexText = 0;
+        for (char c : d) hexText += (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f') || c == ' ';
+        if (d.size() >= 12 && hexText * 10 >= d.size() * 9)
+            emit frameRejected(QStringLiteral("Các byte bị bỏ trông như văn bản hex ASCII (\"%1\"): bên gửi đang gửi chữ \"AB CD ...\" dạng ASCII thay vì byte thật. Nếu dùng Hercules, gửi ở chế độ HEX.")
+                                   .arg(QString::fromLatin1(d.left(24))));
+    }
     if (m_parser.rejectedCount() != m_reportedRejected) {
         m_reportedRejected = m_parser.rejectedCount();
         const FrameParser::Rejected &r = m_parser.lastRejected();

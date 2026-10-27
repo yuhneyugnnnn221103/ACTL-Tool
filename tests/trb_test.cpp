@@ -574,6 +574,22 @@ private slots:
         QCOMPARE(errors.last().at(2).toULongLong(), quint64(1));
     }
 
+    // Gửi nhầm chữ hex dạng ASCII ("AB CD 23 23 ...", 310 byte x 3 ký tự = 930 byte) thay vì byte thật: toàn bộ bị bỏ, app gợi ý nguyên nhân.
+    void asciiHexTextIsDetected()
+    {
+        Rig rig("monitor");
+        services::TrbMonitor::registerFrames(rig.registry, true);
+        rig.link.start();
+        QSignalSpy rejected(&rig.link, &core::Link::frameRejected);
+        QSignalSpy errors(&rig.link, &core::Link::rxErrorsChanged);
+        const QByteArray frame = monitorFrame(1, 2, zeros(trbmon::kNumFields));
+        rig.transport->inject(frame.toHex(' ').toUpper());              // 310 byte -> 929 ký tự (3 ký tự mỗi byte, trừ dấu cách cuối)
+        QVERIFY(errors.last().at(1).toULongLong() > 900);
+        QVERIFY(rejected.size() >= 1);
+        QVERIFY(rejected.last().at(0).toString().contains("ASCII"));
+        QVERIFY(rejected.last().at(0).toString().contains("HEX"));
+    }
+
     // ---------- Tách khung ----------
     void parserResyncsAfterGarbageAndSplitChunks()
     {

@@ -24,6 +24,8 @@ public:
         quint16 recvCrc = 0, calcCrc = 0, calcFromCmd = 0;   // calcFromCmd: CRC nếu tính từ byte CMD đầu tiên
     };
     const Rejected &lastRejected() const { return m_rejected; }
+    // Mẫu các byte rác gần nhất bị bỏ (tối đa 40 byte) và số byte rác trông như văn bản hex ASCII (0-9, A-F, a-f, dấu cách): để nhận ra gửi nhầm dạng ASCII thay vì HEX.
+    const QByteArray &lastDropped() const { return m_lastDropped; }
     quint64 rejectedCount() const { return m_stats.crcErrors + m_stats.tailerErrors; }
 
 private:
@@ -31,6 +33,8 @@ private:
     QByteArray m_buf;
     Stats m_stats;
     Rejected m_rejected;
+    QByteArray m_lastDropped;
+    void noteDropped(quint8 b) { ++m_stats.droppedBytes; m_lastDropped.append(char(b)); if (m_lastDropped.size() > 40) m_lastDropped.remove(0, m_lastDropped.size() - 40); }
 };
 
 } // namespace core
