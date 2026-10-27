@@ -335,16 +335,18 @@ private slots:
     {
         namespace be = proto::beameth;
         be::Params p;
-        p.esp = 12.3;           // x10 = 123 = 0x007B, gửi byte thấp trước: 7B 00
-        p.beta = -4.5;          // x10 = -45 = 0xFFD3 (bù 2): D3 FF
-        p.freqMhz = 2400;       // 0x0960: 60 09
-        p.modeValue = 5;
+        // Mỗi mode có giá trị riêng: mode 01 = (12.3, -4.5, 2400, 5), mode 10 = (-1.0, 0.0, 100, 6), mode 11 = (3276.7, -3276.8, 65535, 255)
+        p.frame[0] = {12.3, -4.5, 2400, 5};     // x10 = 123 = 007B (byte thấp trước: 7B 00); -45 = FFD3 (D3 FF); 2400 = 0960 (60 09)
+        p.frame[1] = {-1.0, 0.0, 100, 6};
+        p.frame[2] = {3276.7, -3276.8, 65535, 255};
         const QByteArray all = be::buildFrame(p);
         QCOMPARE(all.size(), 42);                                        // 3 khung x 14 byte
         const quint8 modes[3] = {0x01, 0x10, 0x11};
+        const QByteArray heads[3] = {QByteArray::fromHex("abcd7b00d3ff600905"), QByteArray::fromHex("abcdf6ff0000640006"),
+                                     QByteArray::fromHex("abcdff7f0080ffffff")};
         for (int k = 0; k < 3; ++k) {
             const QByteArray f = all.mid(k * 14, 14);
-            QCOMPARE(f.left(9).toHex(), QByteArray("abcd" "7b00" "d3ff" "6009" "05"));   // cùng dữ liệu, byte 9 = số nhập
+            QCOMPARE(f.left(9), heads[k]);                                            // dữ liệu riêng từng khung, byte 9 = số nhập của khung đó
             QCOMPARE(quint8(f[9]), modes[k]);                                          // byte 10 lần lượt 01, 10, 11
             QCOMPARE(f.right(2).toHex(), QByteArray("efff"));                          // mỗi khung có đuôi EF FF
             // CRC16 từng khung tính từ HEADER tới hết MODE (byte 1..10), ghi byte thấp trước
@@ -360,13 +362,14 @@ private slots:
         QCOMPARE(be::toTenths(-3276.8), qint16(-32768));
         QCOMPARE(be::toTenths(3276.7), qint16(32767));
 
-        p.esp = 4000;           // vượt giới hạn 16 bit có dấu chia 10
-        QVERIFY(!be::validate(p).isEmpty());
-        QVERIFY(be::buildFrame(p).isEmpty());
-        p.esp = 0; p.freqMhz = 70000;
-        QVERIFY(!be::validate(p).isEmpty());
-        p.freqMhz = 0; p.modeValue = 256;
-        QVERIFY(!be::validate(p).isEmpty());
+        be::Params bad = p;
+        bad.frame[1].esp = 4000;           // vượt giới hạn 16 bit có dấu chia 10, ở khung mode 10
+        QVERIFY(be::validate(bad).contains("Mode 10"));
+        QVERIFY(be::buildFrame(bad).isEmpty());
+        bad = p; bad.frame[2].freqMhz = 70000;
+        QVERIFY(!be::validate(bad).isEmpty());
+        bad = p; bad.frame[0].modeValue = 256;
+        QVERIFY(be::validate(bad).contains("Mode 01"));
     }
 
     // ---------- Khung điều khiển ----------

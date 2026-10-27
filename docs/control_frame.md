@@ -19,7 +19,7 @@ Mọi lệnh điều khiển của app đi trong một khung cố định 107 by
 
 ## Phần điều khiển beam (42 byte)
 
-Ba khung 14 byte nối nhau, cùng dữ liệu, chỉ khác byte 10 của MODE (`01`, `10`, `11`):
+Ba khung 14 byte nối nhau, ứng với ba mode (byte 10 của MODE lần lượt `01`, `10`, `11`); mỗi khung có ESP, BETA, FREQ và MODE (byte 9) **riêng**, nhập ở ba cột trên trang Beam Ethernet:
 
 `AB CD | ESP(2) | BETA(2) | FREQ(2) | MODE(2) | CRC(2) | EF FF`, mọi trường 2 byte **little endian**.
 

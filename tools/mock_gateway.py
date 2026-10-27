@@ -324,11 +324,13 @@ def decode_section(bit, f):
     if bit == 1:
         return f"beam TRB MB{f[4] + 1}/TRB{f[5] + 1}: phaseTX={f[6]} phaseRX={f[7]} ampTX={f[8]} ampRX={f[9]} CH={f[10]:04b} ADAR={f[11]:08b}"
     if bit == 2:
-        def s16(lo): return int.from_bytes(f[lo:lo + 2], "little", signed=True)
-        modes = " ".join(f"{f[k * 14 + 9]:02X}" for k in range(3))
-        crc_ok = all(crc16(bytes(f[k * 14:k * 14 + 10])) == int.from_bytes(f[k * 14 + 10:k * 14 + 12], "little") for k in range(3))
-        return (f"điều khiển beam: Esp={s16(2) / 10:.1f} Beta={s16(4) / 10:.1f} Freq={int.from_bytes(f[6:8], 'little')} MHz "
-                f"Mode={f[8]} byte10 = {modes}, CRC (từ header) {'đúng' if crc_ok else 'SAI'}")
+        parts, crc_ok = [], True
+        for k in range(3):                              # ba khung 14 byte, mỗi khung một mode với giá trị riêng
+            g = f[k * 14:(k + 1) * 14]
+            s16 = lambda lo: int.from_bytes(g[lo:lo + 2], "little", signed=True)
+            parts.append(f"[{g[9]:02X}] Esp={s16(2) / 10:.1f} Beta={s16(4) / 10:.1f} Freq={int.from_bytes(g[6:8], 'little')} MHz Mode={g[8]}")
+            crc_ok = crc_ok and crc16(bytes(g[:10])) == int.from_bytes(g[10:12], "little")
+        return "điều khiển beam: " + "; ".join(parts) + f", CRC (từ header) {'đúng' if crc_ok else 'SAI'}"
     return f"điều khiển PSU {f[4]}: bật cụm={f[5]:04b} clearTrip={f[6]}"
 
 
@@ -642,13 +644,14 @@ def cmd_selftest(_args):
     lines, _ = decode_control(wrap(3, seal(pc, 2)))
     check(len(lines) == 1 and "PSU 4" in lines[0] and "1010" in lines[0], "điều khiển PSU (bit3)")
     bm = bytearray()
-    for m in (0x01, 0x10, 0x11):
-        k = bytearray(14); k[0], k[1] = H1, H2; k[2:4] = (123).to_bytes(2, "little"); k[4:6] = (-45).to_bytes(2, "little", signed=True)
-        k[6:8] = (2400).to_bytes(2, "little"); k[8], k[9] = 5, m
+    for m, (esp, beta, freq, mode) in zip((0x01, 0x10, 0x11), ((123, -45, 2400, 5), (-10, 0, 100, 6), (32767, -32768, 65535, 255))):
+        k = bytearray(14); k[0], k[1] = H1, H2; k[2:4] = esp.to_bytes(2, "little", signed=True); k[4:6] = beta.to_bytes(2, "little", signed=True)
+        k[6:8] = freq.to_bytes(2, "little"); k[8], k[9] = mode, m
         k[10:12] = crc16(bytes(k[:10])).to_bytes(2, "little"); k[12], k[13] = 0xEF, 0xFF
         bm += k
     lines, _ = decode_control(wrap(2, bytes(bm)))
-    check(len(lines) == 1 and "Esp=12.3" in lines[0] and "Beta=-4.5" in lines[0] and "01 10 11" in lines[0] and "đúng" in lines[0], "điều khiển beam (bit2, CRC từ header)")
+    check(len(lines) == 1 and "[01] Esp=12.3 Beta=-4.5 Freq=2400 MHz Mode=5" in lines[0] and "[10] Esp=-1.0" in lines[0]
+          and "[11] Esp=3276.7 Beta=-3276.8 Freq=65535 MHz Mode=255" in lines[0] and "đúng" in lines[0], "điều khiển beam (bit2, giá trị riêng từng mode, CRC từ header)")
 
     print("RS485 giả (cấu hình, có byte thiết bị sau AB CD):")
     def dev(d, f):

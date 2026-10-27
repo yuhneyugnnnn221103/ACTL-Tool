@@ -2,7 +2,7 @@
 #include "log_filter.h"
 #include "theme.h"
 #include <QDoubleSpinBox>
-#include <QFormLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -30,30 +30,45 @@ QDoubleSpinBox *angleBox()
 
 BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(parent), m_ctx(ctx)
 {
-    // Tham số bản tin.
-    m_esp = angleBox();
-    m_beta = angleBox();
-    m_freq = new QSpinBox;
-    m_freq->setRange(0, kFreqMax);
-    m_freq->setSuffix(QStringLiteral(" MHz"));
-    m_freq->setAlignment(Qt::AlignRight);
-    m_modeValue = new QSpinBox;
-    m_modeValue->setRange(0, kModeValueMax);
-    m_modeValue->setAlignment(Qt::AlignRight);
-
+    // Ba cột ứng với ba mode (byte 10 của MODE = 01, 10, 11); mỗi cột nhập Esp, Beta, Freq, Mode riêng.
     auto *form = new QGroupBox(QStringLiteral("Bản tin beam"));
-    auto *f = new QFormLayout(form);
-    f->addRow(QStringLiteral("Esp"), m_esp);
-    f->addRow(QStringLiteral("Beta"), m_beta);
-    f->addRow(QStringLiteral("Freq"), m_freq);
-    f->addRow(QStringLiteral("Mode"), m_modeValue);
-    m_modeValue->setToolTip(QStringLiteral("Byte 9 của MODE, giống nhau ở cả 3 khung; byte 10 do chương trình đặt lần lượt 01, 10, 11"));
-    m_esp->setToolTip(QStringLiteral("Số thập phân có dấu, một chữ số sau dấu phẩy; bản tin gửi giá trị x 10 (16 bit có dấu)"));
-    m_beta->setToolTip(m_esp->toolTip());
-    m_freq->setToolTip(QStringLiteral("Tần số, đơn vị MHz, số nguyên"));
-    for (QAbstractSpinBox *b : {static_cast<QAbstractSpinBox *>(m_esp), static_cast<QAbstractSpinBox *>(m_beta),
-                                static_cast<QAbstractSpinBox *>(m_freq), static_cast<QAbstractSpinBox *>(m_modeValue)})
-        b->setFixedWidth(160);
+    auto *g = new QGridLayout(form);
+    const QStringList rows{QStringLiteral("Esp"), QStringLiteral("Beta"), QStringLiteral("Freq"), QStringLiteral("Mode")};
+    for (int r = 0; r < rows.size(); ++r) g->addWidget(new QLabel(rows.at(r)), r + 1, 0);
+    for (int k = 0; k < kFrameCount; ++k) {
+        auto *title = new QLabel(QStringLiteral("Mode %1").arg(modeByte(k), 2, 16, QLatin1Char('0')).toUpper());
+        title->setAlignment(Qt::AlignCenter);
+        QFont tf = title->font();
+        tf.setBold(true);
+        title->setFont(tf);
+        g->addWidget(title, 0, k + 1);
+
+        m_esp[k] = angleBox();
+        m_beta[k] = angleBox();
+        m_freq[k] = new QSpinBox;
+        m_freq[k]->setRange(0, kFreqMax);
+        m_freq[k]->setSuffix(QStringLiteral(" MHz"));
+        m_freq[k]->setAlignment(Qt::AlignRight);
+        m_modeValue[k] = new QSpinBox;
+        m_modeValue[k]->setRange(0, kModeValueMax);
+        m_modeValue[k]->setAlignment(Qt::AlignRight);
+        m_esp[k]->setToolTip(QStringLiteral("Số thập phân có dấu, một chữ số sau dấu phẩy; bản tin gửi giá trị x 10 (16 bit có dấu)"));
+        m_beta[k]->setToolTip(m_esp[k]->toolTip());
+        m_freq[k]->setToolTip(QStringLiteral("Tần số, đơn vị MHz, số nguyên"));
+        m_modeValue[k]->setToolTip(QStringLiteral("Byte 9 của MODE trong khung này; byte 10 do chương trình đặt = %1")
+                                       .arg(modeByte(k), 2, 16, QLatin1Char('0')).toUpper());
+        g->addWidget(m_esp[k], 1, k + 1);
+        g->addWidget(m_beta[k], 2, k + 1);
+        g->addWidget(m_freq[k], 3, k + 1);
+        g->addWidget(m_modeValue[k], 4, k + 1);
+        g->setColumnStretch(k + 1, 1);
+        for (QAbstractSpinBox *b : {static_cast<QAbstractSpinBox *>(m_esp[k]), static_cast<QAbstractSpinBox *>(m_beta[k]),
+                                    static_cast<QAbstractSpinBox *>(m_freq[k]), static_cast<QAbstractSpinBox *>(m_modeValue[k])}) {
+            b->setMinimumWidth(130);
+            if (auto *d = qobject_cast<QDoubleSpinBox *>(b)) connect(d, &QDoubleSpinBox::valueChanged, this, &BeamEthPage::updatePreview);
+            else connect(static_cast<QSpinBox *>(b), &QSpinBox::valueChanged, this, &BeamEthPage::updatePreview);
+        }
+    }
 
     m_preview = new QLabel;
     m_preview->setFont(QFont(QStringLiteral("monospace")));
@@ -77,8 +92,6 @@ BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(paren
     l->addLayout(sendRow);
     l->addStretch(1);
 
-    for (QDoubleSpinBox *b : {m_esp, m_beta}) connect(b, &QDoubleSpinBox::valueChanged, this, &BeamEthPage::updatePreview);
-    for (QSpinBox *b : {m_freq, m_modeValue}) connect(b, &QSpinBox::valueChanged, this, &BeamEthPage::updatePreview);
     connect(ctx.monitorLink, &core::Link::stateChanged, this, &BeamEthPage::showState);   // beam đi chung đường giám sát (Ethernet tới Gateway)
     showState(State::Closed);
     updatePreview();
@@ -87,10 +100,12 @@ BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(paren
 Params BeamEthPage::params() const
 {
     Params p;
-    p.esp = m_esp->value();
-    p.beta = m_beta->value();
-    p.freqMhz = m_freq->value();
-    p.modeValue = m_modeValue->value();
+    for (int k = 0; k < kFrameCount; ++k) {
+        p.frame[k].esp = m_esp[k]->value();
+        p.frame[k].beta = m_beta[k]->value();
+        p.frame[k].freqMhz = m_freq[k]->value();
+        p.frame[k].modeValue = m_modeValue[k]->value();
+    }
     return p;
 }
 
@@ -114,8 +129,13 @@ void BeamEthPage::send()
     core::Request r;
     r.data = proto::ctlframe::wrap(proto::ctlframe::SecBeam, buildFrame(p));                       // không có trả lời: gửi xong là xong
     m_ctx.monitorLink->send(r);
-    const QString text = QStringLiteral("Esp %1, Beta %2, Freq %3 MHz, Mode %4 (3 khung, byte 10 = 01, 10, 11)")
-                             .arg(p.esp, 0, 'f', 1).arg(p.beta, 0, 'f', 1).arg(p.freqMhz).arg(p.modeValue);
+    QStringList parts;
+    for (int k = 0; k < kFrameCount; ++k) {
+        const FrameParams &f = p.frame[k];
+        parts << QStringLiteral("[%1] Esp %2, Beta %3, Freq %4 MHz, Mode %5").arg(modeByte(k), 2, 16, QLatin1Char('0'))
+                     .arg(f.esp, 0, 'f', 1).arg(f.beta, 0, 'f', 1).arg(f.freqMhz).arg(f.modeValue);
+    }
+    const QString text = parts.join(QStringLiteral("; "));
     m_result->setText(QStringLiteral("Đã gửi lúc %1: %2").arg(QTime::currentTime().toString(QStringLiteral("HH:mm:ss")), text));
     emit logEvent(tagged(EventKind::Ctrl, QStringLiteral("Đã gửi (không chờ ACK): Beam Ethernet, %1 [%2]")
                                               .arg(text, QString::fromLatin1(r.data.toHex(' ').toUpper()))));
