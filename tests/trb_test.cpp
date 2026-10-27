@@ -548,6 +548,27 @@ private slots:
         QCOMPARE(cls({}).group, int(LogSystem));
     }
 
+    // Gateway/TRB chưa đổi CMD: khung giám sát 11 11 (cùng bố cục) vẫn được nhận và cập nhật store như 23 23; tắt thì bị bỏ.
+    void monitorAcceptsLegacyCmd11()
+    {
+        auto legacy = [](int mb, int trb) {
+            QByteArray f = monitorFrame(mb, trb, zeros(trbmon::kNumFields));
+            f[2] = f[3] = char(0x11);                      // CRC từ byte địa chỉ nên không đổi
+            return f;
+        };
+        for (bool accept : {true, false}) {
+            Rig rig("monitor");
+            services::TrbMonitor::registerFrames(rig.registry, true, accept);
+            rig.link.start();
+            model::DeviceStore store(2, 4);
+            services::TrbMonitor mon(&rig.link, &store, nullptr);
+            rig.transport->inject(legacy(1, 2));
+            rig.transport->inject(monitorFrame(0, 1, zeros(trbmon::kNumFields)));
+            QCOMPARE(store.trb(0, 1).frames, quint64(1));                  // CMD mới luôn nhận
+            QCOMPARE(store.trb(1, 2).frames, quint64(accept ? 1 : 0));     // CMD cũ chỉ nhận khi bật
+        }
+    }
+
     // ---------- Tách khung ----------
     void parserResyncsAfterGarbageAndSplitChunks()
     {

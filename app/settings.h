@@ -11,7 +11,7 @@ struct Settings {
     int replayIntervalMs;
     QString servicePort;       // cổng COM của đường RS485 (cấu hình, nạp code)
     int serviceBaud;
-    bool trbCheckCrc, psuCheckCrc;
+    bool trbCheckCrc, psuCheckCrc, trbAcceptOldCmd;
     int cfgReadTimeoutMs, cfgWriteGapMs;
     bool logEnabled, logAutoStart;
     QString logDir, thresholdsFile, psuThresholdsFile, psuDefaultConfigFile;
@@ -48,6 +48,7 @@ struct Settings {
         s.serviceBaud = get("service/baud", 1000000).toInt();
         s.trbCheckCrc = get("trb/checkCrc", true).toBool();
         s.psuCheckCrc = get("psu/checkCrc", true).toBool();
+        s.trbAcceptOldCmd = get("trb/acceptOldCmd", true).toBool();   // nhận cả khung giám sát CMD cũ 11 11 bên cạnh 23 23
         s.cfgReadTimeoutMs = get("config/replyTimeoutMs", 200).toInt(); // khóa mới: khóa cũ config/readTimeoutMs đã bị ghi 3000 vào file ini ở các lần chạy trước
         s.cfgWriteGapMs = get("config/writeGapMs", 300).toInt();
         s.logEnabled = get("log/enabled", true).toBool();

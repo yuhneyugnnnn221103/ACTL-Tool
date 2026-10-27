@@ -4,6 +4,16 @@ namespace proto::trbmon {
 
 QByteArray cmd() { return QByteArray::fromHex("2323"); }
 
+QByteArray legacyCmd() { return QByteArray::fromHex("1111"); }
+
+core::FrameSpec legacySpec(bool checkCrc)
+{
+    core::FrameSpec s = spec(checkCrc);
+    s.cmd = legacyCmd();
+    s.name = QStringLiteral("TRB giám sát (CMD cũ 11 11)");
+    return s;
+}
+
 core::FrameSpec spec(bool checkCrc)
 {
     // Gateway thay khung của TRB không phản hồi / sai CRC / lỗi bằng khung chỉ có địa chỉ: AB CD 23 23 MB TRB, data và CRC toàn 0x00, E1 E2.
