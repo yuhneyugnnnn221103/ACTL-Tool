@@ -548,6 +548,32 @@ private slots:
         QCOMPARE(cls({}).group, int(LogSystem));
     }
 
+    // Khung đủ độ dài nhưng sai CRC/đuôi: loại bỏ, đếm riêng và báo lý do (CRC nhận, CRC tính, 12 byte đầu) để chẩn đoán.
+    void rejectedFramesAreDiagnosed()
+    {
+        Rig rig("monitor");
+        services::TrbMonitor::registerFrames(rig.registry, true);
+        rig.link.start();
+        QSignalSpy rejected(&rig.link, &core::Link::frameRejected);
+        QSignalSpy errors(&rig.link, &core::Link::rxErrorsChanged);
+
+        QByteArray badCrc = monitorFrame(1, 2, zeros(trbmon::kNumFields));
+        badCrc[100] = char(badCrc.at(100) ^ 0x55);                       // hỏng dữ liệu: CRC không khớp
+        rig.transport->inject(badCrc + badCrc + badCrc);                  // 3 khung x 310 byte đều bị bỏ
+        QVERIFY(rejected.size() >= 1);                                    // mỗi lần nhận byte báo một lần (khung cuối cùng bị loại)
+        const QString text = rejected.last().at(0).toString();
+        QVERIFY(text.contains("23 23") && text.contains("CRC nhận") && text.contains("tính từ byte 5") && text.contains("AB CD 23 23 01 02"));
+        QCOMPARE(errors.last().at(0).toULongLong(), quint64(3));          // lỗi CRC
+        QVERIFY(errors.last().at(1).toULongLong() > 0);                   // byte bỏ qua (byte 0x00 tính riêng là phần đệm của Gateway)
+        QCOMPARE(errors.last().at(2).toULongLong(), quint64(0));          // sai đuôi
+
+        QByteArray badTail = monitorFrame(1, 2, zeros(trbmon::kNumFields));
+        badTail[trbmon::kLength - 1] = char(0x00);
+        rig.transport->inject(badTail);
+        QVERIFY(rejected.last().at(0).toString().contains("đuôi nhận"));
+        QCOMPARE(errors.last().at(2).toULongLong(), quint64(1));
+    }
+
     // ---------- Tách khung ----------
     void parserResyncsAfterGarbageAndSplitChunks()
     {

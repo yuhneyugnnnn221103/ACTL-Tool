@@ -24,7 +24,8 @@ void FrameParser::feed(const QByteArray &data, const std::function<void(const Fr
 
         const quint8 *f = d + pos;
         const int len = spec->length;
-        bool ok = !spec->tailer || (f[len - 2] == kTailer1 && f[len - 1] == kTailer2);
+        const bool tailerOk = !spec->tailer || (f[len - 2] == kTailer1 && f[len - 1] == kTailer2);
+        bool ok = tailerOk;
         if (ok && spec->emptyFrom > 0) {
             bool zeros = true;
             for (int i = spec->emptyFrom; i < len - 2 && zeros; ++i) zeros = f[i] == 0;
@@ -37,10 +38,22 @@ void FrameParser::feed(const QByteArray &data, const std::function<void(const Fr
                 continue;
             }
         }
+        auto noteRejected = [&](bool tailerBad) {
+            m_rejected.cmd = spec->cmd;
+            m_rejected.length = len;
+            m_rejected.crcStart = spec->crcStart;
+            m_rejected.tailerBad = tailerBad;
+            m_rejected.head = QByteArray(reinterpret_cast<const char *>(f), qMin(len, 12));
+            m_rejected.tail = QByteArray(reinterpret_cast<const char *>(f + len - 4), 4);
+            m_rejected.recvCrc = quint16(f[len - 4] << 8 | f[len - 3]);
+            m_rejected.calcCrc = crc16(f + spec->crcStart, len - 4 - spec->crcStart);
+            m_rejected.calcFromCmd = crc16(f + 2, len - 4 - 2);
+        };
+        if (!tailerOk) { ++m_stats.tailerErrors; noteRejected(true); }
         if (ok && spec->checkCrc) {
             const quint16 recv = quint16(f[len - 4] << 8 | f[len - 3]);
             ok = recv == crc16(f + spec->crcStart, len - 4 - spec->crcStart);
-            if (!ok) ++m_stats.crcErrors;
+            if (!ok) { ++m_stats.crcErrors; noteRejected(false); }
         }
         if (!ok) { ++pos; ++m_stats.droppedBytes; continue; }
 

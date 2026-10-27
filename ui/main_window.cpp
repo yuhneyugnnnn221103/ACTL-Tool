@@ -229,8 +229,15 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
 
     watchLink(ctx.monitorLink, QStringLiteral("Giám sát (TCP)"), m_tcpPill, m_tcpButton);
     watchLink(ctx.serviceLink, QStringLiteral("Cấu hình (RS485)"), m_comPill, m_comButton);
-    connect(ctx.monitorLink, &core::Link::rxErrorsChanged, this, [this](quint64 crc, quint64 dropped) {
-        m_rxErrText = QStringLiteral("Lỗi CRC: %1 · Byte bỏ qua: %2").arg(crc).arg(dropped);
+    // Khung đủ độ dài nhưng bị loại: ghi vào khung Sự kiện để biết lý do (tối đa một dòng mỗi 2 giây, không đầy log khi đường truyền lỗi liên tục).
+    connect(ctx.monitorLink, &core::Link::frameRejected, this, [this](const QString &text) {
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (now - m_lastRejectLogMs < 2000) return;
+        m_lastRejectLogMs = now;
+        logEvent(tagged(EventKind::Err, QStringLiteral("Giám sát (TCP): ") + text), LogSystem);
+    });
+    connect(ctx.monitorLink, &core::Link::rxErrorsChanged, this, [this](quint64 crc, quint64 dropped, quint64 tailer) {
+        m_rxErrText = QStringLiteral("Lỗi CRC: %1 · Sai đuôi: %2 · Byte bỏ qua: %3").arg(crc).arg(tailer).arg(dropped);
         if (m_rxErrLabel) m_rxErrLabel->setText(m_rxErrText);
     });
 

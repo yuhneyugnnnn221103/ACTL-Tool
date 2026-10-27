@@ -41,7 +41,8 @@ signals:
     void rawReceived(const QByteArray &data);                     // cho log hex
     void rawSent(const QByteArray &data);
     void errorOccurred(const QString &message);
-    void rxErrorsChanged(quint64 crcErrors, quint64 droppedBytes);
+    void rxErrorsChanged(quint64 crcErrors, quint64 droppedBytes, quint64 tailerErrors);
+    void frameRejected(const QString &description);               // một khung đủ độ dài nhưng sai đuôi hoặc CRC bị loại (mô tả chẩn đoán)
 
 private:
     struct Pending { quint64 id; Request req; int attempts = 0; };
@@ -59,6 +60,7 @@ private:
     QList<Pending> m_queue;
     Pending m_current;
     bool m_busy = false;
+    quint64 m_reportedRejected = 0;
     QTimer m_timer; // timeout trả lời hoặc khoảng nghỉ sau khi gửi
     QTimer m_idle;  // đường truyền im lặng -> bỏ khung dở
     QAtomicInteger<quint64> m_nextId{1};

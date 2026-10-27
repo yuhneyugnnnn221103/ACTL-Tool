@@ -27,7 +27,7 @@ Link::Link(const QString &name, Transport *transport, const FrameRegistry *regis
     connect(&m_idle, &QTimer::timeout, this, [this] {
         m_parser.reset();
         m_reportedErrors = m_parser.stats().crcErrors + m_parser.stats().droppedBytes;
-        emit rxErrorsChanged(m_parser.stats().crcErrors, m_parser.stats().droppedBytes);
+        emit rxErrorsChanged(m_parser.stats().crcErrors, m_parser.stats().droppedBytes, m_parser.stats().tailerErrors);
     });
 }
 
@@ -100,9 +100,22 @@ void Link::onBytes(const QByteArray &data)
         emit frameReceived(f);
     });
     const auto &st = m_parser.stats();
-    if (st.crcErrors + st.droppedBytes != m_reportedErrors) {
-        m_reportedErrors = st.crcErrors + st.droppedBytes;
-        emit rxErrorsChanged(st.crcErrors, st.droppedBytes);
+    if (st.crcErrors + st.droppedBytes + st.tailerErrors != m_reportedErrors) {
+        m_reportedErrors = st.crcErrors + st.droppedBytes + st.tailerErrors;
+        emit rxErrorsChanged(st.crcErrors, st.droppedBytes, st.tailerErrors);
+    }
+    if (m_parser.rejectedCount() != m_reportedRejected) {
+        m_reportedRejected = m_parser.rejectedCount();
+        const FrameParser::Rejected &r = m_parser.lastRejected();
+        auto hex4 = [](quint16 v) { return QStringLiteral("%1").arg(v, 4, 16, QLatin1Char('0')).toUpper(); };
+        QString text = QStringLiteral("Khung CMD %1 (%2 byte) bị loại: ").arg(QString::fromLatin1(r.cmd.toHex(' ').toUpper())).arg(r.length);
+        if (r.tailerBad)
+            text += QStringLiteral("đuôi nhận %1 (cần E1 E2)").arg(QString::fromLatin1(r.tail.right(2).toHex(' ').toUpper()));
+        else
+            text += QStringLiteral("CRC nhận 0x%1, tính từ byte %2 (theo giao thức) = 0x%3, tính từ byte CMD = 0x%4")
+                        .arg(hex4(r.recvCrc)).arg(r.crcStart + 1).arg(hex4(r.calcCrc), hex4(r.calcFromCmd));
+        text += QStringLiteral("; 12 byte đầu: %1").arg(QString::fromLatin1(r.head.toHex(' ').toUpper()));
+        emit frameRejected(text);
     }
     if (m_idle.interval() > 0) {
         if (m_parser.hasPending()) m_idle.start();
