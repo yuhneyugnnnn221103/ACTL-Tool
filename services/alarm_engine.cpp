@@ -5,11 +5,12 @@ namespace services {
 AlarmEngine::AlarmEngine(const model::Thresholds *thresholds, const proto::FieldTable *table, QObject *parent)
     : QObject(parent), m_thresholds(thresholds), m_table(table) {}
 
-QList<int> AlarmEngine::check(int mb, int trb, const QList<double> &values)
+QList<int> AlarmEngine::check(int mb, int trb, const QList<double> &values, const QSet<int> &skip)
 {
     QSet<int> &active = m_active[mb << 8 | trb];
     QList<int> now;
     for (int i = 0; i < values.size(); ++i) {
+        if (skip.contains(i)) { active.remove(i); continue; }
         const model::Limit l = m_thresholds->get(mb, trb, i);
         const bool bad = l.violatedBy(values.at(i));
         if (bad) now.append(i);

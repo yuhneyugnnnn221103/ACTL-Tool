@@ -725,9 +725,17 @@ QString MainWindow::psuTooltip(int addr, int cluster) const
     const model::PsuState &s = m_ctx.psuStore->psu(addr);
     QString t = QStringLiteral("PSU %1").arg(addr);
     if (cluster >= 0) t += cluster < kNumCluster ? QStringLiteral(" · Cụm %1").arg(cluster + 1) : QStringLiteral(" · Supply");
-    t += QStringLiteral("\nTrạng thái: %1").arg(statusText(cluster >= 0 ? m_ctx.psuStore->clusterStatus(addr, cluster) : s.status));
-    if (cluster >= 0 && s.status == Status::Trip)
-        t += QStringLiteral("\nPSU đang Trip (chưa xác định được cụm nào, chờ bảng trip code)");
+    const bool isCluster = cluster >= 0 && cluster < kNumCluster;
+    if (isCluster && m_ctx.psuStore->clusterOff(addr, cluster))
+        t += QStringLiteral("\nTrạng thái: OFF (chân EN tắt, không so ngưỡng)");
+    else
+        t += QStringLiteral("\nTrạng thái: %1").arg(statusText(cluster >= 0 ? m_ctx.psuStore->clusterStatus(addr, cluster) : s.status));
+    if (isCluster && s.frames > 0) {
+        t += QStringLiteral("\nAn toàn: %1 · EN: %2 · trip liên tiếp: %3").arg(safeStateText(int(s.values.at(kIdxSafeState(cluster)))))
+                 .arg(int(s.values.at(kIdxEn(cluster))) & 1 ? QStringLiteral("bật") : QStringLiteral("tắt")).arg(s.values.at(kIdxTripCount(cluster)));
+    }
+    if (cluster >= 0 && s.status == Status::Trip && !m_ctx.psuStore->clusterTripped(addr, cluster))
+        t += QStringLiteral("\nPSU đang Trip theo trip code (bảng trip code chưa gán theo cụm)");
     if (s.frames == 0) return t;
 
     t += QStringLiteral("\nCập nhật: %1 trước · %2 bản tin")

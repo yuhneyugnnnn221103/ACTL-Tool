@@ -493,6 +493,8 @@ private slots:
         thr.set(3, 0, tempAdc, {100, 2000});
 
         QList<double> v(psumon::kNumFields, 0.0);
+        v[psumon::kIdxEn(2)] = 1;                                            // cụm 3 đang bật nguồn: mới so ngưỡng
+        v[psumon::kIdxSafeState(2)] = psumon::SafeOn;
         v[tempAdc] = 500;
         v[tempFet] = 60000;
         v[psumon::kIdxRtc0] = 26;
@@ -527,6 +529,52 @@ private slots:
 
         store.markStale(store.psu(3).lastSeenMs + 5000, 3000);
         QCOMPARE(store.psu(3).status, model::Status::Lost);
+    }
+
+    // Cụm tắt (EN = 0, không trip): không so ngưỡng, ô hiện OFF; cụm TRIPPED/LOCKOUT là Trip và kéo PSU thành Trip dù EN đã về 0.
+    void offClusterIsNotCheckedAndTrippedClusterTripsPsu()
+    {
+        core::FrameRegistry registry;
+        services::PsuMonitor::registerFrames(registry, true);
+        auto *tp = new FakeTransport;
+        core::Link link("monitor", tp, &registry);
+        link.start();
+        model::PsuStore store(1, 5);
+        model::Thresholds thr(&psumon::table());
+        services::AlarmEngine alarms(&thr, &psumon::table());
+        services::PsuMonitor mon(&link, &store, &alarms);
+
+        const int t0 = psumon::clusterField(0, psumon::TempAdc2), t1 = psumon::clusterField(1, psumon::TempAdc2);
+        thr.set(2, 0, t0, {100, 2000});                                       // ngưỡng dưới 100: giá trị 0 của cụm tắt sẽ vi phạm nếu có so
+        thr.set(2, 0, t1, {100, 2000});
+        QList<double> v(psumon::kNumFields, 0.0);
+        v[psumon::kIdxEn(0)] = 1; v[psumon::kIdxSafeState(0)] = psumon::SafeOn; v[t0] = 500;   // cụm 1 bật, trong ngưỡng
+        v[psumon::kIdxSafeState(1)] = psumon::SafeOff;                                          // cụm 2 tắt, giá trị 0
+        tp->inject(monitorFrame(2, v));
+        QCOMPARE(store.psu(2).status, model::Status::Ok);                    // cụm 2 không bị tính quá ngưỡng
+        QVERIFY(store.psu(2).alarms.isEmpty());
+        QVERIFY(store.clusterOff(2, 1));
+        QVERIFY(!store.clusterOff(2, 0));
+        QCOMPARE(store.clusterStatus(2, 0), model::Status::Ok);
+
+        v[psumon::kIdxEn(1)] = 1; v[psumon::kIdxSafeState(1)] = psumon::SafeOn;   // bật cụm 2 mà giá trị vẫn 0: bây giờ vi phạm
+        tp->inject(monitorFrame(2, v));
+        QCOMPARE(store.psu(2).status, model::Status::Warning);
+        QCOMPARE(store.clusterStatus(2, 1), model::Status::Warning);
+        QVERIFY(!store.clusterOff(2, 1));
+
+        v[psumon::kIdxEn(1)] = 0; v[psumon::kIdxSafeState(1)] = psumon::SafeTripped;   // trip: firmware cắt EN, nhưng không được hiện OFF
+        tp->inject(monitorFrame(2, v));
+        QVERIFY(store.clusterTripped(2, 1));
+        QVERIFY(!store.clusterOff(2, 1));
+        QCOMPARE(store.clusterStatus(2, 1), model::Status::Trip);
+        QCOMPARE(store.clusterStatus(2, 0), model::Status::Ok);               // cụm khác không bị kéo theo
+        QCOMPARE(store.psu(2).status, model::Status::Trip);                   // PSU Trip khi một cụm trip
+
+        v[psumon::kIdxSafeState(1)] = psumon::SafeLockout;
+        tp->inject(monitorFrame(2, v));
+        QCOMPARE(store.clusterStatus(2, 1), model::Status::Trip);
+        QCOMPARE(store.psu(2).status, model::Status::Trip);
     }
 
     void clusterStatusFollowsAlarmsPerCluster()

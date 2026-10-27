@@ -18,10 +18,23 @@ QList<int> PsuStore::clusterAlarms(int addr, int cluster) const
     return out;
 }
 
+bool PsuStore::clusterTripped(int addr, int cluster) const
+{
+    const PsuState &p = psu(addr);
+    return p.frames > 0 && cluster < proto::psumon::kNumCluster && proto::psumon::clusterTripped(p.values, cluster);
+}
+
+bool PsuStore::clusterOff(int addr, int cluster) const
+{
+    const PsuState &p = psu(addr);
+    return p.frames > 0 && cluster < proto::psumon::kNumCluster && proto::psumon::clusterOff(p.values, cluster);
+}
+
 Status PsuStore::clusterStatus(int addr, int cluster) const
 {
     const Status s = psu(addr).status;
     if (s == Status::NoData || s == Status::Lost || s == Status::Updating) return s;
+    if (clusterTripped(addr, cluster)) return Status::Trip;
     return clusterAlarms(addr, cluster).isEmpty() ? Status::Ok : Status::Warning;
 }
 
@@ -29,6 +42,7 @@ Status PsuStore::clusterDisplayStatus(int addr, int cluster) const
 {
     const Status s = psu(addr).status;
     if (s == Status::NoData || s == Status::Updating) return s;
+    if (clusterTripped(addr, cluster)) return Status::Trip;
     return clusterAlarms(addr, cluster).isEmpty() ? Status::Ok : Status::Warning;
 }
 

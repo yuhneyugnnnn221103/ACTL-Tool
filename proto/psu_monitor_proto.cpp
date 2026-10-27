@@ -98,6 +98,28 @@ QByteArray buildFrame(int addr, const QList<double> &values)
     return f;
 }
 
+bool clusterTripped(const QList<double> &values, int c)
+{
+    const int st = int(values.at(kIdxSafeState(c)));
+    return st == SafeTripped || st == SafeLockout;
+}
+
+bool clusterOff(const QList<double> &values, int c)
+{
+    return !(int(values.at(kIdxEn(c))) & 1) && !clusterTripped(values, c);
+}
+
+QSet<int> offClusterFields(const QList<double> &values)
+{
+    QSet<int> out;
+    for (int c = 0; c < kNumCluster; ++c) {
+        if (!clusterOff(values, c)) continue;
+        const int first = clusterField(c, ClusterField(0));
+        for (int f = 0; f < kClusterFields; ++f) out.insert(first + f);
+    }
+    return out;
+}
+
 QString safeStateText(int state)
 {
     switch (state) {

@@ -23,11 +23,14 @@ void PsuMonitor::onFrame(const core::Frame &frame)
     if (!m_store->contains(addr)) { ++m_badAddress; return; }
 
     const QList<double> v = psumon::table().decode(frame.raw);
-    // Như TRB: có trip code khác 0 là Trip, ưu tiên hơn Quá ngưỡng.
+    // Như TRB: có trip code khác 0 là Trip, ưu tiên hơn Quá ngưỡng. Thêm: một cụm DCM ở TRIPPED/LOCKOUT (safe_state của cụm) cũng là Trip.
+    // Bảng trip code chưa gán được theo cụm nên trip theo cụm tạm lấy từ safe_state.
     bool trip = false;
     for (int i = 0; i < psumon::kNumTrip; ++i) trip = trip || v.at(psumon::kIdxTrip0 + i) != 0;
+    for (int c = 0; c < psumon::kNumCluster; ++c) trip = trip || psumon::clusterTripped(v, c);
 
-    const QList<int> bad = m_alarms ? m_alarms->check(addr, 0, v) : QList<int>();
+    // Cụm đang tắt (chân EN = 0, không trip) không so ngưỡng: số đo của cụm tắt không có ý nghĩa và không được kéo trạng thái PSU lên Quá ngưỡng.
+    const QList<int> bad = m_alarms ? m_alarms->check(addr, 0, v, psumon::offClusterFields(v)) : QList<int>();
     const model::Status before = m_store->psu(addr).status;
     const model::Status now = trip ? model::Status::Trip : bad.isEmpty() ? model::Status::Ok : model::Status::Warning;
     m_store->updatePsu(addr, v, frame.raw, frame.timestampMs, now, bad);

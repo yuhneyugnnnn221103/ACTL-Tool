@@ -163,6 +163,21 @@ Vùng dự phòng 24 byte được firmware APSU dùng làm vùng mở rộng. O
 
 Giao diện hiện các giá trị này ở khung "Trạng thái PSU" (cột phải) trên trang PSU. Hai trạng thái **TRIPPED** và **LOCKOUT** ảnh hưởng tới điều khiển (mục 3).
 
+### 2.5b Trạng thái từng cụm trên trang tổng quan
+
+Mỗi cụm DCM (và ô Supply) có trạng thái riêng, dựa vào 3 byte theo cụm của vùng mở rộng:
+
+| Điều kiện của cụm | Hiện |
+|---|---|
+| `safe_state` là TRIPPED hoặc LOCKOUT (kể cả khi chân EN đã về 0) | **Trip** (đỏ) |
+| Chân EN tắt và không TRIPPED/LOCKOUT | **OFF** (xám nhạt, chữ "OFF"); không so ngưỡng, không tính vào cảnh báo của PSU |
+| Chân EN bật, có giá trị của cụm vượt ngưỡng | **Quá ngưỡng** (cam) |
+| Chân EN bật, trong ngưỡng | **Tốt** (xanh) |
+
+- Ô **Supply** luôn so ngưỡng, không phụ thuộc EN.
+- Ô tên PSU là **Trip** khi có một cụm TRIPPED/LOCKOUT hoặc có trip code khác 0, còn lại theo cảnh báo của các cụm đang bật và Supply.
+- Trip theo cụm tạm lấy từ `safe_state` vì bảng trip code chưa chuẩn; khi có trip code theo từng cụm thì xác định cụm lỗi qua trip code.
+
 ### 2.6 Cách app xử lý
 
 - **Trip:** có bất kỳ trip code nào khác 0 thì PSU ở trạng thái Trip (ưu tiên hơn Quá ngưỡng). Trip chưa gán được cho từng cụm.

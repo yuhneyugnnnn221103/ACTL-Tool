@@ -26,6 +26,9 @@ public:
 
     // Trạng thái một cụm DCM (0..3; chỉ số 4 = nhóm Supply): mất kết nối/chưa có dữ liệu theo PSU, Quá ngưỡng nếu có giá trị của cụm
     // vượt ngưỡng, còn lại Tốt. Trip chưa gán được cho cụm vì chưa có bảng trip code, nên không hiện ở đây.
+    // Cụm (0..3) đang TRIPPED/LOCKOUT theo safe_state của cụm; cụm đang OFF (chân EN tắt, không trip) không so ngưỡng. Ô Supply (4) không có hai trạng thái này.
+    bool clusterTripped(int addr, int cluster) const;
+    bool clusterOff(int addr, int cluster) const;
     Status clusterStatus(int addr, int cluster) const;
     QList<int> clusterAlarms(int addr, int cluster) const;
     // Trạng thái để tô màu ô: mất kết nối thì lấy theo số liệu cuối (cụm: Quá ngưỡng hoặc Tốt; PSU: Trip > Quá ngưỡng > Tốt).

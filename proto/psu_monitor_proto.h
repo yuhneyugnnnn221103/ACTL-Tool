@@ -8,6 +8,7 @@
 // Vùng dự phòng 24 byte (byte 239..262) là mở rộng của firmware APSU: chỉ dùng 4 trạng thái an toàn, 4 cờ EN, 4 bộ đếm trip (theo cụm), slot và version; còn lại dự phòng.
 #include "../core/frame.h"
 #include "field_table.h"
+#include <QSet>
 #include <QString>
 
 namespace proto::psumon {
@@ -39,7 +40,12 @@ constexpr int kIdxVersion = kIdxSlot + 1;                   // +13..+16 version 
 constexpr int kNumFields = kIdxVersion + 1;
 
 enum SafeState { SafeBoot = 0, SafeOff = 1, SafeArming = 2, SafeOn = 3, SafeTripped = 4, SafeLockout = 5 };
-QString safeStateText(int state);           // "BOOT", "OFF", ...
+QString safeStateText(int state);
+// Trạng thái theo từng cụm DCM (c = 0..3) từ bản tin đã giải mã (values theo thứ tự table()):
+bool clusterTripped(const QList<double> &values, int c);   // safe_state của cụm là TRIPPED hoặc LOCKOUT
+bool clusterOff(const QList<double> &values, int c);       // chân EN tắt và cụm không TRIPPED/LOCKOUT: không so ngưỡng, hiện "OFF"
+QSet<int> offClusterFields(const QList<double> &values);   // chỉ số các trường đo của mọi cụm đang OFF (bỏ qua khi so ngưỡng)
+           // "BOOT", "OFF", ...
 QString tripName(int i);                    // i = 0..9 (Trip 1..10); bảng bit TẠM THỜI của firmware
 QString tripBitName(int i, int bit);        // rỗng nếu bit chưa dùng
 double supplyShown(double raw);             // dịch phải 4 bit (bậc thang xuống), giữ dấu

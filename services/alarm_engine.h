@@ -12,7 +12,8 @@ class AlarmEngine : public QObject {
 public:
     AlarmEngine(const model::Thresholds *thresholds, const proto::FieldTable *table, QObject *parent = nullptr);
 
-    QList<int> check(int mb, int trb, const QList<double> &values); // trả về các trường đang vượt ngưỡng
+    // Trả về các trường đang vượt ngưỡng. Trường trong skip không so ngưỡng (ví dụ cụm DCM đang tắt) và bỏ cảnh báo đang có mà không phát sự kiện.
+    QList<int> check(int mb, int trb, const QList<double> &values, const QSet<int> &skip = {});
 
 signals:
     void alarmEvent(int mb, int trb, const QString &text, bool raised);
