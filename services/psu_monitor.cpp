@@ -22,6 +22,14 @@ void PsuMonitor::onFrame(const core::Frame &frame)
     const int addr = frame.at(psumon::kOffAddr);
     if (!m_store->contains(addr)) { ++m_badAddress; return; }
 
+    int &empty = m_emptyRun[addr];
+    if (frame.empty) {                    // Gateway báo PSU này không phản hồi: đánh dấu X ngay; đủ m_emptyLimit lần liên tiếp thì coi là mất kết nối
+        m_store->setNoReply(addr, true);
+        if (++empty >= m_emptyLimit) m_store->markSilent(addr);
+        return;
+    }
+    empty = 0;
+
     const QList<double> v = psumon::table().decode(frame.raw);
     // Như TRB: có trip code khác 0 là Trip, ưu tiên hơn Quá ngưỡng. Thêm: một cụm DCM ở TRIPPED/LOCKOUT (safe_state của cụm) cũng là Trip.
     // Bảng trip code chưa gán được theo cụm nên trip theo cụm tạm lấy từ safe_state.

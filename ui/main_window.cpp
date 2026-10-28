@@ -768,6 +768,8 @@ QString MainWindow::psuTooltip(int addr, int cluster) const
     }
     if (cluster >= 0 && s.status == Status::Trip && !m_ctx.psuStore->clusterTripped(addr, cluster))
         t += QStringLiteral("\nPSU đang Trip theo trip code (bảng trip code chưa gán theo cụm)");
+    if (s.noReply) t += QStringLiteral("\nX: Gateway vừa báo PSU không phản hồi (khung rỗng)");
+    else if (s.status == Status::Lost) t += QStringLiteral("\n?: quá hạn không có bản tin mới, số liệu bên dưới là số liệu cũ");
     if (s.frames == 0) return t;
 
     t += QStringLiteral("\nCập nhật: %1 trước · %2 bản tin")

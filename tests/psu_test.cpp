@@ -1,10 +1,12 @@
 // Test phần PSU: bảng trường, khung điều khiển, giám sát (qua Link), cấu hình (qua Link với PSU giả lập).
 #include "../core/link.h"
+#include "../model/device_store.h"
 #include "../model/psu_store.h"
 #include "../proto/device_select_proto.h"
 #include "../proto/psu_config_proto.h"
 #include "../proto/psu_control_proto.h"
 #include "../proto/psu_monitor_proto.h"
+#include "../proto/trb_monitor_proto.h"
 #include "../proto/stm_ota_proto.h"
 #include "../core/frame_parser.h"
 #include "../services/fpga_ota.h"
@@ -79,7 +81,8 @@ private slots:
         QCOMPARE(t.size(), psumon::kNumFields);
         int end = psumon::kOffAddr + 1;
         for (int i = 0; i < psumon::kIdxExt0; ++i) { const Field &f = t.fields().at(i); QCOMPARE(f.offset, end); end += f.size; }
-        QCOMPARE(end, psumon::kLength - 4 - 2 - 22);             // hết Trip; vùng mở rộng firmware 24 byte (chỉ dùng 5 trường) nằm sau
+        QCOMPARE(psumon::kLength, 310);
+        QCOMPARE(end, 5 + 4 * 48 + 24 + 7 + 10);             // hết Trip; vùng mở rộng firmware 24 byte (chỉ dùng 5 trường) nằm sau
         QCOMPARE(t.fields().at(psumon::clusterField(1, psumon::TempFet)).offset, 5 + 48 + 18 + 6 + 20); // cụm 2, dưới 3 ADC + AMC + 10 XDP
         QCOMPARE(t.fields().at(psumon::kIdxSupply0).offset, 5 + 4 * 48);
         QCOMPARE(t.fields().at(psumon::kIdxTrip0).offset, 5 + 4 * 48 + 24 + 7);
@@ -104,7 +107,7 @@ private slots:
         v[psumon::kIdxSlot] = 'B';
         v[psumon::kIdxVersion] = 20261013;
         const QByteArray f = psumon::buildFrame(2, v);
-        QCOMPARE(f.size(), 266);
+        QCOMPARE(f.size(), 310);
         QVERIFY(crcOk(f, 2));
         const QList<double> back = t.decode(f);
         QCOMPARE(back.at(psumon::kIdxSafeState(2)), double(psumon::SafeOn));
@@ -575,6 +578,80 @@ private slots:
         tp->inject(monitorFrame(2, v));
         QCOMPARE(store.clusterStatus(2, 1), model::Status::Trip);
         QCOMPARE(store.psu(2).status, model::Status::Trip);
+    }
+
+    // PSU cũng có X (khung rỗng của Gateway: AB CD 81 81 ADDR, dữ liệu và CRC toàn 0, E1 E2) và ? (quá hạn) như TRB.
+    void silentPsuIsMarkedWithXAndLostLikeTrb()
+    {
+        core::FrameRegistry registry;
+        services::PsuMonitor::registerFrames(registry, true);
+        auto *tp = new FakeTransport;
+        core::Link link("monitor", tp, &registry);
+        link.start();
+        model::PsuStore store(1, 5);
+        services::PsuMonitor mon(&link, &store);
+        mon.setEmptyLimit(3);
+        auto empty = [](int addr) {
+            QByteArray f(psumon::kLength, '\0');
+            f[0] = char(0xAB); f[1] = char(0xCD);
+            f.replace(2, 2, psumon::cmd());
+            f[psumon::kOffAddr] = char(addr);
+            f[psumon::kLength - 2] = char(0xE1); f[psumon::kLength - 1] = char(0xE2);
+            return f;
+        };
+        QList<double> v(psumon::kNumFields, 0.0);
+
+        tp->inject(empty(2));                                           // chưa từng có dữ liệu: X ngay, trạng thái vẫn "chưa có dữ liệu"
+        QVERIFY(store.psu(2).noReply);
+        QCOMPARE(store.psu(2).status, model::Status::NoData);
+        QVERIFY(!store.psu(3).noReply);
+
+        tp->inject(monitorFrame(2, v));                                  // có bản tin thật: hết X
+        QVERIFY(!store.psu(2).noReply);
+        QCOMPARE(store.psu(2).status, model::Status::Ok);
+        tp->inject(empty(2));                                           // đã có dữ liệu: X hiện ngay dù chưa đủ 3 khung
+        QVERIFY(store.psu(2).noReply);
+        QCOMPARE(store.psu(2).status, model::Status::Ok);
+        tp->inject(empty(2));
+        tp->inject(empty(2));                                           // đủ 3 khung rỗng liên tiếp: mất kết nối, giữ số liệu cuối
+        QCOMPARE(store.psu(2).status, model::Status::Lost);
+        QVERIFY(store.psu(2).frames > 0);
+        tp->inject(monitorFrame(2, v));
+        QVERIFY(!store.psu(2).noReply);
+        QCOMPARE(store.psu(2).status, model::Status::Ok);
+    }
+
+    // Gateway gửi một lượt 20 TRB + 5 PSU = 25 x 310 = 7750 byte (hai loại khung cùng 310 byte, phân biệt bằng CMD 23 23 / 81 81):
+    // nhận trọn một lần hoặc bị TCP cắt ở ranh giới bất kỳ, cả 25 thiết bị đều vào đúng store.
+    void mixedBurstOf20TrbAnd5Psu()
+    {
+        for (int chunk : {7750, 1460, 733, 1}) {
+            core::FrameRegistry registry;
+            services::TrbMonitor::registerFrames(registry, true);
+            services::PsuMonitor::registerFrames(registry, true);
+            auto *tp = new FakeTransport;
+            core::Link link("monitor", tp, &registry);
+            link.start();
+            model::DeviceStore trbs(3, 8);
+            model::PsuStore psus(1, 5);
+            services::TrbMonitor trbMon(&link, &trbs, nullptr);
+            services::PsuMonitor psuMon(&link, &psus);
+            QList<double> tv(proto::trbmon::kNumFields, 0.0);
+            tv[proto::trbmon::kIdxPg] = 0x0F;
+            QList<double> pv(psumon::kNumFields, 0.0);
+            QByteArray burst;
+            for (int i = 0; i < 20; ++i) burst += proto::trbmon::buildFrame(i / 8, i % 8, tv);
+            for (int a = 1; a <= 5; ++a) burst += monitorFrame(a, pv);
+            QCOMPARE(burst.size(), 7750);
+            QCOMPARE(psumon::kLength, proto::trbmon::kLength);
+            for (int i = 0; i < burst.size(); i += chunk) tp->inject(burst.mid(i, chunk));
+            QCOMPARE(trbs.count(model::Status::Ok), 20);
+            QCOMPARE(trbs.trb(2, 3).frames, quint64(1));                // TRB thứ 20 không mất
+            QCOMPARE(trbs.trb(2, 4).frames, quint64(0));
+            for (int a = 1; a <= 5; ++a) QCOMPARE(psus.psu(a).frames, quint64(1));
+            QCOMPARE(trbMon.badAddressFrames(), quint64(0));
+            QCOMPARE(psuMon.badAddressFrames(), quint64(0));
+        }
     }
 
     void clusterStatusFollowsAlarmsPerCluster()

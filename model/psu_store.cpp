@@ -65,6 +65,7 @@ void PsuStore::updatePsu(int addr, const QList<double> &values, const QByteArray
     s.alarms = alarms;
     s.lastSeenMs = timestampMs;
     ++s.frames;
+    s.noReply = false;                          // có bản tin thật: hết sự cố
     setStatus(addr, status);
 }
 
@@ -75,6 +76,18 @@ void PsuStore::markStale(qint64 nowMs, int staleMs)
         const bool live = s.status == Status::Ok || s.status == Status::Warning || s.status == Status::Trip;
         if (live && nowMs - s.lastSeenMs > staleMs) setStatus(m_firstAddr + i, Status::Lost);
     }
+}
+
+void PsuStore::setNoReply(int addr, bool on)
+{
+    if (contains(addr)) m_psus[addr - m_firstAddr].noReply = on;
+}
+
+void PsuStore::markSilent(int addr)
+{
+    if (!contains(addr)) return;
+    const Status s = m_psus.at(addr - m_firstAddr).status;
+    if (s == Status::Ok || s == Status::Warning || s == Status::Trip) setStatus(addr, Status::Lost);   // chưa có số liệu thì giữ "chưa có dữ liệu"
 }
 
 void PsuStore::setStatus(int addr, Status to)

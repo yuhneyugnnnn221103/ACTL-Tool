@@ -1,11 +1,11 @@
 #pragma once
-// Bản tin giám sát PSU, CMD 2 byte 81 81, 266 byte (theo "Định nghĩa bản tin"), CRC phủ từ byte CMD:
+// Bản tin giám sát PSU, CMD 2 byte 81 81, 310 byte (cùng độ dài với khung giám sát TRB; các byte thêm là dự phòng) (theo "Định nghĩa bản tin"), CRC phủ từ byte CMD:
 // [AB CD][81 81][Addr][CỤM 1..4: 4x48B][SUPPLY 24B][RTC 7B][Trip 10B][Dự phòng 24B][CRC 2B][E1 E2]
 // Mỗi cụm: 6 giá trị ADC + 2 giá trị AMC (3 byte) rồi 12 giá trị XDP (2 byte).
 // Giá trị là số thô (chưa có công thức quy đổi). Supply là thanh ghi CURRENT / VBUS của INA228 (3 byte, dữ liệu ở bit 23..4):
 // dòng có dấu (bù 2, 24 bit), áp không dấu. Giá trị lưu trong app là thô đủ 24 bit (so ngưỡng cùng đơn vị với firmware);
 // khi hiển thị thì dịch phải 4 bit (supplyShown).
-// Vùng dự phòng 24 byte (byte 239..262) là mở rộng của firmware APSU: chỉ dùng 4 trạng thái an toàn, 4 cờ EN, 4 bộ đếm trip (theo cụm), slot và version; còn lại dự phòng.
+// Vùng dự phòng 24 byte (byte 239..262) là mở rộng của firmware APSU; byte 263..306 là dự phòng: chỉ dùng 4 trạng thái an toàn, 4 cờ EN, 4 bộ đếm trip (theo cụm), slot và version; còn lại dự phòng.
 #include "../core/frame.h"
 #include "field_table.h"
 #include <QSet>
@@ -13,7 +13,7 @@
 
 namespace proto::psumon {
 
-constexpr int kLength = 266, kCrcStart = 2, kOffAddr = 4;
+constexpr int kLength = 310, kCrcStart = 2, kOffAddr = 4;
 constexpr int kNumCluster = 4, kClusterFields = 20, kNumSupply = 8, kNumRtc = 7, kNumTrip = 10;
 constexpr int kPollLength = 13;   // khung hỏi 02 02
 
@@ -54,7 +54,7 @@ QByteArray cmd();   // 81 81
 QByteArray pollCmd();                       // 02 02
 core::FrameSpec pollSpec(bool checkCrc);    // khung hỏi giám sát 13 byte (cho giả lập/test)
 QByteArray buildPoll(int addr);
-QByteArray buildFrame(int addr, const QList<double> &values);   // 81 81 đủ 266 byte (giả lập/test)
+QByteArray buildFrame(int addr, const QList<double> &values);   // 81 81 đủ 310 byte (giả lập/test)
 core::FrameSpec spec(bool checkCrc);
 const FieldTable &table();
 

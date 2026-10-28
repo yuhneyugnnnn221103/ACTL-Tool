@@ -124,7 +124,7 @@ def trb_frame(mb, trb, rng, *, isen=None, v=150, i=500, power_temp=40, mcu=50, h
 
 # ----------------------------------------------------------------------------- bản tin PSU
 
-PSU_LEN, PSU_CRC_START, PSU_ADDR = 266, 2, 4      # CMD 2 byte (81 81), địa chỉ ở byte 4
+PSU_LEN, PSU_CRC_START, PSU_ADDR = 310, 2, 4      # CMD 2 byte (81 81), địa chỉ ở byte 4
 PSU_CLUSTER_OFF, PSU_CLUSTER_SIZE = 5, 48
 PSU_SUPPLY_OFF, PSU_RTC_OFF, PSU_TRIP_OFF, PSU_TRIP_COUNT = 197, 221, 228, 10
 
@@ -634,8 +634,8 @@ def cmd_selftest(_args):
     check(crc16(t[4:TRB_LEN - 4]) == (t[TRB_LEN - 4] << 8 | t[TRB_LEN - 3]) and t[TRB_LEN - 2:] == bytes([T1, T2]), "TRB CRC từ byte 4, tailer E1 E2")
     check(t[4] == 3 and t[5] == 5 and t[TRB_TRIP0:TRB_TRIP0 + 16] == bytes([1] * 16), "địa chỉ và trip code đúng vị trí")
     p = psu_frame(2, rng, trips=[0xAA] * 10)
-    check(len(p) == PSU_LEN and p[2:4] == b"\x81\x81" and p[PSU_ADDR] == 2, "PSU 266 byte, CMD 81 81, địa chỉ ở byte 4")
-    check(crc16(p[2:262]) == (p[262] << 8 | p[263]), "PSU CRC từ byte 2 (CMD)")
+    check(len(p) == PSU_LEN and p[2:4] == b"\x81\x81" and p[PSU_ADDR] == 2, "PSU 310 byte, CMD 81 81, địa chỉ ở byte 4")
+    check(crc16(p[2:306]) == (p[306] << 8 | p[307]), "PSU CRC từ byte 2 (CMD)")
     check(p[PSU_TRIP_OFF:PSU_TRIP_OFF + 10] == bytes([0xAA] * 10), "PSU trip code đúng vị trí")
     check(PSU_CLUSTER_OFF + 4 * PSU_CLUSTER_SIZE == PSU_SUPPLY_OFF and sum(s for _, s in PSU_CLUSTER_FIELDS) == PSU_CLUSTER_SIZE,
           "cụm PSU 48 byte, Supply ngay sau 4 cụm")

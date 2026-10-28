@@ -182,3 +182,5 @@ Bản tin cấu hình và nạp code (TRB `A1/A3`, PSU `03 03/04 04`, nạp FPGA
 Tab Hex thô cũng hiện các byte bị loại, hiện ở mọi trang: `RX LỖI CRC` và `RX LỖI ĐUÔI` (nguyên khung đủ độ dài nhưng sai CRC hoặc đuôi, một dòng cho cả khung), `RX BỎ QUA` (đoạn byte rác hoặc khung CMD lạ). Byte `0x00` đệm của Gateway không tính là rác nên không hiện.
 
 **Calib**: tab gửi bản tin Calib (`AB CD 18 18 MB TRB` + RX_CHN_EN 4 byte + TX_CHN_EN 4 byte + 32 kênh x (phase TX, phase RX, amp TX, amp RX) + 4 byte dự phòng + CRC + `E1 E2`, 150 byte, CRC từ byte MB) qua RS485 kèm byte thiết bị `01`. Tích chọn kênh RX/TX, nhập giá trị số nguyên không dấu, nhập/xuất file JSON để dùng lại; chi tiết ở `docs/control_frame.md`.
+
+Bản tin giám sát PSU (`81 81`) dài 310 byte như TRB (byte 263..306 dự phòng). PSU cũng có X (khung rỗng của Gateway, hiện ngay), ? (quá hạn) và OFF (cụm tắt) trên tổng quan; một lượt Gateway gửi 20 TRB + 5 PSU (7750 byte) được tách theo CMD `23 23` / `81 81`.

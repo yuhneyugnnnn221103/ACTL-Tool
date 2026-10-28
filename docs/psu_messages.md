@@ -27,7 +27,7 @@ Tài liệu này tổng hợp mọi bản tin liên quan tới PSU trong ACTL To
 
 | Bản tin | CMD | Hướng | Độ dài (byte) | Ghi chú |
 |---|---|---|---|---|
-| Giám sát PSU | `81 81` | PSU → app | 266 | Số liệu 4 cụm DCM, nguồn phụ, RTC, trip |
+| Giám sát PSU | `81 81` | PSU → app | 310 | Số liệu 4 cụm DCM, nguồn phụ, RTC, trip |
 | Điều khiển PSU | `01 01` | app → PSU | 13 | Bật/tắt 4 cụm, Clear trip; không ACK |
 | Hỏi giám sát PSU | `02 02` | app/Gateway → PSU | 13 | Trả lời `81 81`; app có hàm dựng khung nhưng chưa tự gửi |
 | Hỏi cấu hình PSU | `03 03` | app → PSU | 13 | Trả lời bằng `82 82` |
@@ -44,7 +44,7 @@ Tài liệu này tổng hợp mọi bản tin liên quan tới PSU trong ACTL To
 
 Firmware PSU **không tự phát**: chỉ trả lời, và trả ra đúng cổng đã nhận lệnh. Khung hỏi giám sát `02 02` (13 byte: `AB CD 02 02 Addr 00 00 00 00 CRC E1 E2`) do Gateway gửi; app chỉ nhận khung `81 81` Gateway chuyển lên (có sẵn hàm dựng `02 02` trong `proto/psu_monitor_proto`). Khung gửi sai địa chỉ thì PSU bỏ qua, không phản hồi.
 
-## 2. Giám sát `81 81` (266 byte)
+## 2. Giám sát `81 81` (310 byte)
 
 Bố cục: `[AB CD][81 81][Addr][CỤM 1..4: 4 x 48 B][SUPPLY 24 B][RTC 7 B][TRIP 10 B][Mở rộng firmware 24 B][CRC 2 B][E1 E2]`
 
@@ -61,8 +61,9 @@ Bố cục: `[AB CD][81 81][Addr][CỤM 1..4: 4 x 48 B][SUPPLY 24 B][RTC 7 B][TR
 | 222-228 | RTC | 7 byte, mỗi trường 1 byte |
 | 229-238 | Trip | 10 trip code, mỗi cái 1 byte |
 | 239-262 | Mở rộng firmware | 24 byte (xem 2.5): ACTL chỉ dùng 4 trạng thái an toàn, 4 cờ EN, 4 bộ đếm trip (theo cụm), slot, version; còn lại dự phòng |
-| 263-264 | CRC | CRC16 từ byte 3 đến byte 262 |
-| 265-266 | Đuôi | `E1 E2` |
+| 263-306 | Dự phòng | 44 byte |
+| 307-308 | CRC | CRC16 từ byte 3 đến byte 306 |
+| 309-310 | Đuôi | `E1 E2` |
 
 ### 2.1 Một cụm DCM (cụm 1, byte 6-53)
 
@@ -162,6 +163,10 @@ Vùng dự phòng 24 byte được firmware APSU dùng làm vùng mở rộng. O
 | +17..+23 | 256-262 | 7 | | 0 (dự phòng) |
 
 Giao diện hiện các giá trị này ở khung "Trạng thái PSU" (cột phải) trên trang PSU. Hai trạng thái **TRIPPED** và **LOCKOUT** ảnh hưởng tới điều khiển (mục 3).
+
+### 2.5a Khung rỗng (X) và quá hạn (?)
+
+Như TRB: PSU không phản hồi thì Gateway thay bằng **khung rỗng** 310 byte `AB CD 81 81 ADDR`, dữ liệu và CRC toàn `00`, `E1 E2` (giả định cùng quy ước với TRB). Nhận khung rỗng thì ô PSU hiện **X** ngay từ khung đầu, kể cả khi chưa có dữ liệu; đủ `system/emptyFramesToLost` khung rỗng liên tiếp (mặc định 3) thì PSU chuyển Mất kết nối và giữ số liệu cuối. Có bản tin thật thì X mất. Quá `system/staleMs` không có khung mới thì hiện **?**.
 
 ### 2.5b Trạng thái từng cụm trên trang tổng quan
 

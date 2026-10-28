@@ -72,6 +72,7 @@ int main(int argc, char *argv[])
     services::TrbConfig trbConfig(ctx.serviceLink, &thresholds, cfg.thresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
     services::AlarmEngine psuAlarms(&psuThresholds, &proto::psumon::table());
     services::PsuMonitor psuMonitor(ctx.monitorLink, &psuStore, &psuAlarms);
+    psuMonitor.setEmptyLimit(cfg.emptyFramesToLost);
     services::PsuControl psuControl(ctx.monitorLink);
     services::PsuConfig psuConfig(ctx.serviceLink, &psuThresholds, cfg.psuThresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
     services::CsvLogger logger(cfg.logDir, cfg.logPeriodMs, qint64(cfg.logMaxFileMb) * 1024 * 1024,

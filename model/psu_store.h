@@ -12,6 +12,7 @@ struct PsuState {
     QList<double> values;   // theo thứ tự bảng trường proto::psumon::table()
     QList<int> alarms;      // chỉ số các trường đang vượt ngưỡng
     QByteArray raw;
+    bool noReply = false;   // Gateway vừa báo PSU không phản hồi (khung rỗng) và chưa có bản tin thật nào sau đó: tổng quan hiện "X" ngay, kể cả khi chưa có dữ liệu
 };
 
 class PsuStore : public QObject {
@@ -39,6 +40,8 @@ public:
     void updatePsu(int addr, const QList<double> &values, const QByteArray &raw, qint64 timestampMs,
                    Status status, const QList<int> &alarms = {});
     void markStale(qint64 nowMs, int staleMs); // quá hạn -> Lost
+    void setNoReply(int addr, bool on);
+    void markSilent(int addr);                 // Gateway báo PSU không phản hồi đủ số khung rỗng liên tiếp: Ok/Warning/Trip -> Lost (giữ số liệu cuối)
 
 signals:
     void psuStatusChanged(int addr, model::Status from, model::Status to);

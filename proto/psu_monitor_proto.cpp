@@ -33,7 +33,8 @@ QByteArray cmd() { return QByteArray::fromHex("8181"); }
 
 core::FrameSpec spec(bool checkCrc)
 {
-    return {cmd(), kLength, kCrcStart, checkCrc, QStringLiteral("PSU giám sát")};
+    // Gateway thay khung của PSU không phản hồi / sai CRC / lỗi bằng khung chỉ có địa chỉ: AB CD 81 81 ADDR, data và CRC toàn 0x00, E1 E2 (như TRB).
+    return {cmd(), kLength, kCrcStart, checkCrc, QStringLiteral("PSU giám sát"), kOffAddr + 1};
 }
 
 static FieldTable build()
@@ -65,7 +66,7 @@ static FieldTable build()
     at(QStringLiteral("FW.SLOT"), 12, 1);
     at(QStringLiteral("FW.VERSION"), 13, 4);
     off = ext + 22;
-    Q_ASSERT(t.size() == kNumFields && off == kLength - 4 - 2);
+    Q_ASSERT(t.size() == kNumFields && off == 260);   // trường cuối kết thúc ở byte 260; byte 263..306 dự phòng rồi CRC, E1 E2
     return t;
 }
 

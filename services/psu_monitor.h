@@ -13,6 +13,7 @@ public:
 
     PsuMonitor(core::Link *link, model::PsuStore *store, AlarmEngine *alarms = nullptr, QObject *parent = nullptr);
     quint64 badAddressFrames() const { return m_badAddress; }
+    void setEmptyLimit(int n) { m_emptyLimit = qMax(1, n); }   // số khung rỗng liên tiếp của Gateway để coi PSU mất kết nối (X hiện ngay từ khung đầu)
 
 public slots:
     void onFrame(const core::Frame &frame);
@@ -24,6 +25,8 @@ private:
     model::PsuStore *m_store;
     AlarmEngine *m_alarms;
     quint64 m_badAddress = 0;
+    int m_emptyLimit = 3;
+    QHash<int, int> m_emptyRun;
 };
 
 } // namespace services
