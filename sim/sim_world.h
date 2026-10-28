@@ -16,7 +16,7 @@ class SimWorld : public QObject {
     Q_OBJECT
 public:
     struct Stats {
-        quint64 polls = 0, controls = 0, beams = 0, configReads = 0, configWrites = 0;
+        quint64 polls = 0, controls = 0, beams = 0, configReads = 0, configWrites = 0, calibs = 0;
         quint64 ignored = 0;        // khung gửi tới địa chỉ không tồn tại
         quint64 debugConflicts = 0; // số lần có từ hai TRB cùng ở chế độ debug
     };

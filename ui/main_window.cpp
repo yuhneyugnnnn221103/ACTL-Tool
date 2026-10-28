@@ -2,6 +2,7 @@
 #include "overview_grid.h"
 #include "auth.h"
 #include "beam_eth_page.h"
+#include "calib_page.h"
 #include "firmware_page.h"
 #include "psu_config_page.h"
 #include "psu_grid.h"
@@ -107,8 +108,8 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     setMinimumSize(1100, 560);   // đặt sẵn để layout không tự nới cửa sổ quá màn hình; trang nào lớn hơn thì cuộn
     // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
     // Đường kết nối của từng trang: 0 giám sát (Ethernet; điều khiển PSU và beam cũng đi đường này), 1 RS485 (cấu hình, nạp code, điều khiển và beam TRB), -1 không có.
-    m_pageConn = {0, 0, 1, 0, 1, 1, 0, -1};
-    m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogBeam, LogSystem};
+    m_pageConn = {0, 0, 1, 0, 1, 1, 0, 1, -1};
+    m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogBeam, LogCalib, LogSystem};
 
     // Điều hướng trái + các trang.
     m_nav = new QListWidget;
@@ -140,6 +141,14 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     auto *beamPage = new BeamEthPage(ctx);
     m_pages->addWidget(scrollPage(beamPage));
     connect(beamPage, &BeamEthPage::logEvent, this, [this](const QString &text) { logEvent(text, LogBeam); });
+    m_nav->addItem(QStringLiteral("Calib"));
+    auto *calibPage = new CalibPage(ctx);
+    m_pages->addWidget(scrollPage(calibPage));
+    connect(ctx.trbCalib, &services::TrbCalib::commandFinished, this, [this](const QString &d, bool sent) {
+        logEvent(tagged(sent ? EventKind::Ctrl : EventKind::Err,
+                         (sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa mở cổng RS485: ")) + d),
+                 LogCalib);
+    });
     m_nav->addItem(QStringLiteral("Giả lập"));
     auto *simPage = new SimPage(ctx);
     m_pages->addWidget(scrollPage(simPage));

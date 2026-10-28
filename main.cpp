@@ -76,6 +76,8 @@ int main(int argc, char *argv[])
     services::PsuConfig psuConfig(ctx.serviceLink, &psuThresholds, cfg.psuThresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
     services::CsvLogger logger(cfg.logDir, cfg.logPeriodMs, qint64(cfg.logMaxFileMb) * 1024 * 1024,
                                &proto::trbmon::table(), &proto::psumon::table());
+    services::TrbCalib trbCalib(ctx.serviceLink);   // bản tin Calib (18 18) gửi qua RS485
+    ctx.trbCalib = &trbCalib;
     services::FpgaOta fpgaOta(ctx.serviceLink);
     services::StmOta stmOta(ctx.serviceLink);
     ctx.fpgaOta = &fpgaOta;

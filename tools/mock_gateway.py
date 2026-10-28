@@ -491,6 +491,7 @@ def cmd_thresholds(args):
 
 # ----------------------------------------------------------------------------- RS485 giả (pty)
 
+CALIB_LEN = 150
 TRB_CFG_LEN, TRB_CFG_READ_LEN = 520, 10
 PSU_CFG_LEN, PSU_CFG_READ_LEN = 915, 13
 
@@ -535,6 +536,8 @@ class SerialResponder:
                 n, kind = TRB_CFG_LEN, "ghi TRB"
             elif dev == 1 and cmd2 == b"\xA3\xA3":
                 n, kind = TRB_CFG_READ_LEN, "đọc TRB"
+            elif dev == 1 and cmd2 == b"\x18\x18":
+                n, kind = CALIB_LEN, "calib TRB"
             elif dev == 2 and cmd2 == b"\x04\x04":
                 n, kind = PSU_CFG_LEN, "ghi PSU"
             elif dev == 2 and cmd2 == b"\x03\x03":
@@ -555,6 +558,11 @@ class SerialResponder:
         return replies
 
     def _handle(self, kind, f):
+        if kind == "calib TRB":                           # không có ACK: chỉ ghi nhận
+            rx = int.from_bytes(f[6:10], "big")
+            tx = int.from_bytes(f[10:14], "big")
+            self.log(f"  calib MB{f[4]}/TRB{f[5]}: RX_EN={rx:08X} TX_EN={tx:08X} kênh0 phaseTX={f[14]} phaseRX={f[15]} ampTX={f[16]} ampRX={f[17]}")
+            return []
         is_trb = kind.endswith("TRB")
         key = (f[4], f[5]) if is_trb else f[PSU_ADDR]
         name = f"MB{key[0]}/TRB{key[1]}" if is_trb else f"PSU {key}"
@@ -690,6 +698,9 @@ def cmd_selftest(_args):
     ctl_r = SerialResponder(rng=random.Random(4), log=logged.append)
     ctl = bytearray(14); ctl[2] = ctl[3] = 0xA2; ctl[4], ctl[5], ctl[6], ctl[7] = 7, 3, 5, 0x03
     check(ctl_r.feed(wrap(0, seal(ctl, 4))) == [] and any("điều khiển TRB MB8/TRB4" in l for l in logged), "RS485 nhận khung điều khiển tổng 107 byte (A2)")
+    cal = bytearray(CALIB_LEN); cal[2] = cal[3] = 0x18; cal[4], cal[5] = 2, 5; cal[6] = 0x80; cal[13] = 0x01; cal[14:18] = bytes([11, 12, 13, 14])
+    logged.clear()
+    check(ctl_r.feed(dev(1, seal(cal, 4))) == [] and any("calib MB2/TRB5: RX_EN=80000000 TX_EN=00000001" in l and "phaseTX=11" in l for l in logged), "RS485 nhận bản tin Calib 18 18 (150 byte + byte thiết bị 01)")
     check(r.feed(seal(bytearray(rd), 2)) == [], "khung PSU thiếu byte thiết bị bị bỏ qua")
     check(r.feed(dev(1, seal(bytearray(rd), 2))) == [], "byte thiết bị sai loại (TRB cho khung PSU) bị bỏ qua")
     junk = r.feed(b"\x00\xFF\xAB" + dev(2, seal(bytearray(rd), 2)))

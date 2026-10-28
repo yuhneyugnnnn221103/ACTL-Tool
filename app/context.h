@@ -9,6 +9,7 @@
 #include "../services/psu_config.h"
 #include "../services/psu_control.h"
 #include "../services/stm_ota.h"
+#include "../services/trb_calib.h"
 #include "../services/trb_config.h"
 #include "../services/trb_control.h"
 
@@ -26,6 +27,7 @@ struct AppContext {
     core::SerialTransport *serial = nullptr;
     services::TrbControl *trbControl = nullptr;
     services::TrbConfig *trbConfig = nullptr;
+    services::TrbCalib *trbCalib = nullptr;
     services::PsuControl *psuControl = nullptr;
     services::PsuConfig *psuConfig = nullptr;
     services::FpgaOta *fpgaOta = nullptr;

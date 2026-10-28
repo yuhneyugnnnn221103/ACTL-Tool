@@ -5,6 +5,7 @@
 #include "../model/device_store.h"
 #include "../model/thresholds.h"
 #include "../proto/device_select_proto.h"
+#include "../proto/trb_calib_proto.h"
 #include "../proto/trb_config_proto.h"
 #include "../proto/trb_control_proto.h"
 #include "../proto/beam_eth_proto.h"
@@ -13,6 +14,7 @@
 #include "../services/alarm_engine.h"
 #include "../sim/sim_world.h"
 #include "../services/csv_logger.h"
+#include "../services/trb_calib.h"
 #include "../services/trb_config.h"
 #include "../services/trb_control.h"
 #include "../services/trb_monitor.h"
@@ -274,6 +276,83 @@ private slots:
         for (int i = 0; i < trbmon::kNumTrip; ++i)
             if (trbmon::tripName(i) != QStringLiteral("Dự phòng")) names.insert(trbmon::tripName(i));
         QCOMPARE(names.size(), 14);
+    }
+
+    // ---------- Bản tin Calib ----------
+    void calibFrameLayoutAndFile()
+    {
+        namespace cb = proto::calib;
+        cb::Data d;
+        d.rxEn = 0x80000001u | (1u << 9);        // kênh 0, 9, 31
+        d.txEn = 1u << 24;                       // kênh 24
+        d.phaseTx[0] = 11; d.phaseRx[0] = 12; d.ampTx[0] = 13; d.ampRx[0] = 14;
+        d.phaseTx[1] = 21; d.phaseRx[1] = 22; d.ampTx[1] = 23; d.ampRx[1] = 24;
+        d.phaseTx[31] = 201; d.phaseRx[31] = 202; d.ampTx[31] = 203; d.ampRx[31] = 255;
+        const QByteArray f = cb::buildFrame(2, 5, d);
+        QCOMPARE(f.size(), 150);
+        QCOMPARE(f.left(6).toHex(), QByteArray("abcd18180205"));              // AB CD 18 18 MB TRB
+        QCOMPARE(f.right(2).toHex(), QByteArray("e1e2"));
+        QVERIFY(crcOk(f, 4));                                                  // CRC phủ từ byte MB (byte 5)
+        // RX_CHN_EN byte 7..10 (byte 7 = kênh 24-31, byte 10 = kênh 0-7): kênh 31 -> byte 7 bit 7; kênh 9 -> byte 9 bit 1; kênh 0 -> byte 10 bit 0
+        QCOMPARE(f.mid(6, 4).toHex(), QByteArray("80000201"));
+        QCOMPARE(f.mid(10, 4).toHex(), QByteArray("01000000"));                // TX: kênh 24 -> byte 11 bit 0
+        QCOMPARE(f.mid(14, 4).toHex(), QByteArray("0b0c0d0e"));                // kênh 0: byte 15..18 = phase TX, phase RX, amp TX, amp RX
+        QCOMPARE(f.mid(18, 4).toHex(), QByteArray("15161718"));                // kênh 1 từ byte 19
+        QCOMPARE(f.mid(138, 4).toHex(), QByteArray("c9cacbff"));               // kênh 31 từ byte 139 tới 142
+        QCOMPARE(f.mid(142, 4), QByteArray(4, '\0'));                          // dự phòng 143-146
+
+        cb::Data back;
+        QVERIFY(cb::parseFrame(f, back));
+        QCOMPARE(back.rxEn, d.rxEn);
+        QCOMPARE(back.txEn, d.txEn);
+        QCOMPARE(int(back.ampRx[31]), 255);
+        QCOMPARE(cb::buildFrame(2, 5, back), f);
+
+        cb::Data fromFile;                                                     // xuất rồi nhập lại file JSON giữ nguyên mọi giá trị
+        QVERIFY(cb::fromJson(cb::toJson(d), fromFile).isEmpty());
+        QCOMPARE(cb::buildFrame(2, 5, fromFile), f);
+        // file hỏng bị từ chối và không ghi đè dữ liệu
+        QJsonObject bad = cb::toJson(d);
+        QJsonArray ch = bad.value("channels").toArray();
+        QJsonObject c0 = ch.at(0).toObject();
+        c0["amp_rx"] = 256;
+        ch[0] = c0;
+        bad["channels"] = ch;
+        cb::Data keep = d;
+        QVERIFY(cb::fromJson(bad, keep).contains("amp_rx"));
+        QCOMPARE(keep.rxEn, d.rxEn);
+        QJsonObject badCh = cb::toJson(d);
+        badCh["rx_enabled"] = QJsonArray{40};
+        QVERIFY(!cb::fromJson(badCh, keep).isEmpty());
+        QVERIFY(!cb::fromJson(QJsonObject(), keep).isEmpty());
+    }
+
+    // Gửi Calib: đi qua đường RS485 với byte thiết bị 0x01 (TRB) sau AB CD, Gateway bỏ byte đó ra khung 150 byte; không chờ trả lời.
+    void calibServiceAddsDeviceByte()
+    {
+        Rig rig("service");
+        rig.link.start();
+        services::TrbCalib calib(&rig.link);
+        QSignalSpy done(&calib, &services::TrbCalib::commandFinished);
+        proto::calib::Data d;
+        d.rxEn = 0xF;
+        d.phaseTx[3] = 77;
+        calib.send(1, 2, d);
+        QVERIFY(done.wait(1000));
+        QVERIFY(done.last().at(1).toBool());
+        QVERIFY(done.last().at(0).toString().contains("MB2 / TRB3"));
+        QCOMPARE(rig.transport->written.size(), 1);
+        const QByteArray sent = rig.transport->written.first();
+        QCOMPARE(sent.size(), 151);
+        QCOMPARE(sent.left(5).toHex(), QByteArray("abcd011818"));              // AB CD DEV(01) 18 18
+        QCOMPARE(proto::devsel::strip(sent), proto::calib::buildFrame(1, 2, d));
+        calib.send(proto::calib::kBroadcast, proto::calib::kBroadcast, d);
+        QVERIFY(done.wait(1000));
+        QVERIFY(done.last().at(0).toString().contains("tất cả TRB"));
+        // nhóm log của khung Calib (có hoặc không có byte thiết bị)
+        QCOMPARE(ui::classifyFrame(sent).group, int(ui::LogCalib));
+        QCOMPARE(ui::classifyFrame(proto::devsel::strip(sent)).group, int(ui::LogCalib));
+        QCOMPARE(ui::classifyFrame(proto::devsel::add(proto::devsel::Trb, trbcfg::buildReadRequest(1, 1))).group, int(ui::LogTrbConfig));   // khung cấu hình có DEV vẫn vào đúng nhóm
     }
 
     // ---------- Byte chọn thiết bị ----------

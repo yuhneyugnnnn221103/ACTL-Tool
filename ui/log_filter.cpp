@@ -22,7 +22,23 @@ QString eventTag(EventKind k)
 
 QString tagged(EventKind k, const QString &text) { return QStringLiteral("[%1] %2").arg(eventTag(k), text); }
 
+static FrameClass classifyPlain(const QByteArray &raw);
+
+// Khung PC gửi xuống Gateway qua RS485 có thêm byte thiết bị (01 TRB, 02 PSU, 03 TRSU) sau AB CD: nếu phân loại nguyên khung không ra nhóm nào
+// thì thử bỏ byte đó đi.
 FrameClass classifyFrame(const QByteArray &raw)
+{
+    FrameClass c = classifyPlain(raw);
+    if (c.group == LogSystem && raw.size() >= 5 && quint8(raw.at(2)) >= 1 && quint8(raw.at(2)) <= 3) {
+        QByteArray stripped = raw;
+        stripped.remove(2, 1);
+        const FrameClass s = classifyPlain(stripped);
+        if (s.group != LogSystem) return s;
+    }
+    return c;
+}
+
+static FrameClass classifyPlain(const QByteArray &raw)
 {
     FrameClass c;
     if (raw.size() < 4) return c;
@@ -36,6 +52,10 @@ FrameClass classifyFrame(const QByteArray &raw)
         break;
     case 0xA1A1: case 0xA3A3: case 0xA4A4:
         c.group = LogTrbConfig;
+        break;
+    case 0x1818:            // Calib
+        c.group = LogCalib;
+        if (raw.size() >= 6) { c.mb = quint8(raw.at(4)); c.trb = quint8(raw.at(5)); }
         break;
     case 0x8181: case 0x0101:
         c.group = LogPsuMonitor;

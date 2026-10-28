@@ -1,5 +1,6 @@
 #include "sim_world.h"
 #include "../proto/control_frame_proto.h"
+#include "../proto/trb_calib_proto.h"
 #include "../proto/trb_config_proto.h"
 #include "../proto/trb_control_proto.h"
 #include "../proto/trb_monitor_proto.h"
@@ -16,6 +17,7 @@ bool registerRequestFrames(core::FrameRegistry &registry, bool checkCrc)
     // Khung cấu hình có thêm byte thiết bị (0x01 = TRB) sau AB CD: khóa tra cứu là {DEV, byte CMD đầu}, CRC vẫn tính từ byte địa chỉ (lùi 1 vì có DEV).
     ok &= registry.add({QByteArray::fromHex("01A1"), trbcfg::kLength + 1, 5, checkCrc, QStringLiteral("TRB ghi cấu hình")});
     ok &= registry.add({QByteArray::fromHex("01A3"), 10 + 1, 5, checkCrc, QStringLiteral("TRB hỏi cấu hình")});
+    ok &= registry.add({QByteArray::fromHex("0118"), proto::calib::kLength + 1, 5, checkCrc, QStringLiteral("TRB Calib")});   // 01 = byte thiết bị TRB, 18 = CMD
     core::FrameSpec control{QByteArray(1, char(ctlframe::kCmd)), ctlframe::kLength, 0, false, QStringLiteral("Điều khiển tổng")};
     control.tailer = false;                          // khung điều khiển tổng không có CRC tổng, đuôi 3 byte E1 E2 E3 nên không dùng kiểm tra đuôi 2 byte của parser
     ok &= registry.add(control);
@@ -107,6 +109,9 @@ QByteArray SimWorld::handle(const core::Frame &frame)
         for (TrbModel *m : list) if (m->online()) m->applyBeam(b);
         return {};
     }
+    case 0x18:                                       // Calib: không có ACK (chỉ đếm, mô hình chưa lưu giá trị)
+        ++m_stats.calibs;
+        return {};
     case 0xA1:                                       // ghi cấu hình: không có ACK
         ++m_stats.configWrites;
         for (TrbModel *m : list) if (m->online()) m->writeConfig(frame);
