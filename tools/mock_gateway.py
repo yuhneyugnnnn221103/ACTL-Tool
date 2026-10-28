@@ -108,7 +108,7 @@ def trb_frame(mb, trb, rng, *, isen=None, v=150, i=500, power_temp=40, mcu=50, h
     f[TRB_ADAR], f[TRB_PA], f[TRB_PG] = adar, pa, pg
     put(f, TRB_MCU, mcu, 2)
     put(f, TRB_HUM, humidity, 2)
-    f[TRB_INIT_DATA] = 0x77                      # bit 0,1,2,4,5,6 = đã khởi tạo xong
+    f[TRB_INIT_DATA] = 0x7F                      # bit 0..6 = đã khởi tạo xong
     for k, n in {2: 3, 7: 1}.items():            # mẫu: vài bộ đếm bản tin lỗi khác 0
         put(f, TRB_ERR0 + 2 * k, n, 2)
     put(f, TRB_PERIOD_TXEN, 1000, 4)

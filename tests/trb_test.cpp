@@ -113,6 +113,14 @@ private slots:
         QCOMPARE(t.fields().at(trbmon::kIdxInitData).name, QStringLiteral("INIT DATA"));
         QCOMPARE(t.fields().at(trbmon::kIdxInitData).offset + 1, 240);   // số byte tính từ 1
         QCOMPARE(t.fields().at(trbmon::kIdxInitData).size, 1);
+        // INIT DATA: 7 bit liên tiếp, LUT = bit 5, Geometry = bit 6; 0x3F sáng 6 đèn đầu (kể cả LUT), Geometry tắt
+        QCOMPARE(trbmon::kNumInitBits, 7);
+        const char *names[7] = {"eMMC Init", "DDR3 Calib", "eMMC Config", "Array Calib", "Amp Calib", "LUT", "Geometry"};
+        for (int i = 0; i < 7; ++i) {
+            QCOMPARE(trbmon::kInitBits[i].bit, i);
+            QCOMPARE(QString::fromLatin1(trbmon::kInitBits[i].name), QString::fromLatin1(names[i]));
+            QCOMPARE((0x3F >> trbmon::kInitBits[i].bit & 1) != 0, i != 6);
+        }
         // Số byte tính từ 1: lỗi 241-264, PERIOD TXEN 265-268, PULSE TXEN 269-270, PERIOD BEAMSYNC 271-274, PULSE BEAMSYNC 275-276, debug 277-295.
         auto first = [&](int idx) { return t.fields().at(idx).offset + 1; };
         QCOMPARE(t.fields().at(trbmon::kIdxErr0).name, QStringLiteral("BẢN TIN LỖI 1"));

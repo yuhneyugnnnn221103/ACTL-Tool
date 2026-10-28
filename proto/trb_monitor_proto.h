@@ -27,10 +27,10 @@ constexpr int kNumDebug = 17;                                // MEM_ERR_1 ... ST
 constexpr int kIdxDebug0 = kIdxPulseBeamsync + 1;
 constexpr int kNumFields = kIdxDebug0 + kNumDebug;
 
-// INIT DATA: mỗi bit 1 = bước khởi tạo đã xong. Bit 3 chưa dùng. Thứ tự hiển thị: kInitBits[0..5].
+// INIT DATA: mỗi bit 1 = bước khởi tạo đã xong; 7 bit liên tiếp 0..6. Thứ tự hiển thị: kInitBits[0..6].
 struct InitBit { int bit; const char *name; };
-constexpr InitBit kInitBits[] = {{0, "eMMC Init"}, {1, "DDR3 Calib"}, {2, "eMMC Config"}, {4, "Array Calib"}, {5, "Amp Calib"}, {6, "LUT"}};
-constexpr int kNumInitBits = 6;
+constexpr InitBit kInitBits[] = {{0, "eMMC Init"}, {1, "DDR3 Calib"}, {2, "eMMC Config"}, {3, "Array Calib"}, {4, "Amp Calib"}, {5, "LUT"}, {6, "Geometry"}};
+constexpr int kNumInitBits = 7;
 QString errName(int i);                  // tên loại bản tin lỗi i (0..11): Beam, Calib PG, Config ADAR, ghi LUT, Control, tra LUT, dịch pha/biên, ghi/kiểm tra calib toàn mảng, ghi config, hỏi cấu hình, hỏi giám sát
 
 // PG (Power Good): bit i = TRM(i+1), 1 = nguồn tốt. Bit 0 trong 4 bit thấp là lỗi và được coi như một trip.

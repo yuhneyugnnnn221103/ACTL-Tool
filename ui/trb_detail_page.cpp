@@ -215,7 +215,7 @@ QWidget *TrbDetailPage::buildMonitor()
     leds->addWidget(ledGroup(QStringLiteral("PG"), numbered(QStringLiteral("TRM%1"), 4), m_ledPg), 1);
     leds->addWidget(ledGroup(QStringLiteral("PA"), numbered(QStringLiteral("TRM%1"), 4), m_ledPa), 1);
 
-    // Hàng kế: INIT DATA (6 ô ứng 6 bit, 0 xám, 1 xanh) bên trái, lưới 2x2 Period/Pulse bên phải.
+    // Hàng kế: INIT DATA (7 ô ứng 7 bit, 0 xám, 1 xanh) bên trái, lưới 2x2 Period/Pulse bên phải.
     QStringList initNames;
     for (const trbmon::InitBit &b : trbmon::kInitBits) initNames << QString::fromLatin1(b.name);
     auto *leds2 = new QHBoxLayout;
