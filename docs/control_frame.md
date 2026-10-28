@@ -59,4 +59,4 @@ PC gửi qua đường RS485, có byte thiết bị `01` (TRB) sau `AB CD` nên 
 | 147-148 | 2 | CRC16 (CRC16-CCITT-FALSE, byte cao trước), phủ từ byte 5 (MB) đến byte 146, như các khung TRB khác |
 | 149-150 | 2 | `E1 E2` |
 
-Tab **Calib**: tích chọn kênh cho RX CHN EN và TX CHN EN (ô tích = bit 1), nhập 4 giá trị số nguyên 0..255 cho từng kênh, nút "Xóa" đưa mọi ô tích về bỏ chọn và mọi giá trị về 0; chọn TRB đích bằng ô MB/TRB hoặc nút Trước/Sau (không còn broadcast). "Nhập file…" và "Xuất file…" đọc ghi file JSON (`rx_enabled`, `tx_enabled` là danh sách kênh bật, `channels` có `ch`, `phase_tx`, `phase_rx`, `amp_tx`, `amp_rx`).
+Tab **Calib**: giao diện đánh số kênh **1-32** (kênh hiển thị n ứng với kênh n-1 trong bản tin và bit n-1 của RX/TX_CHN_EN; file JSON giữ chỉ số 0-31). Tích chọn kênh cho RX CHN EN và TX CHN EN (ô tích = bit 1), nhập 4 giá trị số nguyên 0..255 cho từng kênh, nút "Xóa" đưa mọi ô tích về bỏ chọn và mọi giá trị về 0; chọn TRB đích bằng ô MB/TRB hoặc nút Trước/Sau (không còn broadcast). "Nhập file…" và "Xuất file…" đọc ghi file JSON (`rx_enabled`, `tx_enabled` là danh sách kênh bật, `channels` có `ch`, `phase_tx`, `phase_rx`, `amp_tx`, `amp_rx`).

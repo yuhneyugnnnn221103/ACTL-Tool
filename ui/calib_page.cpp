@@ -35,8 +35,8 @@ QGroupBox *channelGroup(const QString &title, QCheckBox *boxes[], const QString 
     for (int row = 0; row < 4; ++row)
         for (int i = 0; i < 8; ++i) {
             const int c = row * 8 + i;
-            boxes[c] = new QCheckBox(QString::number(c));
-            boxes[c]->setToolTip(tip.arg(c));
+            boxes[c] = new QCheckBox(QString::number(c + 1));   // hiển thị kênh 1-32 (bit 0-31 của bản tin)
+            boxes[c]->setToolTip(tip.arg(c + 1));
             grid->addWidget(boxes[c], row, i);
         }
     auto *all = new QPushButton(QStringLiteral("Chọn hết"));
@@ -62,6 +62,7 @@ QSpinBox *byteBox()
     auto *b = new QSpinBox;
     b->setRange(0, 255);
     b->setAlignment(Qt::AlignRight);
+    b->setFixedWidth(90);
     b->setFrame(false);
     b->setFocusPolicy(Qt::StrongFocus);       // lăn chuột trên bảng cuộn trang, chỉ ô đang được chọn mới đổi giá trị theo con lăn
     return b;
@@ -96,18 +97,25 @@ CalibPage::CalibPage(const AppContext &ctx, QWidget *parent) : QWidget(parent), 
     m_table = new QTableWidget(kChannels, 4);
     m_table->setHorizontalHeaderLabels({QString::fromUtf8(kColumns[0]), QString::fromUtf8(kColumns[1]), QString::fromUtf8(kColumns[2]), QString::fromUtf8(kColumns[3])});
     QStringList rows;
-    for (int c = 0; c < kChannels; ++c) rows << QStringLiteral("CH%1").arg(c);
+    for (int c = 0; c < kChannels; ++c) rows << QStringLiteral("CH%1").arg(c + 1);   // hiển thị kênh 1-32
     m_table->setVerticalHeaderLabels(rows);
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     m_table->setSelectionMode(QAbstractItemView::NoSelection);
+    m_table->verticalHeader()->setDefaultSectionSize(38);   // đủ cao để ô nhập hiện đủ cả hai nút tăng giảm
     m_table->setAlternatingRowColors(false);
     for (int c = 0; c < kChannels; ++c)
         for (int k = 0; k < 4; ++k) {
             m_cell[c][k] = byteBox();
-            m_table->setCellWidget(c, k, m_cell[c][k]);
+            // Ô nhập hẹp, đặt giữa cột: bảng vẫn trải đều hai mép màn hình, khoảng trống giữa các ô là chỗ lăn chuột để cuộn các kênh 1-32.
+            auto *holder = new QWidget;
+            auto *hl = new QHBoxLayout(holder);
+            hl->setContentsMargins(0, 0, 0, 0);
+            hl->addStretch(1);
+            hl->addWidget(m_cell[c][k]);
+            hl->addStretch(1);
+            m_table->setCellWidget(c, k, holder);
         }
     m_table->setMinimumHeight(360);
-    m_table->setFixedWidth(860);                 // thu hẹp bảng để chừa phần trống bên phải: lăn chuột ở đó cuộn cả trang
 
     // Nút.
     auto *import = new QPushButton(QStringLiteral("Nhập file…"));
@@ -142,7 +150,7 @@ CalibPage::CalibPage(const AppContext &ctx, QWidget *parent) : QWidget(parent), 
     masks->addWidget(rx, 1);
     masks->addWidget(tx, 1);
     l->addLayout(masks);
-    l->addWidget(m_table, 1, Qt::AlignLeft);
+    l->addWidget(m_table, 1);
     l->addLayout(buttons);
 
     connect(ctx.serviceLink, &core::Link::stateChanged, this, &CalibPage::showState);
