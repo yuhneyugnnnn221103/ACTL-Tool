@@ -11,7 +11,7 @@
 
 namespace proto::psucfg {
 
-constexpr int kLength = 915, kCrcStart = 2, kOffAddr = 4, kOffMask = 5, kOffFirstField = 7, kRequestLength = 13;
+constexpr int kLength = 915, kCrcStart = 4, kOffAddr = 4, kOffMask = 5, kOffFirstField = 7, kRequestLength = 13;
 constexpr quint16 kConfigMaskAll = 0xFFFF;
 constexpr int kNumCluster = 4;
 

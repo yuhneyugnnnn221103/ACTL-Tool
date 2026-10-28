@@ -4,7 +4,7 @@ namespace proto::stmota {
 
 QByteArray cmdBytes(quint8 code) { return QByteArray(2, char(code)); }
 
-core::FrameSpec ackSpec() { return {cmdBytes(kAck), 17, 2, true, QStringLiteral("STM32 ACK nạp code")}; }
+core::FrameSpec ackSpec() { return {cmdBytes(kAck), 17, 4, true, QStringLiteral("STM32 ACK nạp code")}; }
 
 quint32 crc32(const QByteArray &data)
 {
@@ -25,7 +25,7 @@ static QByteArray sealed(QByteArray f, quint8 cmd, quint8 addr)
 {
     f.replace(2, 2, cmdBytes(cmd));
     f[kOffAddr] = char(addr);
-    core::seal(f, 2);
+    core::seal(f, 4);
     return f;
 }
 

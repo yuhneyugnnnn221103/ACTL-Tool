@@ -12,7 +12,7 @@ QByteArray buildControl(int addr, const ControlCmd &c)
     f[kOffAddr] = char(addr);
     f[kOffMask] = char(c.clusterMask & 0x0F);
     f[kOffClearTrip] = char(c.clearTrip ? 0x01 : 0x00);
-    core::seal(f, 2);
+    core::seal(f, 4);
     return f;
 }
 

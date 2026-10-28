@@ -15,7 +15,7 @@ Mọi lệnh điều khiển của app đi trong một khung cố định 107 by
 
 - Mỗi lần gửi chỉ **một** phần có lệnh: phần đó chứa nguyên khung con (giữ header, CRC, đuôi riêng của nó), bit mask tương ứng = 1, các bit còn lại = 0, mọi phần khác đệm `00`.
 - Tổng 4 + 14 + 17 + 42 + 13 + 14 + 3 (đuôi) = 107 byte (`kLength` trong `proto/control_frame_proto.h`).
-- Khung con TRB tính CRC từ byte địa chỉ (như cũ); khung PSU tính từ CMD (như cũ).
+- Khung con TRB tính CRC từ byte địa chỉ (như cũ); khung PSU cũng tính từ byte địa chỉ (ngay sau CMD), giống TRB.
 
 ## Phần điều khiển beam (42 byte)
 
@@ -38,7 +38,7 @@ Các bản tin cấu hình và nạp code (đường RS485) có thêm **1 byte t
 | `03` | TRSU (dành cho sau này) |
 
 - Áp dụng cho: ghi/đọc cấu hình TRB (`A1`, `A3`), ghi/đọc cấu hình PSU (`04 04`, `03 03`), nạp FPGA của TRB (`0x88`, nạp, xóa, boot, `0x44`) và nạp STM32 của PSU (`90..97`). Khung hỏi/điều khiển/giám sát không đổi.
-- Gateway đọc DEV để biết gửi xuống thiết bị nào, **bỏ byte này đi**, ghép lại khung gốc rồi gửi xuống TRB/PSU. DEV không nằm trong phạm vi CRC nên CRC của khung gốc không đổi (TRB tính từ byte địa chỉ, PSU tính từ CMD).
+- Gateway đọc DEV để biết gửi xuống thiết bị nào, **bỏ byte này đi**, ghép lại khung gốc rồi gửi xuống TRB/PSU. DEV không nằm trong phạm vi CRC nên CRC của khung gốc không đổi (TRB, PSU, STM32 đều tính từ byte địa chỉ, ngay sau CMD).
 - Chiều trả lời (thiết bị về PC) là khung gốc, không có DEV. Đây là giả định của ACTL, Gateway cần giữ nguyên.
 - Độ dài mỗi khung PC gửi xuống tăng thêm 1 byte (ví dụ ghi cấu hình PSU 916 byte, ghi cấu hình TRB 521 byte, gói DATA STM32 270 byte).
 

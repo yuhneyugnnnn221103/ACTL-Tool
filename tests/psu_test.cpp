@@ -108,7 +108,7 @@ private slots:
         v[psumon::kIdxVersion] = 20261013;
         const QByteArray f = psumon::buildFrame(2, v);
         QCOMPARE(f.size(), 310);
-        QVERIFY(crcOk(f, 2));
+        QVERIFY(crcOk(f, 4));
         const QList<double> back = t.decode(f);
         QCOMPARE(back.at(psumon::kIdxSafeState(2)), double(psumon::SafeOn));
         QCOMPARE(back.at(psumon::kIdxSlot), double('B'));
@@ -134,7 +134,7 @@ private slots:
         const QByteArray p = psumon::buildPoll(4);
         QCOMPARE(p.size(), 13);
         QCOMPARE(p.mid(2, 3).toHex(), QByteArray("020204"));
-        QVERIFY(crcOk(p, 2));
+        QVERIFY(crcOk(p, 4));
         QCOMPARE(psumon::tripBitName(0, 2), QStringLiteral("I_5V vượt MAX"));
         QCOMPARE(psumon::tripBitName(1, 7), QStringLiteral("V_3V3_2 dưới MIN"));
         QCOMPARE(psumon::tripBitName(2, 5), QStringLiteral("INA2 SHNTUL"));
@@ -211,7 +211,7 @@ private slots:
         QCOMPARE(f.size(), 13);
         QCOMPARE(f.left(9).toHex(), QByteArray("abcd0101" "03" "05" "01" "0000"));
         QCOMPARE(f.right(2).toHex(), QByteArray("e1e2"));
-        QVERIFY(crcOk(f, 2));
+        QVERIFY(crcOk(f, 4));
         const QByteArray g = psuctl::buildControl(1, {0xFF, false});
         QCOMPARE(quint8(g.at(psuctl::kOffMask)), quint8(0x0F)); // chỉ 4 bit thấp
         QCOMPARE(quint8(g.at(psuctl::kOffClearTrip)), quint8(0));
@@ -222,13 +222,13 @@ private slots:
         const QByteArray r = psucfg::buildReadRequest(2);
         QCOMPARE(r.size(), 13);
         QCOMPARE(r.left(8).toHex(), QByteArray("abcd0303" "02" "000000"));
-        QVERIFY(crcOk(r, 2));
+        QVERIFY(crcOk(r, 4));
 
         QList<double> v = psucfg::defaultValues();
         const QByteArray w = psucfg::buildWrite(2, v);
         QCOMPARE(w.size(), 915);
         QCOMPARE(w.left(7).toHex(), QByteArray("abcd0404" "02" "ffff"));
-        QVERIFY(crcOk(w, 2));
+        QVERIFY(crcOk(w, 4));
         QCOMPARE(psucfg::table().decode(w), v);
     }
 
@@ -257,20 +257,20 @@ private slots:
         const QByteArray b = stmota::buildBegin(3, 0x01020304, 0xAABBCCDD, 7);
         QCOMPARE(b.size(), 21);
         QCOMPARE(b.left(17).toHex(), QByteArray("abcd9090" "03" "01020304" "aabbccdd" "00000007"));
-        QVERIFY(crcOk(b, 2));
+        QVERIFY(crcOk(b, 4));
 
         const QByteArray d = stmota::buildData(2, 0x0102, QByteArray(10, 'x'));
         QCOMPARE(d.size(), 269);
         QCOMPARE(d.left(9).toHex(), QByteArray("abcd9191" "02" "0102" "000a"));
         QCOMPARE(d.mid(9, 10), QByteArray(10, 'x'));
         QCOMPARE(quint8(d.at(19)), quint8(0xFF));                 // chunk cuối đệm 0xFF
-        QVERIFY(crcOk(d, 2));
+        QVERIFY(crcOk(d, 4));
 
         for (quint8 code : {stmota::kEnd, stmota::kCommit, stmota::kInfo}) {
             const QByteArray c = stmota::buildCtrl(5, code);
             QCOMPARE(c.size(), 9);
             QCOMPARE(c.left(5), stmota::cmdBytes(code).prepend(QByteArray::fromHex("abcd")).append(char(5)));
-            QVERIFY(crcOk(c, 2));
+            QVERIFY(crcOk(c, 4));
         }
     }
 
@@ -285,7 +285,7 @@ private slots:
         ack[6] = char(stmota::Ok);
         ack.replace(7, 4, QByteArray::fromHex("0000002A"));
         ack[11] = 'B';
-        core::seal(ack, 2);
+        core::seal(ack, 4);
 
         core::FrameParser parser(&registry);
         QList<core::Frame> got;
@@ -399,7 +399,7 @@ private slots:
             a[4] = char(addr); a[5] = char(ackCmd); a[6] = char(status);
             for (int i = 0; i < 4; ++i) a[7 + i] = char(info >> (24 - 8 * i));
             a[11] = slot; a[12] = char(trial);
-            core::seal(a, 2);
+            core::seal(a, 4);
             return a;
         };
         QList<quint8> cmds;
@@ -441,7 +441,7 @@ private slots:
             QByteArray a(17, 0);
             a.replace(2, 2, stmota::cmdBytes(stmota::kAck));
             a[4] = char(1); a[5] = char(ackCmd); a[6] = char(status); a[10] = char(info); a[11] = slot;
-            core::seal(a, 2);
+            core::seal(a, 4);
             return a;
         };
         tp->onWrite = [&](const QByteArray &raw) {

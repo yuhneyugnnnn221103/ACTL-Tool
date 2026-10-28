@@ -7,7 +7,7 @@ Tài liệu này tổng hợp mọi bản tin liên quan tới PSU trong ACTL To
 | Mục | Nội dung |
 |---|---|
 | Khung | `AB CD` + **CMD 2 byte** + địa chỉ PSU + dữ liệu + **CRC16** (2 byte) + `E1 E2` |
-| CRC | CRC16-CCITT-FALSE (đa thức 0x1021, khởi tạo 0xFFFF), **tính từ byte CMD đến hết dữ liệu**, ghi **byte cao trước** |
+| CRC | CRC16-CCITT-FALSE (đa thức 0x1021, khởi tạo 0xFFFF), **tính từ byte địa chỉ (ngay sau CMD, bỏ CMD ra như TRB) đến hết dữ liệu**, ghi **byte cao trước** |
 | Thứ tự byte | Mọi số nhiều byte đều **big-endian** (byte cao trước), **không dấu**, trừ dòng Supply (`I_*`) và ngưỡng dòng Supply có dấu bù 2 |
 | Vị trí byte | Trong tài liệu này byte đếm **từ 1**: `AB` = 1, `CD` = 2, CMD = 3-4, địa chỉ = 5 |
 | Địa chỉ PSU | 1 byte, mặc định 5 PSU địa chỉ 1 đến 5 (cài đặt `psu/count`, `psu/firstAddr`) |
@@ -62,7 +62,7 @@ Bố cục: `[AB CD][81 81][Addr][CỤM 1..4: 4 x 48 B][SUPPLY 24 B][RTC 7 B][TR
 | 229-238 | Trip | 10 trip code, mỗi cái 1 byte |
 | 239-262 | Mở rộng firmware | 24 byte (xem 2.5): ACTL chỉ dùng 4 trạng thái an toàn, 4 cờ EN, 4 bộ đếm trip (theo cụm), slot, version; còn lại dự phòng |
 | 263-306 | Dự phòng | 44 byte |
-| 307-308 | CRC | CRC16 từ byte 3 đến byte 306 |
+| 307-308 | CRC | CRC16 từ byte 5 (địa chỉ) đến byte 306 |
 | 309-310 | Đuôi | `E1 E2` |
 
 ### 2.1 Một cụm DCM (cụm 1, byte 6-53)
@@ -203,7 +203,7 @@ Mỗi cụm DCM (và ô Supply) có trạng thái riêng, dựa vào 3 byte theo
 | 6 | 1 | Mask | Bit 0..3 = cụm 1..4; **1 = bật, 0 = tắt**. Mỗi cụm (3 DCM) có một chân EN riêng, bit k điều khiển EN cụm k+1 (firmware APSU hiện tại mới lấy bit0, chờ cập nhật theo cụm). App gửi mask theo 4 ô đã tích |
 | 7 | 1 | ClearTrip | `0x01` = PSU xóa các trip code trong bản tin giám sát; `0x00` = không |
 | 8-9 | 2 | Dự phòng | `00 00` |
-| 10-11 | 2 | CRC | CRC16 từ byte 3 đến byte 9 |
+| 10-11 | 2 | CRC | CRC16 từ byte 5 (địa chỉ) đến byte 9 |
 | 12-13 | 2 | Đuôi | `E1 E2` |
 
 - Mỗi lệnh **ghi đè trạng thái bật/tắt**, nên giao diện luôn hỏi xác nhận trước khi gửi. Mỗi cụm DCM (3 DCM) có một chân EN riêng; bit k của Mask điều khiển chân EN cụm k+1. Khi chọn PSU, 4 ô "Bật cụm" được điền sẵn theo `FW.EN1..4` bit0. ****
@@ -216,7 +216,7 @@ Mỗi cụm DCM (và ô Supply) có trạng thái riêng, dựa vào 3 byte theo
 
 ### 4.1 Hỏi cấu hình `03 03` (13 byte)
 
-`[AB CD][03 03][Addr][Dự phòng 4 B][CRC 2 B][E1 E2]`: byte 5 là địa chỉ, byte 6-9 là `00 00 00 00`, CRC từ byte 3 đến byte 9.
+`[AB CD][03 03][Addr][Dự phòng 4 B][CRC 2 B][E1 E2]`: byte 5 là địa chỉ, byte 6-9 là `00 00 00 00`, CRC từ byte 5 (địa chỉ) đến byte 9.
 
 ### 4.2 Ghi `04 04` và trả lời `82 82` (915 byte)
 
@@ -235,7 +235,7 @@ Mỗi cụm DCM (và ô Supply) có trạng thái riêng, dựa vào 3 byte theo
 | 776-847 | INA | 4 INA x 9 thanh ghi x 2 byte = 72 byte |
 | 848-895 | Ngưỡng Supply | 8 giá trị x (MAX, MIN) x 3 byte = 48 byte |
 | 896-911 | Dự phòng | 16 byte |
-| 912-913 | CRC | CRC16 từ byte 3 đến byte 911 |
+| 912-913 | CRC | CRC16 từ byte 5 (địa chỉ) đến byte 911 |
 | 914-915 | Đuôi | `E1 E2` |
 
 Các thanh ghi XDP, ADS, INA hiển thị và nhập dạng **hex** trên giao diện; rê chuột vào trường để xem mô tả (cột Ghi chú).
@@ -378,7 +378,7 @@ Ghi chú theo firmware cho nhóm INA: `SHUNT_CAL` = 0 nghĩa là dùng giá tr�
 
 ## 5. Nạp code STM32 (`90`-`97`)
 
-Mã lệnh là một byte **lặp hai lần** ở phần CMD (ví dụ BEGIN là `90 90`). CRC phủ từ byte CMD.
+Mã lệnh là một byte **lặp hai lần** ở phần CMD (ví dụ BEGIN là `90 90`). CRC phủ từ byte địa chỉ (sau CMD).
 
 ### 5.1 BEGIN `90 90` (21 byte)
 
@@ -449,7 +449,7 @@ Cần mật khẩu kỹ sư để nạp và rollback; PSU phải ở SAFE_OFF m�
 
 ## 6. Khác biệt đã biết với firmware
 
-- CRC tính từ byte CMD (khớp firmware hiện tại). Firmware có macro `PSU_CRC_INCLUDE_CMD` để đổi sang tính từ ADDR; nếu đổi thì phải đổi cả phía app (`core::seal` với `crcStart` của PSU).
+- CRC tính từ byte địa chỉ (ngay sau CMD), giống TRB. Firmware có macro `PSU_CRC_INCLUDE_CMD`: đặt `0` để khớp (CRC không gồm CMD); app dùng `crcStart = 4` cho mọi khung PSU và STM32.
 - RTC và 4 cụm DCM: firmware chưa có nguồn dữ liệu nên gửi `00`; giao diện vẫn hiện (toàn 0).
 - Bảng trip code là tạm thời (mục 2.4).
 - Cổng nào là đường Gateway/dự phòng của PSU chưa chốt (firmware hiện nhận mọi lệnh ở cả 3 cổng).

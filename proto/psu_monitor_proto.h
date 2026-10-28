@@ -1,5 +1,5 @@
 #pragma once
-// Bản tin giám sát PSU, CMD 2 byte 81 81, 310 byte (cùng độ dài với khung giám sát TRB; các byte thêm là dự phòng) (theo "Định nghĩa bản tin"), CRC phủ từ byte CMD:
+// Bản tin giám sát PSU, CMD 2 byte 81 81, 310 byte (cùng độ dài với khung giám sát TRB; các byte thêm là dự phòng) (theo "Định nghĩa bản tin"), CRC phủ từ byte địa chỉ (ngay sau CMD, như TRB):
 // [AB CD][81 81][Addr][CỤM 1..4: 4x48B][SUPPLY 24B][RTC 7B][Trip 10B][Dự phòng 24B][CRC 2B][E1 E2]
 // Mỗi cụm: 6 giá trị ADC + 2 giá trị AMC (3 byte) rồi 12 giá trị XDP (2 byte).
 // Giá trị là số thô (chưa có công thức quy đổi). Supply là thanh ghi CURRENT / VBUS của INA228 (3 byte, dữ liệu ở bit 23..4):
@@ -13,7 +13,7 @@
 
 namespace proto::psumon {
 
-constexpr int kLength = 310, kCrcStart = 2, kOffAddr = 4;
+constexpr int kLength = 310, kCrcStart = 4, kOffAddr = 4;
 constexpr int kNumCluster = 4, kClusterFields = 20, kNumSupply = 8, kNumRtc = 7, kNumTrip = 10;
 constexpr int kPollLength = 13;   // khung hỏi 02 02
 

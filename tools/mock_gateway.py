@@ -124,7 +124,7 @@ def trb_frame(mb, trb, rng, *, isen=None, v=150, i=500, power_temp=40, mcu=50, h
 
 # ----------------------------------------------------------------------------- bản tin PSU
 
-PSU_LEN, PSU_CRC_START, PSU_ADDR = 310, 2, 4      # CMD 2 byte (81 81), địa chỉ ở byte 4
+PSU_LEN, PSU_CRC_START, PSU_ADDR = 310, 4, 4      # CMD 2 byte (81 81), địa chỉ ở byte 4 (index), CRC từ byte địa chỉ như TRB
 PSU_CLUSTER_OFF, PSU_CLUSTER_SIZE = 5, 48
 PSU_SUPPLY_OFF, PSU_RTC_OFF, PSU_TRIP_OFF, PSU_TRIP_COUNT = 197, 221, 228, 10
 
@@ -548,7 +548,7 @@ class SerialResponder:
             if len(b) < n + 1:
                 break
             frame = bytes(b[:2] + b[3:n + 1])                 # bỏ byte thiết bị: khung gốc dài n
-            start = 4 if kind.endswith("TRB") else 2
+            start = 4                                         # CRC từ byte địa chỉ (ngay sau CMD) cho cả TRB và PSU
             if not self._crc_ok(frame, start):
                 self.log(f"  khung {kind} sai CRC/tailer, bỏ qua 1 byte")
                 del b[0]
@@ -589,7 +589,7 @@ class SerialResponder:
             reply[2] = reply[3] = 0x82
             reply[PSU_ADDR] = key
             reply[5] = reply[6] = 0                      # Config Mask: không dùng khi trả lời
-            crc_start = 2
+            crc_start = 4
         self.log(f"  {kind} {name}: trả lời {len(reply)} byte")
         if self.delay:
             time.sleep(self.delay)
@@ -635,7 +635,7 @@ def cmd_selftest(_args):
     check(t[4] == 3 and t[5] == 5 and t[TRB_TRIP0:TRB_TRIP0 + 16] == bytes([1] * 16), "địa chỉ và trip code đúng vị trí")
     p = psu_frame(2, rng, trips=[0xAA] * 10)
     check(len(p) == PSU_LEN and p[2:4] == b"\x81\x81" and p[PSU_ADDR] == 2, "PSU 310 byte, CMD 81 81, địa chỉ ở byte 4")
-    check(crc16(p[2:306]) == (p[306] << 8 | p[307]), "PSU CRC từ byte 2 (CMD)")
+    check(crc16(p[4:306]) == (p[306] << 8 | p[307]), "PSU CRC từ byte địa chỉ (index 4), giống TRB")
     check(p[PSU_TRIP_OFF:PSU_TRIP_OFF + 10] == bytes([0xAA] * 10), "PSU trip code đúng vị trí")
     check(PSU_CLUSTER_OFF + 4 * PSU_CLUSTER_SIZE == PSU_SUPPLY_OFF and sum(s for _, s in PSU_CLUSTER_FIELDS) == PSU_CLUSTER_SIZE,
           "cụm PSU 48 byte, Supply ngay sau 4 cụm")
@@ -660,7 +660,7 @@ def cmd_selftest(_args):
     lines, rest = decode_control(wrap(0, seal(ctl, 4)))
     check(len(lines) == 1 and "MB8/TRB4" in lines[0] and rest == b"", "điều khiển TRB (khung tổng 107 byte, bit0)")
     pc = bytearray(13); pc[2] = pc[3] = 0x01; pc[4], pc[5], pc[6] = 4, 0b1010, 1
-    lines, _ = decode_control(wrap(3, seal(pc, 2)))
+    lines, _ = decode_control(wrap(3, seal(pc, 4)))
     check(len(lines) == 1 and "PSU 4" in lines[0] and "1010" in lines[0], "điều khiển PSU (bit3)")
     bm = bytearray()
     for m, (esp, beta, freq, mode) in zip((0x01, 0x10, 0x11), ((123, -45, 2400, 5), (-10, 0, 100, 6), (32767, -32768, 65535, 255))):
@@ -684,14 +684,14 @@ def cmd_selftest(_args):
     check(len(out) == 1 and len(out[0]) == TRB_CFG_LEN and out[0][2:4] == b"\xA4\xA4" and out[0][10:14] == b"\x01\x02\x03\x04"
           and crc16(out[0][4:516]) == (out[0][516] << 8 | out[0][517]), "đọc TRB trả đúng cấu hình đã ghi (A4A4)")
     w = bytearray(PSU_CFG_LEN); w[2] = w[3] = 0x04; w[PSU_ADDR] = 3; w[5] = w[6] = 0xFF; w[500:504] = b"\xDE\xAD\xBE\xEF"
-    r.feed(dev(2, seal(w, 2)))
+    r.feed(dev(2, seal(w, 4)))
     rd = bytearray(PSU_CFG_READ_LEN); rd[2] = rd[3] = 0x03; rd[PSU_ADDR] = 3
-    out = r.feed(dev(2, seal(rd, 2)))
+    out = r.feed(dev(2, seal(rd, 4)))
     check(len(out) == 1 and len(out[0]) == PSU_CFG_LEN and out[0][2:4] == b"\x82\x82" and out[0][500:504] == b"\xDE\xAD\xBE\xEF"
-          and crc16(out[0][2:911]) == (out[0][911] << 8 | out[0][912]), "đọc PSU trả đúng cấu hình đã ghi (82 82)")
+          and crc16(out[0][4:911]) == (out[0][911] << 8 | out[0][912]), "đọc PSU trả đúng cấu hình đã ghi (82 82)")
     noisy = SerialResponder(drop=1.0, rng=random.Random(3), log=lambda *_: None)
-    check(noisy.feed(dev(2, seal(bytearray(rd), 2))) == [], "--drop 1.0: không trả lời")
-    chunks = dev(2, seal(bytearray(rd), 2))
+    check(noisy.feed(dev(2, seal(bytearray(rd), 4))) == [], "--drop 1.0: không trả lời")
+    chunks = dev(2, seal(bytearray(rd), 4))
     split = [r.feed(chunks[:5]), r.feed(chunks[5:])]
     check(split[0] == [] and len(split[1]) == 1, "nhận khung bị chia mảnh")
     logged = []
@@ -701,9 +701,9 @@ def cmd_selftest(_args):
     cal = bytearray(CALIB_LEN); cal[2] = cal[3] = 0x18; cal[4], cal[5] = 2, 5; cal[6] = 0x80; cal[13] = 0x01; cal[14:18] = bytes([11, 12, 13, 14])
     logged.clear()
     check(ctl_r.feed(dev(1, seal(cal, 4))) == [] and any("calib MB2/TRB5: RX_EN=80000000 TX_EN=00000001" in l and "phaseTX=11" in l for l in logged), "RS485 nhận bản tin Calib 18 18 (150 byte + byte thiết bị 01)")
-    check(r.feed(seal(bytearray(rd), 2)) == [], "khung PSU thiếu byte thiết bị bị bỏ qua")
-    check(r.feed(dev(1, seal(bytearray(rd), 2))) == [], "byte thiết bị sai loại (TRB cho khung PSU) bị bỏ qua")
-    junk = r.feed(b"\x00\xFF\xAB" + dev(2, seal(bytearray(rd), 2)))
+    check(r.feed(seal(bytearray(rd), 4)) == [], "khung PSU thiếu byte thiết bị bị bỏ qua")
+    check(r.feed(dev(1, seal(bytearray(rd), 4))) == [], "byte thiết bị sai loại (TRB cho khung PSU) bị bỏ qua")
+    junk = r.feed(b"\x00\xFF\xAB" + dev(2, seal(bytearray(rd), 4)))
     check(len(junk) == 1, "bỏ qua byte rác phía trước")
 
     print("không có lỗi" if not check.failed else f"{check.failed} lỗi")

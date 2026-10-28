@@ -14,7 +14,7 @@ constexpr int kMinFrameLen = 8; // header2 + cmd (1-2) + addr + crc2 + tailer2, 
 struct FrameSpec {
     QByteArray cmd;        // 1 hoặc 2 byte ngay sau header
     int length = 0;        // tổng độ dài khung
-    int crcStart = 4;      // CRC phủ [crcStart .. length-5]; TRB/FPGA OTA = 4, STM/PSU = 2
+    int crcStart = 4;      // CRC phủ [crcStart .. length-5]; mọi khung TRB / FPGA OTA / PSU / STM32 = 4 (từ byte địa chỉ, ngay sau CMD)
     bool checkCrc = true;
     QString name;
     int emptyFrom = 0;     // > 0: khung "rỗng" của Gateway (thiết bị không phản hồi) có mọi byte từ emptyFrom tới hết CRC bằng 0x00; nhận không cần CRC, Frame::empty = true
