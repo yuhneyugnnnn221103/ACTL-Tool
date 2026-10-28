@@ -642,6 +642,30 @@ private slots:
         QVERIFY(ascii >= 20);
     }
 
+    // Gateway gửi một lượt 25 thiết bị = 25 x 310 = 7750 byte: nhận trọn trong một lần hoặc bị TCP cắt ở ranh giới bất kỳ (MSS 1460) đều đủ 25 khung.
+    void monitorHandlesBurstOf25Devices()
+    {
+        for (int chunk : {7750, 1460, 733, 1}) {
+            Rig rig("monitor");
+            services::TrbMonitor::registerFrames(rig.registry, true);
+            rig.link.start();
+            model::DeviceStore store(4, 8);
+            services::TrbMonitor mon(&rig.link, &store, nullptr);
+            QList<double> v = zeros(trbmon::kNumFields);
+            v[trbmon::kIdxPg] = 0x0F;                                          // PG tốt, nếu không sẽ tính là Trip
+            QByteArray burst;
+            for (int i = 0; i < 25; ++i) burst += monitorFrame(i / 8, i % 8, v);
+            QCOMPARE(burst.size(), 7750);
+            QElapsedTimer timer;
+            timer.start();
+            for (int i = 0; i < burst.size(); i += chunk) rig.transport->inject(burst.mid(i, chunk));
+            QCOMPARE(store.count(model::Status::Ok), 25);
+            QCOMPARE(store.trb(3, 0).frames, quint64(1));                      // thiết bị thứ 25 (MB4/TRB1) không bị mất
+            QCOMPARE(store.trb(3, 1).frames, quint64(0));                      // và không có thiết bị thứ 26
+            QVERIFY2(timer.elapsed() < 500, qPrintable(QStringLiteral("quá chậm: %1 ms (chunk %2)").arg(timer.elapsed()).arg(chunk)));
+        }
+    }
+
     // ---------- Tách khung ----------
     void parserResyncsAfterGarbageAndSplitChunks()
     {
