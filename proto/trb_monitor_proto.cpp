@@ -48,7 +48,7 @@ static FieldTable build()
     u16(QStringLiteral("PULSE TXEN"));                     // 269-270
     u32(QStringLiteral("PERIOD BEAMSYNC"));                // 271-274
     u16(QStringLiteral("PULSE BEAMSYNC"));                 // 275-276
-    // Từ byte 277: 17 trường debug (19 byte; BEAM_DONE_CNT và BEAM_LAST_TIME 2 byte, còn lại 1 byte), chỉ ghi log (không hiện trên giao diện.
+    // Từ byte 277: 17 trường debug (19 byte; BEAM_DONE_CNT và BEAM_LAST_TIME 2 byte, còn lại 1 byte), chỉ ghi log, không hiện trên giao diện.
     for (const char *n : kDebugNames) {                    // BEAM_DONE_CNT và BEAM_LAST_TIME 2 byte, còn lại 1 byte
         const QString name = QString::fromLatin1(n);
         if (name == QLatin1String("BEAM_DONE_CNT") || name == QLatin1String("BEAM_LAST_TIME")) u16(name); else u8(name);
