@@ -8,7 +8,7 @@ Phần mềm PC (Qt 6, C++17, QWidget) giám sát, điều khiển, cấu hình 
 |---|---|
 | Giám sát TRB (bản tin 310 byte), lưới tổng quan 20 × 8 | Xong |
 | Chi tiết TRB, lệnh điều khiển và beam | Xong, chưa chờ ACK |
-| Cảnh báo quá ngưỡng theo từng TRB, log CSV | Xong |
+| Cảnh báo quá ngưỡng theo từng TRB, log nhị phân nén và tab Xem log | Xong |
 | Cấu hình TRB (đơn lẻ, hàng loạt), khóa mật khẩu | Xong |
 | Nạp code FPGA trên TRB (broadcast, gửi riêng) | Xong |
 | Nạp code STM32 trên PSU (slot A/B, CRC32) | Xong |
@@ -42,7 +42,7 @@ cmake --build build
 ctest --test-dir build
 ```
 
-Test nằm trong `tests/` (cần Qt Test): `trb_test` (bản tin, tách khung, giám sát, cảnh báo, điều khiển, cấu hình với TRB giả lập, ngưỡng, log CSV) và `psu_test` (phần PSU). Dùng chung transport giả ở `tests/test_support.h`.
+Test nằm trong `tests/` (cần Qt Test): `trb_test` (bản tin, tách khung, giám sát, cảnh báo, điều khiển, cấu hình với TRB giả lập, ngưỡng, log nén) và `psu_test` (phần PSU). Dùng chung transport giả ở `tests/test_support.h`.
 
 File chạy là `build/actl_tool`.
 
@@ -59,7 +59,7 @@ File chạy là `build/actl_tool`.
 - **Kết nối**: thẻ ở đầu thanh trên cùng cho biết trạng thái đường mà trang đang mở dùng; bấm vào thì mở cửa sổ popup gồm cả 4 đường, mỗi đường một dòng có thẻ trạng thái luôn hiện, ô cấu hình (IP/cổng hoặc cổng COM/baud) và nút kết nối: Giám sát (Ethernet tới Gateway), Cấu hình / nạp code (RS485) và RS485 #2 (dành cho chức năng chưa bổ sung). Cuối popup có thống kê lỗi CRC / byte bỏ qua. Trang Giả lập có cổng COM riêng trong trang.
 - **Beam Ethernet**: trang riêng điều khiển beam, gửi qua đường Ethernet giám sát/điều khiển chung với TRB và PSU (không có đường Ethernet riêng; kết nối bằng thẻ kết nối ở đầu thanh trên cùng). Nhập Esp, Beta (số thập phân có dấu, 1 chữ số sau dấu phẩy, bản tin gửi giá trị x 10 dạng 16 bit bù 2), Freq (MHz, số nguyên), và Mode (số nguyên 0..255, byte 9), riêng cho từng mode `01`, `10`, `11` ở ba cột. Mỗi lần gửi là một bản tin 42 byte ghép từ 3 khung 14 byte `AB CD | ESP | BETA | FREQ | MODE | CRC16 (từ header AB CD tới MODE) | EF FF`, mỗi khung có dữ liệu riêng và byte 10 của MODE lần lượt `01`, `10`, `11` (mỗi khung có CRC và đuôi riêng), **little endian** (byte thấp trước) cho Esp, Beta, Freq và CRC (riêng khung này, các khung khác vẫn byte cao trước), không chờ trả lời; ô hex phía dưới cho xem trước đúng bản tin sẽ gửi.
 - **Nạp code**: tab FPGA (chọn nhanh TRB: chọn tất cả, bỏ chọn, đảo chọn, theo từng MB; 4 bước riêng: kiểm tra kết nối, xóa flash, nạp code, boot và xác nhận; nạp khi chưa xóa thì có cảnh báo; cột "Phiên bản code" đọc từ bản tin `99 99`. Nạp xong không lỗi thì ghi version mới bằng bản tin `44 44` rồi hỏi lại để đối chiếu. Tên file .bin toàn chữ số, đặt theo ngày `YYYYMMDD` (cùng ngày thì thêm số thứ tự cuối, ví dụ `2026101302.bin`); tên được đổi thành số nguyên (≤ 4294967294), ghi 4 byte big-endian và hiển thị lại đúng số đó. Tên có chữ hoặc quá lớn thì không ghi version) và tab STM32 (nạp lần lượt từng PSU).
-- **Ghi log CSV**: ở góc khung log có nút "Ghi log" (không màu khi không ghi; nền xanh và chữ "Đang ghi log" khi đang ghi; bấm để bật/tắt, rê chuột xem giờ hẹn) và nút "Hẹn giờ…" (chọn thời điểm bắt đầu và dừng, mỗi mốc dùng một lần). Khi dừng, mọi file log (kể cả sự kiện) được đóng và không ghi thêm.
+- **Ghi log**: ở góc khung log có nút "Ghi log" (không màu khi không ghi; nền xanh và chữ "Đang ghi log" khi đang ghi; bấm để bật/tắt, rê chuột xem giờ hẹn) và nút "Hẹn giờ…" (chọn thời điểm bắt đầu và dừng, mỗi mốc dùng một lần). Khi dừng, file log được đóng, đổi tên kèm thời điểm kết thúc và không ghi thêm. Log lưu thân khung gốc dạng XOR với bản tin trước của cùng thiết bị rồi nén zlib theo khối ~1 MB hoặc 2 giây, nên nhỏ hơn dữ liệu thô hàng chục lần; file luôn đọc được tới khối cuối hoàn chỉnh kể cả khi app tắt đột ngột.
 - **Khung log**: tab Sự kiện và tab Hex thô (bật bằng ô "Hiện bản tin hex"). Mỗi trang chỉ hiện log của mình: Chi tiết TRB hiện giám sát, điều khiển, beam và sự kiện của TRB đang xem; Cấu hình TRB hiện khung `A1/A3/A4`; PSU hiện `81 81` và `01 01`; Cấu hình PSU hiện `03 03`, `04 04`, `82 82`; Nạp code hiện khung nạp FPGA, STM32 và tiến độ nạp; Tổng quan hiện tất cả. Lỗi kết nối và lỗi đường truyền hiện ở mọi trang. File CSV `events.csv` vẫn ghi đủ mọi sự kiện.
 
 Bản tin PSU chi tiết (giám sát, điều khiển, cấu hình, nạp STM32, từng trường và byte, kể cả phần mở rộng theo firmware APSU): `docs/psu_messages.md`. Theo firmware APSU: Supply là thanh ghi INA228 (hiện dịch phải 4 bit, dòng có dấu), vùng dự phòng của bản tin giám sát chứa trạng thái an toàn / chân EN / số lần trip theo từng cụm DCM cùng slot / version (hàng thẻ trạng thái trên trang PSU), mỗi cụm một chân EN, cấu hình chỉ nhận khi SAFE_OFF, nạp code có thêm ERASE và ROLLBACK.
@@ -83,9 +83,7 @@ Các file nằm cạnh file chạy và được tạo ở lần chạy đầu.
 | `thresholds.json` | Ngưỡng min/max theo từng TRB, tự cập nhật mỗi lần đọc cấu hình |
 | `psu_thresholds.json` | Như trên, theo địa chỉ PSU |
 | `psu_default_config.json` | Tùy chọn: cấu hình mặc định PSU, cùng định dạng file "Lưu file…" của trang Cấu hình PSU |
-| `logs/<phiên>/trb/MB03_TRB05.csv` | Số liệu giám sát, mỗi TRB một file riêng (MB, TRB đếm từ 1), mặc định mỗi bản tin nhận được ghi một dòng (`log/minIntervalMs` = 0); `<phiên>` là thư mục đặt tên theo giờ bắt đầu lần ghi (`yyyy-MM-dd_HH-mm-ss`), mỗi lần bấm "Ghi log", hẹn giờ hoặc mở app là một thư mục mới chứa đủ log TRB, PSU và sự kiện của lần đó. File chỉ được tạo khi TRB có dữ liệu |
-| `logs/<phiên>/psu/PSU2.csv` | Số liệu giám sát PSU, mỗi PSU một file, cùng chu kỳ ghi |
-| `logs/<phiên>/events.csv` | Sự kiện |
+| `logs/ACTL_20261029-101500_20261029-103000.alog` | Log nhị phân nén, **mỗi lần ghi một file** chứa mọi TRB, PSU và sự kiện; tên thể hiện thời điểm bắt đầu và kết thúc ghi (đang ghi thì phần kết thúc là `dang-ghi`, đổi tên khi dừng). Mặc định mỗi bản tin nhận được ghi một bản ghi (`log/minIntervalMs` = 0). Xem bằng tab **Xem log**. Định dạng: `services/log_file.h` |
 
 Các khóa hay dùng trong `actl_tool.ini`:
 
@@ -115,10 +113,10 @@ Style Fusion cộng một file QSS duy nhất (`resources/style.qss`, nạp từ
 ui/        Giao diện, chỉ đọc model và gọi service
 services/  Mỗi chức năng một lớp: trb_monitor, trb_control, trb_config,
            psu_monitor, psu_control, psu_config,
-           fpga_ota, stm_ota, alarm_engine, csv_logger
+           fpga_ota, stm_ota, alarm_engine, log_recorder, log_file
 model/     device_store (TRB), psu_store (PSU), thresholds
 proto/     Định nghĩa bản tin; field_table mô tả trường dùng chung cho
-           giải mã, đóng gói, hiển thị, CSV và ngưỡng
+           giải mã, đóng gói, hiển thị, log và ngưỡng
 core/      transport (TCP client, serial, phát lại file), frame_parser, link
 app/       main, settings, context
 tests/     Test cho từng lớp, dùng transport và thiết bị giả lập
@@ -162,7 +160,7 @@ Gateway hỏi `AB CD 23 23 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giá
 
 - TRB không phản hồi, sai CRC hoặc lỗi bản tin: Gateway thay bằng **khung rỗng** 310 byte `AB CD 23 23 MB TRB`, phần data và CRC toàn `0x00`, rồi `E1 E2` (vẫn nằm trong lượt gửi 8 TRB của MB). App nhận khung này không cần CRC, biết đúng TRB nào im lặng và đánh dấu mất kết nối (giữ số liệu cuối) sau `system/emptyFramesToLost` khung rỗng liên tiếp (mặc định 3); có bản tin thật trở lại thì hồi phục và đếm lại từ đầu. TRB chưa từng có số liệu giữ "chưa có dữ liệu". `system/staleMs` (mặc định 3000 ms) vẫn là chốt chặn khi không nhận được gì cho TRB đó.
 
-- Số MB và TRB hiển thị trên giao diện, trong sự kiện, chú thích, tên file và cột `mb`, `trb` của file CSV đếm từ **1** (MB1..MB20, TRB1..TRB8). Trên đường truyền (địa chỉ trong bản tin), file ngưỡng `thresholds.json` (khóa `"mb/trb"`) và mã nguồn vẫn đếm từ 0.
+- Số MB và TRB hiển thị trên giao diện, trong sự kiện, chú thích, tên thiết bị trong tab Xem log đếm từ **1** (MB1..MB20, TRB1..TRB8). Trên đường truyền (địa chỉ trong bản tin), file ngưỡng `thresholds.json` (khóa `"mb/trb"`) và mã nguồn vẫn đếm từ 0.
 
 ## Việc còn lại
 
@@ -184,3 +182,5 @@ Tab Hex thô cũng hiện các byte bị loại, hiện ở mọi trang: `RX L�
 **Calib**: tab gửi bản tin Calib (`AB CD 18 18 MB TRB` + RX_CHN_EN 4 byte + TX_CHN_EN 4 byte + 32 kênh x (phase TX, phase RX, amp TX, amp RX) + 4 byte dự phòng + CRC + `E1 E2`, 150 byte, CRC từ byte MB) qua RS485 kèm byte thiết bị `01`. Tích chọn kênh RX/TX, nhập giá trị số nguyên không dấu, nhập/xuất file JSON để dùng lại; chi tiết ở `docs/control_frame.md`.
 
 Bản tin giám sát PSU (`81 81`) dài 310 byte như TRB (byte 263..306 dự phòng). PSU cũng có X (khung rỗng của Gateway, hiện ngay), ? (quá hạn) và OFF (cụm tắt) trên tổng quan; một lượt Gateway gửi 20 TRB + 5 PSU (7750 byte) được tách theo CMD `23 23` / `81 81`.
+
+**Xem log**: tab đọc file `.alog` (nhiều file cùng lúc, ghép lên một trục thời gian). Cột trái: danh sách file, cây thiết bị (TRB theo MB, PSU) và danh sách trường có ô lọc. Mỗi trường được tích là một đồ thị, các thiết bị đã tích là các đường song song trong đồ thị đó (tối đa 12 đồ thị, 16 đường mỗi đồ thị). Lăn chuột phóng to/thu nhỏ trục thời gian, kéo để dịch, nhấp đúp xem toàn bộ; trỏ chuột hiện giá trị tại thời điểm đó ở mọi đồ thị. Vạch đỏ đánh dấu mỗi lần thiết bị trip. Bảng bên dưới liệt kê sự kiện và các lần đổi trạng thái (Trip, Quá ngưỡng, Tốt); bấm một dòng để tới thời điểm đó.

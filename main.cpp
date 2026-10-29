@@ -75,8 +75,7 @@ int main(int argc, char *argv[])
     psuMonitor.setEmptyLimit(cfg.emptyFramesToLost);
     services::PsuControl psuControl(ctx.monitorLink);
     services::PsuConfig psuConfig(ctx.serviceLink, &psuThresholds, cfg.psuThresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
-    services::CsvLogger logger(cfg.logDir, cfg.logPeriodMs, qint64(cfg.logMaxFileMb) * 1024 * 1024,
-                               &proto::trbmon::table(), &proto::psumon::table());
+    services::LogRecorder logger(cfg.logDir, cfg.logPeriodMs);
     services::TrbCalib trbCalib(ctx.serviceLink);   // bản tin Calib (18 18) gửi qua RS485
     ctx.trbCalib = &trbCalib;
     services::FpgaOta fpgaOta(ctx.serviceLink);
@@ -118,7 +117,7 @@ int main(int argc, char *argv[])
         window.logEvent(ui::tagged(raised ? ui::EventKind::Warn : ui::EventKind::Ok, QStringLiteral("PSU %1: %2").arg(addr).arg(t)),
                         ui::LogPsuMonitor);
     });
-    QObject::connect(&logger, &services::CsvLogger::errorOccurred, &window, [&](const QString &m) { window.logEvent(ui::tagged(ui::EventKind::Err, m)); });
+    QObject::connect(&logger, &services::LogRecorder::errorOccurred, &window, [&](const QString &m) { window.logEvent(ui::tagged(ui::EventKind::Err, m)); });
     if (!thresholdError.isEmpty()) window.logEvent(ui::tagged(ui::EventKind::Err, thresholdError));
     if (!psuThresholdError.isEmpty()) window.logEvent(ui::tagged(ui::EventKind::Err, psuThresholdError));
     window.showMaximized();

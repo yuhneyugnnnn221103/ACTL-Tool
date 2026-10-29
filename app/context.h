@@ -3,7 +3,7 @@
 #include "../app/settings.h"
 #include "../core/serial_transport.h"
 #include "../core/tcp_client_transport.h"
-#include "../services/csv_logger.h"
+#include "../services/log_recorder.h"
 #include "../model/psu_store.h"
 #include "../services/fpga_ota.h"
 #include "../services/psu_config.h"
@@ -32,7 +32,7 @@ struct AppContext {
     services::PsuConfig *psuConfig = nullptr;
     services::FpgaOta *fpgaOta = nullptr;
     services::StmOta *stmOta = nullptr;
-    services::CsvLogger *logger = nullptr;   // nullptr khi tắt log
+    services::LogRecorder *logger = nullptr;   // nullptr khi tắt log
     ui::Auth *auth = nullptr;
 
     // Đường RS485 là hỏi-đáp, mỗi lúc chỉ một chức năng được dùng.

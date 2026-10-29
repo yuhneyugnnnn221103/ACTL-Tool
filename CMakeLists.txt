@@ -67,12 +67,15 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         proto/trb_calib_proto.h proto/trb_calib_proto.cpp
         services/trb_calib.h services/trb_calib.cpp
         ui/calib_page.h ui/calib_page.cpp
+        ui/plot_widget.h ui/plot_widget.cpp
+        ui/log_viewer_page.h ui/log_viewer_page.cpp
         services/fpga_ota.h services/fpga_ota.cpp
         proto/stm_ota_proto.h proto/stm_ota_proto.cpp
         services/stm_ota.h services/stm_ota.cpp
         model/thresholds.h model/thresholds.cpp
         services/alarm_engine.h services/alarm_engine.cpp
-        services/csv_logger.h services/csv_logger.cpp
+        services/log_file.h services/log_file.cpp
+        services/log_recorder.h services/log_recorder.cpp
         model/device_store.h model/device_store.cpp
         services/trb_monitor.h services/trb_monitor.cpp
         model/psu_store.h model/psu_store.cpp
@@ -154,7 +157,7 @@ if(Qt${QT_VERSION_MAJOR}Test_FOUND)
         proto/fpga_ota_proto.cpp proto/stm_ota_proto.cpp proto/beam_eth_proto.cpp proto/trb_calib_proto.cpp
         proto/psu_monitor_proto.cpp proto/psu_control_proto.cpp proto/psu_config_proto.cpp
         model/device_store.cpp model/psu_store.cpp model/thresholds.cpp
-        services/alarm_engine.cpp services/csv_logger.cpp
+        services/alarm_engine.cpp services/log_file.cpp services/log_recorder.cpp
         services/trb_monitor.cpp services/trb_control.cpp services/trb_config.cpp services/trb_calib.cpp
         services/fpga_ota.cpp services/stm_ota.cpp
         services/psu_monitor.cpp services/psu_control.cpp services/psu_config.cpp

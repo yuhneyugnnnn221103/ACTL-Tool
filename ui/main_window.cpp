@@ -3,6 +3,7 @@
 #include "auth.h"
 #include "beam_eth_page.h"
 #include "calib_page.h"
+#include "log_viewer_page.h"
 #include "firmware_page.h"
 #include "psu_config_page.h"
 #include "psu_grid.h"
@@ -108,8 +109,8 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     setMinimumSize(1100, 560);   // đặt sẵn để layout không tự nới cửa sổ quá màn hình; trang nào lớn hơn thì cuộn
     // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
     // Đường kết nối của từng trang: 0 giám sát (Ethernet; điều khiển PSU và beam cũng đi đường này), 1 RS485 (cấu hình, nạp code, điều khiển và beam TRB), -1 không có.
-    m_pageConn = {0, 0, 1, 0, 1, 1, 0, 1, -1};
-    m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogBeam, LogCalib, LogSystem};
+    m_pageConn = {0, 0, 1, 0, 1, 1, 0, 1, 0, -1};
+    m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogBeam, LogCalib, LogAll, LogSystem};
 
     // Điều hướng trái + các trang.
     m_nav = new QListWidget;
@@ -149,6 +150,8 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
                          (sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa mở cổng RS485: ")) + d),
                  LogCalib);
     });
+    m_nav->addItem(QStringLiteral("Xem log"));
+    m_pages->addWidget(new LogViewerPage(ctx));       // tự có vùng cuộn riêng cho đồ thị
     m_nav->addItem(QStringLiteral("Giả lập"));
     auto *simPage = new SimPage(ctx);
     m_pages->addWidget(scrollPage(simPage));
@@ -510,7 +513,7 @@ QWidget *MainWindow::buildLogPanel()
     cl->setContentsMargins(0, 0, 0, 0);
     cl->addWidget(m_hexEnable);
     if (m_ctx.logger) {
-        services::CsvLogger *logger = m_ctx.logger;
+        services::LogRecorder *logger = m_ctx.logger;
         auto *toggle = new QPushButton(QStringLiteral("Ghi log"));
         auto *schedule = new QPushButton(QStringLiteral("Hẹn giờ…"));
         theme::setRole(schedule, "secondary");
@@ -525,8 +528,8 @@ QWidget *MainWindow::buildLogPanel()
             toggle->style()->unpolish(toggle);   // đổi role lúc chạy cần áp lại stylesheet
             toggle->style()->polish(toggle);
         };
-        connect(logger, &services::CsvLogger::recordingChanged, this, refresh);
-        connect(logger, &services::CsvLogger::scheduleChanged, this, refresh);
+        connect(logger, &services::LogRecorder::recordingChanged, this, refresh);
+        connect(logger, &services::LogRecorder::scheduleChanged, this, refresh);
         connect(toggle, &QPushButton::clicked, this, [=] {
             if (!logger->recording()) logger->setSchedule(QDateTime(), logger->stopAt()); // bắt đầu tay thì bỏ hẹn giờ bắt đầu
             logger->setRecording(!logger->recording());
@@ -557,7 +560,7 @@ QWidget *MainWindow::buildLogPanel()
 // Hộp thoại hẹn giờ ghi log: mỗi mốc bật/tắt riêng. Chỉ hiệu lực một lần.
 void MainWindow::editLogSchedule()
 {
-    services::CsvLogger *logger = m_ctx.logger;
+    services::LogRecorder *logger = m_ctx.logger;
     QDialog dlg(this);
     dlg.setWindowTitle(QStringLiteral("Hẹn giờ ghi log"));
     auto *startOn = new QCheckBox(QStringLiteral("Bắt đầu ghi lúc"));
@@ -600,7 +603,7 @@ void MainWindow::logEvent(const QString &text, int group, int mb, int trb)
 {
     appendLog(m_eventLog, m_eventBuffer,
               {QDateTime::currentDateTime().toString("HH:mm:ss.zzz ") + text, group, mb, trb});
-    if (m_ctx.logger) m_ctx.logger->logEvent(text);   // file CSV luôn ghi đủ, không lọc theo trang
+    if (m_ctx.logger) m_ctx.logger->logEvent(text);   // file log luôn ghi đủ, không lọc theo trang
     m_listDirty = true; // sự kiện cảnh báo có thể đổi lý do hiển thị trong danh sách bất thường
 }
 

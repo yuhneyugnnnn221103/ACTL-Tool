@@ -13,7 +13,7 @@
 #include "../proto/trb_monitor_proto.h"
 #include "../services/alarm_engine.h"
 #include "../sim/sim_world.h"
-#include "../services/csv_logger.h"
+#include "../services/log_recorder.h"
 #include "../services/trb_calib.h"
 #include "../services/trb_config.h"
 #include "../services/trb_control.h"
@@ -1316,33 +1316,25 @@ private slots:
         QVERIFY(!trb.config.contains(FakeTrb::key(0, 1)));
     }
 
-    // ---------- Log CSV ----------
-    void csvLoggerStartsAndStopsBySchedule()
+    // ---------- Log nhị phân nén (.alog) ----------
+    // Một lần ghi = một file; tên có thời điểm bắt đầu và kết thúc; hẹn giờ bắt đầu/dừng; sau khi dừng không ghi thêm; bật lại ra file mới.
+    void logRecorderStartsAndStopsBySchedule()
     {
         QTemporaryDir dir;
-        services::CsvLogger logger(dir.path(), 0, 1024 * 1024, &trbmon::table(), &proto::trbmon::table());
+        services::LogRecorder logger(dir.path(), 0);
         model::TrbState s;
         s.lastSeenMs = 1'700'000'000'000;
-        s.values = zeros(trbmon::kNumFields);
-        auto sessions = [&] {   // mỗi lần ghi một thư mục
-            logger.flush();
-            return QDir(dir.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+        s.raw = monitorFrame(0, 0, zeros(trbmon::kNumFields));
+        auto files = [&] { logger.flush(); return QDir(dir.path()).entryList({"*.alog"}, QDir::Files, QDir::Name); };
+        auto samples = [&](const QString &name) {
+            logfile::Data d;
+            return logfile::load(dir.path() + "/" + name, d) && d.series.contains(logfile::deviceKey(logfile::KindTrb, 0, 0))
+                       ? d.series.value(logfile::deviceKey(logfile::KindTrb, 0, 0)).count() : -1;
         };
-        auto files = [&] {      // đường dẫn tương đối của file MB01/TRB01 ở mọi lần ghi
-            QStringList l;
-            for (const QString &d : sessions())
-                for (const QString &f : QDir(dir.path() + "/" + d + "/trb").entryList({"MB01_TRB01.csv"}, QDir::Files)) l << d + "/trb/" + f;
-            return l;
-        };
-        auto lines = [&](const QString &rel) {   // gồm dòng tiêu đề
-            QFile f(dir.path() + "/" + rel);
-            return f.open(QIODevice::ReadOnly) ? f.readAll().count('\n') : 0;
-        };
-        auto rows = [&] { return files().isEmpty() ? 0 : lines(files().first()); };
 
         logger.setRecording(false);
         logger.logTrb(0, 0, s, false);
-        QCOMPARE(rows(), 0);                                   // chưa ghi thì không tạo file
+        QVERIFY(files().isEmpty());                            // chưa ghi thì không tạo file
 
         const QDateTime t0 = QDateTime::currentDateTime();
         logger.setSchedule(t0.addSecs(60), t0.addSecs(120));
@@ -1353,71 +1345,150 @@ private slots:
         QVERIFY(!logger.startAt().isValid());
         logger.logTrb(0, 0, s, false);
         s.lastSeenMs += 10;
-        logger.logTrb(0, 0, s, false);
-        QCOMPARE(rows(), 3);                                   // tiêu đề + 2 dòng
+        logger.logTrb(0, 0, s, false);                         // ghi sau mỗi bản tin, không bỏ bản nào
+        QCOMPARE(files().size(), 1);
+        QVERIFY(files().first().contains("dang-ghi"));         // đang ghi: chưa có thời điểm kết thúc
         logger.tick(t0.addSecs(121));                          // tới giờ dừng
         QVERIFY(!logger.recording());
         s.lastSeenMs += 10;
-        logger.logTrb(0, 0, s, true);
-        QCOMPARE(rows(), 3);                                   // sau khi dừng không ghi thêm
+        logger.logTrb(0, 0, s, true);                          // sau khi dừng không ghi thêm
+        const QStringList done = files();
+        QCOMPARE(done.size(), 1);
+        QVERIFY(!done.first().contains("dang-ghi"));
+        QDateTime from, to;
+        QVERIFY(logfile::parseFileName(done.first(), from, to));
+        QVERIFY(to.isValid() && from <= to);                   // tên thể hiện bắt đầu và kết thúc
+        QCOMPARE(samples(done.first()), 2);
 
-        QCOMPARE(files().size(), 1);
-        const QString first = files().first();
-        logger.setRecording(true);                             // bật lại: lần ghi mới nằm trong file mới
+        logger.setRecording(true);                             // bật lại: lần ghi mới ra file mới, file cũ không bị nối thêm
+        s.lastSeenMs += 10;
         logger.logTrb(0, 0, s, false);
         QCOMPARE(files().size(), 2);
-        QCOMPARE(lines(first), 3);                             // file của lần ghi trước không bị nối thêm
+        QCOMPARE(samples(done.first()), 2);
 
         logger.setSchedule(QDateTime(), t0.addSecs(-5));       // mốc dừng đã qua: dừng ngay
         QVERIFY(!logger.recording());
+        QCOMPARE(files().size(), 2);
     }
 
-    void csvLoggerWritesHeaderRowsAndThrottles()
+    // Ghi rồi đọc lại: mọi trường giải mã đúng, trạng thái, PSU, sự kiện; chu kỳ tối thiểu; file lớn dần theo số bản tin rất chậm nhờ nén.
+    void logFileRoundTripAndCompression()
     {
         QTemporaryDir dir;
+        const QString path = dir.path() + "/x.alog";
+        const qint64 t0 = 1'700'000'000'000;
+        QList<double> v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxPg] = 0x0F;
+        const int fV = trbmon::kIdxTrbV, fPeriod = trbmon::kIdxPeriodTxen, fDebug = trbmon::kIdxDebug0;
+        qint64 rawBytes = 0;
         {
-            services::CsvLogger logger(dir.path(), 10000, 1024 * 1024, &trbmon::table(), &proto::trbmon::table());
-            model::TrbState s;
-            s.status = model::Status::Warning;
-            s.lastSeenMs = 1'700'000'000'000;
-            s.values = zeros(trbmon::kNumFields);
-            s.values[trbmon::kIdxTrbV] = 123;
-            logger.logTrb(2, 3, s, false);
-            s.lastSeenMs += 2000;                                 // chưa đủ chu kỳ 10 s: bỏ qua
-            logger.logTrb(2, 3, s, false);
-            s.lastSeenMs += 2000;
-            logger.logTrb(2, 3, s, true);                         // ép ghi (đổi trạng thái)
-            logger.logTrb(0, 1, s, true);                         // TRB khác: file riêng
-            model::PsuState p;
-            p.lastSeenMs = s.lastSeenMs;
-            p.values = zeros(proto::trbmon::table().fields().size());
-            logger.logPsu(2, p, true);
-            logger.logEvent(QStringLiteral("sự kiện \"thử\""));
-            logger.flush();
+            logfile::Writer w;
+            QVERIFY(w.open(path, t0));
+            for (int i = 0; i < 2000; ++i) {                      // 20 TRB, mỗi TRB 100 mẫu, giá trị đổi chậm như số đo thật
+                for (int k = 0; k < 20; ++k) {
+                    v[fV] = 150 + (i + k) % 7;
+                    v[fPeriod] = 1000 + i;
+                    v[fDebug] = (i / 50) & 0xFF;
+                    const QByteArray frame = monitorFrame(k / 8, k % 8, v);
+                    rawBytes += frame.size();
+                    w.addTrb(t0 + i * 20 + k, k / 8, k % 8, i == 1500 ? int(model::Status::Trip) : int(model::Status::Ok), frame);
+                }
+                if (i % 500 == 0) w.addEvent(t0 + i * 20, QStringLiteral("[TRIP] sự kiện %1").arg(i));
+            }
+            QList<double> pv(proto::psumon::kNumFields, 0.0);
+            pv[proto::psumon::kIdxVersion] = 20261013;
+            w.addPsu(t0 + 5, 3, int(model::Status::Ok), proto::psumon::buildFrame(3, pv));
+            w.close();
         }
+        const qint64 size = QFileInfo(path).size();
+        qInfo("log nén: %lld byte từ %lld byte thô (%.1f lần), %d bản tin", size, rawBytes, double(rawBytes) / double(size), 40000);
+        QVERIFY2(size * 20 < rawBytes, qPrintable(QStringLiteral("nén kém: %1 byte từ %2 byte").arg(size).arg(rawBytes)));   // nén tốt hơn 20 lần
 
-        const QStringList sessionDirs = QDir(dir.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-        QCOMPARE(sessionDirs.size(), 1);                          // một lần ghi = một thư mục
-        const QDir day(dir.path() + "/" + sessionDirs.first());
-        QCOMPARE(QDir(day.filePath("trb")).entryList({"*.csv"}).size(), 2);   // mỗi TRB một file
-        const QStringList trbFiles = QDir(day.filePath("trb")).entryList({"MB03_TRB04*.csv"});
-        QCOMPARE(trbFiles.size(), 1);
-        QFile f(day.filePath("trb/" + trbFiles.first()));
-        QVERIFY(f.open(QIODevice::ReadOnly));
-        const QList<QByteArray> lines = f.readAll().split('\n');
-        QVERIFY(lines.at(0).startsWith("\xEF\xBB\xBF" "time,mb,trb,status,TRM1.I SEN1"));   // UTF-8 BOM cho Excel
-        QVERIFY(lines.at(0).contains("TRB.V"));
-        QCOMPARE(lines.size(), 4);                                // header, 2 dòng dữ liệu, dòng rỗng cuối
-        QVERIFY(lines.at(1).contains(",3,4,"));          // mb, trb đếm từ 1 như giao diện
-        QVERIFY(lines.at(1).contains(",123,"));
+        logfile::Data d;
+        QString err;
+        QVERIFY2(logfile::load(path, d, &err), qPrintable(err));
+        QVERIFY(d.warnings.isEmpty());
+        QCOMPARE(d.series.size(), 21);
+        const int key = logfile::deviceKey(logfile::KindTrb, 1, 3);        // MB2 / TRB4 = k 11
+        const logfile::Series &s = d.series.value(key);
+        QCOMPARE(s.count(), 2000);
+        QCOMPARE(s.t.first(), t0 + 11);
+        QCOMPARE(s.t.at(1999), t0 + 1999 * 20 + 11);
+        QCOMPARE(int(quint8(s.status.at(1500))), int(model::Status::Trip));
+        QCOMPARE(int(quint8(s.status.at(1499))), int(model::Status::Ok));
+        const proto::FieldTable &t = trbmon::table();
+        QCOMPARE(logfile::fieldValue(s, 123, t.fields().at(fV)), double(150 + (123 + 11) % 7));
+        QCOMPARE(logfile::fieldValue(s, 1999, t.fields().at(fPeriod)), double(1000 + 1999));    // trường 4 byte
+        QCOMPARE(logfile::fieldValue(s, 1000, t.fields().at(fDebug)), double((1000 / 50) & 0xFF));
+        QCOMPARE(d.events.size(), 4);
+        QVERIFY(d.events.first().text.contains("sự kiện 0"));
+        QCOMPARE(logfile::deviceName(key), QStringLiteral("MB2 / TRB4"));
+        QCOMPARE(d.series.value(logfile::deviceKey(logfile::KindPsu, 3)).count(), 1);
+        const proto::Field &ver = proto::psumon::table().fields().at(proto::psumon::kIdxVersion);
+        QCOMPARE(logfile::fieldValue(d.series.value(logfile::deviceKey(logfile::KindPsu, 3)), 0, ver), 20261013.0);
 
-        QCOMPARE(QDir(day.filePath("psu")).entryList({"PSU2*.csv"}).size(), 1);
+        // File bị cắt giữa chừng vẫn đọc được các khối đầy đủ trước đó, kèm cảnh báo.
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadWrite));
+        QByteArray all = f.readAll();
+        f.close();
+        QFile cut(dir.path() + "/cut.alog");
+        QVERIFY(cut.open(QIODevice::WriteOnly));
+        cut.write(all.left(all.size() - 30));
+        cut.close();
+        logfile::Data part;
+        QVERIFY(logfile::load(dir.path() + "/cut.alog", part));
+        QVERIFY(!part.warnings.isEmpty());
+        QVERIFY(part.series.size() > 0);
+        QVERIFY(!logfile::load(dir.path() + "/none.alog", part));
+        QFile bad(dir.path() + "/bad.alog");
+        QVERIFY(bad.open(QIODevice::WriteOnly));
+        bad.write("not a log file at all");
+        bad.close();
+        QVERIFY(!logfile::load(dir.path() + "/bad.alog", part, &err));
+        QVERIFY(err.contains("ACTL"));
 
-        const QStringList events = day.entryList({"events*.csv"});
-        QCOMPARE(events.size(), 1);
-        QFile e(day.filePath(events.first()));
-        QVERIFY(e.open(QIODevice::ReadOnly));
-        QVERIFY(e.readAll().contains("\"sự kiện \"\"thử\"\"\""));  // dấu nháy kép được escape
+        // Nhiều file lên cùng trục thời gian: ghép đúng thứ tự dù thứ tự mở khác nhau.
+        logfile::Data late, early;
+        {
+            logfile::Writer w;
+            QVERIFY(w.open(dir.path() + "/b.alog", t0 + 100000));
+            w.addTrb(t0 + 100000, 0, 0, 1, monitorFrame(0, 0, v));
+            w.close();
+            QVERIFY(w.open(dir.path() + "/a.alog", t0));
+            w.addTrb(t0 + 5, 0, 0, 1, monitorFrame(0, 0, v));
+            w.close();
+        }
+        QVERIFY(logfile::load(dir.path() + "/b.alog", late));
+        QVERIFY(logfile::load(dir.path() + "/a.alog", early));
+        logfile::merge(late, early);
+        const logfile::Series &m = late.series.value(logfile::deviceKey(logfile::KindTrb, 0, 0));
+        QCOMPARE(m.count(), 2);
+        QCOMPARE(m.t.first(), t0 + 5);
+        QCOMPARE(m.t.last(), t0 + 100000);
+        QCOMPARE(late.startMs, t0 + 5);
+
+        // Chu kỳ tối thiểu: không ghi bản tin đến sớm hơn, trừ khi ép (đổi trạng thái).
+        QTemporaryDir dir2;
+        services::LogRecorder logger(dir2.path(), 10000);
+        model::TrbState st;
+        st.status = model::Status::Warning;
+        st.lastSeenMs = t0;
+        st.raw = monitorFrame(2, 3, v);
+        logger.logTrb(2, 3, st, false);
+        st.lastSeenMs += 2000;
+        logger.logTrb(2, 3, st, false);                       // chưa đủ 10 s
+        st.lastSeenMs += 2000;
+        logger.logTrb(2, 3, st, true);                        // ép ghi
+        logger.logEvent(QStringLiteral("sự kiện \"thử\""));
+        logger.setRecording(false);
+        const QStringList out = QDir(dir2.path()).entryList({"*.alog"});
+        QCOMPARE(out.size(), 1);
+        logfile::Data r;
+        QVERIFY(logfile::load(dir2.path() + "/" + out.first(), r));
+        QCOMPARE(r.series.value(logfile::deviceKey(logfile::KindTrb, 2, 3)).count(), 2);
+        QCOMPARE(r.events.size(), 1);
+        QCOMPARE(r.events.first().text, QStringLiteral("sự kiện \"thử\""));
     }
 };
 
