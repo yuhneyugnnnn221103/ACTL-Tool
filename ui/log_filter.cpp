@@ -13,7 +13,7 @@ QString eventTag(EventKind k)
     case EventKind::Cfg:   return QStringLiteral("CFG");    // đọc/ghi cấu hình
     case EventKind::Debug: return QStringLiteral("DBG");    // chế độ Debug
     case EventKind::Ota:   return QStringLiteral("OTA");    // nạp code FPGA / STM32
-    case EventKind::Net:   return QStringLiteral("NET");    // kết nối, ngắt kết nối Gateway / RS485
+    case EventKind::Net:   return QStringLiteral("NET");    // kết nối, ngắt kết nối Gateway
     case EventKind::Err:   return QStringLiteral("ERR");    // lỗi đường truyền, file, nhập liệu
     case EventKind::Auth:  return QStringLiteral("AUTH");   // khóa / mở khóa chế độ kỹ sư
     }
@@ -22,23 +22,7 @@ QString eventTag(EventKind k)
 
 QString tagged(EventKind k, const QString &text) { return QStringLiteral("[%1] %2").arg(eventTag(k), text); }
 
-static FrameClass classifyPlain(const QByteArray &raw);
-
-// Khung PC gửi xuống Gateway qua RS485 có thêm byte thiết bị (01 TRB, 02 PSU, 03 TRSU) sau AB CD: nếu phân loại nguyên khung không ra nhóm nào
-// thì thử bỏ byte đó đi.
 FrameClass classifyFrame(const QByteArray &raw)
-{
-    FrameClass c = classifyPlain(raw);
-    if (c.group == LogSystem && raw.size() >= 5 && quint8(raw.at(2)) >= 1 && quint8(raw.at(2)) <= 3) {
-        QByteArray stripped = raw;
-        stripped.remove(2, 1);
-        const FrameClass s = classifyPlain(stripped);
-        if (s.group != LogSystem) return s;
-    }
-    return c;
-}
-
-static FrameClass classifyPlain(const QByteArray &raw)
 {
     FrameClass c;
     if (raw.size() < 4) return c;

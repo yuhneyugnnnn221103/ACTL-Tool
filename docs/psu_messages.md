@@ -20,8 +20,8 @@ Tài liệu này tổng hợp mọi bản tin liên quan tới PSU trong ACTL To
 |---|---|---|
 | Giám sát `81 81` | Ethernet (TCP, app là client, Gateway là server) | Gateway chuyển tiếp lên app |
 | Điều khiển `01 01` | Ethernet (cùng đường giám sát) | Ưu tiên cao hơn mọi lệnh khác trong hàng đợi |
-| Hỏi/ghi cấu hình `03 03`, `04 04`, `82 82` | RS485 (cổng COM) | Hỏi đáp: mỗi lúc chỉ một chức năng dùng đường này |
-| Nạp code STM32 `90`-`95` | RS485 (cổng COM) | Lần lượt từng PSU |
+| Hỏi/ghi cấu hình `03 03`, `04 04`, `82 82` | Ethernet (cùng đường giám sát) | Hỏi đáp: mỗi lúc chỉ một chức năng cấu hình hoặc nạp code chạy |
+| Nạp code STM32 `90`-`95` | Ethernet (cùng đường giám sát) | Lần lượt từng PSU |
 
 ### Bảng tổng hợp bản tin
 

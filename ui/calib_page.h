@@ -13,7 +13,7 @@ class QTableWidget;
 namespace ui {
 
 // Tab Calib: tích chọn kênh RX/TX, nhập phase/amp TX/RX từng kênh (số nguyên không dấu 0..255), gửi bản tin Calib 18 18 (150 byte)
-// qua RS485 (xem proto/trb_calib_proto.h); nhập/xuất file JSON để dùng lại.
+// qua Ethernet (xem proto/trb_calib_proto.h); nhập/xuất file JSON để dùng lại.
 class CalibPage : public QWidget {
     Q_OBJECT
 public:

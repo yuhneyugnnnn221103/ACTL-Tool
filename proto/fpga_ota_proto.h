@@ -1,5 +1,5 @@
 #pragma once
-// Nạp code FPGA trên TRB qua RS485 (theo fpga_ota_frame.h). CRC phủ từ byte địa chỉ.
+// Nạp code FPGA trên TRB qua Ethernet (theo fpga_ota_frame.h). CRC phủ từ byte địa chỉ.
 //   PC -> FPGA, 269 byte: [AB CD][CMD CMD][MB][TRB][ID 2B][Length][Data 256B][CRC][E1 E2]
 //       CMD: 55 nạp gói, 66 xóa flash, 88 hỏi trạng thái, AA yêu cầu boot. Địa chỉ FF FF = broadcast.
 //   FPGA -> PC, 40 byte:  [AB CD][99 99][Ack][CODE][STAT 4B][BOOTSTS 4B][WBSTAR 4B][VERSION 4B][Dự phòng 14B][CRC][E1 E2]

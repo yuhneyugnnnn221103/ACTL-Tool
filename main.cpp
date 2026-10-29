@@ -30,19 +30,16 @@ int main(int argc, char *argv[])
     services::FpgaOta::registerFrames(registry);
     services::StmOta::registerFrames(registry);
 
-    // Hai đường truyền, chung một thread I/O. Thêm đường mới = thêm một transport + một Link ở đây.
+    // Một đường truyền duy nhất (Ethernet tới Gateway) chạy trên thread I/O riêng: giám sát, điều khiển, cấu hình, nạp code, Calib đều đi đường này.
     core::Transport *monitorTransport;
     if (cfg.monitorReplayFile.isEmpty())
         monitorTransport = ctx.tcp = new core::TcpClientTransport(cfg.monitorAddress, cfg.monitorPort);
     else
         monitorTransport = new core::ReplayTransport(cfg.monitorReplayFile, cfg.replayIntervalMs, true);
     ctx.monitorLink = new core::Link(QStringLiteral("monitor"), monitorTransport, &registry);
-    ctx.serial = new core::SerialTransport(cfg.servicePort, cfg.serviceBaud);
-    ctx.serviceLink = new core::Link(QStringLiteral("service"), ctx.serial, &registry);
-    ctx.serviceLink->setIdleResetMs(20); // RS485 hỏi-đáp: bỏ khung cụt để không chặn câu trả lời kế tiếp
 
     QThread ioThread;
-    for (core::Link *l : {ctx.monitorLink, ctx.serviceLink}) {
+    for (core::Link *l : {ctx.monitorLink}) {
         l->moveToThread(&ioThread);
         QObject::connect(&ioThread, &QThread::finished, l, &QObject::deleteLater);
     }
@@ -68,18 +65,18 @@ int main(int argc, char *argv[])
     services::AlarmEngine alarms(&thresholds, &proto::trbmon::table());
     services::TrbMonitor trbMonitor(ctx.monitorLink, &store, &alarms);
     trbMonitor.setEmptyLimit(cfg.emptyFramesToLost);
-    services::TrbControl trbControl(ctx.serviceLink);   // điều khiển và beam TRB (A2, 14) gửi qua RS485, không qua Ethernet
-    services::TrbConfig trbConfig(ctx.serviceLink, &thresholds, cfg.thresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
+    services::TrbControl trbControl(ctx.monitorLink);
+    services::TrbConfig trbConfig(ctx.monitorLink, &thresholds, cfg.thresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
     services::AlarmEngine psuAlarms(&psuThresholds, &proto::psumon::table());
     services::PsuMonitor psuMonitor(ctx.monitorLink, &psuStore, &psuAlarms);
     psuMonitor.setEmptyLimit(cfg.emptyFramesToLost);
     services::PsuControl psuControl(ctx.monitorLink);
-    services::PsuConfig psuConfig(ctx.serviceLink, &psuThresholds, cfg.psuThresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
+    services::PsuConfig psuConfig(ctx.monitorLink, &psuThresholds, cfg.psuThresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
     services::LogRecorder logger(cfg.logDir, cfg.logPeriodMs);
-    services::TrbCalib trbCalib(ctx.serviceLink);   // bản tin Calib (18 18) gửi qua RS485
+    services::TrbCalib trbCalib(ctx.monitorLink);
     ctx.trbCalib = &trbCalib;
-    services::FpgaOta fpgaOta(ctx.serviceLink);
-    services::StmOta stmOta(ctx.serviceLink);
+    services::FpgaOta fpgaOta(ctx.monitorLink);
+    services::StmOta stmOta(ctx.monitorLink);
     ctx.fpgaOta = &fpgaOta;
     ctx.stmOta = &stmOta;
     ui::Auth auth(cfg.passwordHash, cfg.lockMinutes);

@@ -9,8 +9,6 @@ struct Settings {
     quint16 monitorPort;
     QString monitorReplayFile; // khác rỗng: phát lại file hex thay cho TCP (để thử)
     int replayIntervalMs;
-    QString servicePort;       // cổng COM của đường RS485 (cấu hình, nạp code)
-    int serviceBaud;
     bool trbCheckCrc, psuCheckCrc;
     int cfgReadTimeoutMs, cfgWriteGapMs;
     bool logEnabled, logAutoStart;
@@ -44,8 +42,6 @@ struct Settings {
         s.monitorPort = quint16(get("monitor/gatewayPort", 5000).toUInt());
         s.monitorReplayFile = get("monitor/replayFile", "").toString();
         s.replayIntervalMs = get("monitor/replayIntervalMs", 5).toInt();
-        s.servicePort = get("service/port", "").toString();
-        s.serviceBaud = get("service/baud", 1000000).toInt();
         s.trbCheckCrc = get("trb/checkCrc", true).toBool();
         s.psuCheckCrc = get("psu/checkCrc", true).toBool();
         s.cfgReadTimeoutMs = get("config/replyTimeoutMs", 200).toInt(); // khóa mới: khóa cũ config/readTimeoutMs đã bị ghi 3000 vào file ini ở các lần chạy trước

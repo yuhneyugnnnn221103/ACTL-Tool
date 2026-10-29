@@ -4,7 +4,7 @@
 
 namespace services {
 
-// Đọc/ghi cấu hình PSU qua link RS485, lần lượt từng PSU. Ghi không có ACK nên luôn đọc lại để kiểm tra.
+// Đọc/ghi cấu hình PSU qua link Ethernet, lần lượt từng PSU. Ghi không có ACK nên luôn đọc lại để kiểm tra.
 // Mỗi lần đọc được cấu hình thì cập nhật ngưỡng cảnh báo (khóa theo địa chỉ PSU).
 class PsuConfig : public QObject {
     Q_OBJECT

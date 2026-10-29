@@ -5,19 +5,19 @@ Các lệnh (python3 tools/mock_gateway.py <lệnh> -h để xem tùy chọn):
 
   list         Liệt kê các kịch bản.
   tcp          Giả Gateway: là TCP server (mặc định 0.0.0.0:5000), chờ app (TCP client) nối vào rồi bơm bản tin giám sát
-               TRB (2323) và PSU (81) theo kịch bản. In ra lệnh điều khiển/beam mà app gửi xuống.
+               TRB (2323) và PSU (81) theo kịch bản. Trên cùng kết nối đó trả lời lệnh đọc cấu hình TRB (A3A3) và PSU (03 03),
+               nhớ cấu hình đã ghi (A1A1, 04 04), in ra lệnh điều khiển / beam / Calib mà app gửi xuống (--drop, --corrupt, --delay
+               để thử khi mất gói hoặc ghi sai).
   hex          Ghi file hex để app phát lại: đặt monitor/replayFile=<file> trong actl_tool.ini.
   thresholds   Ghi thresholds.json và psu_thresholds.json mẫu để kịch bản "warning" có giá trị vượt ngưỡng.
-  serial       Tạo cổng giả RS485 (pty, chỉ Linux/macOS): trả lời lệnh đọc cấu hình TRB (A3A3) và PSU (03),
-               nhớ cấu hình đã ghi (A1A1, 04). Mở đường dẫn in ra trong ô cổng COM của app.
   selftest     Tự kiểm tra bộ dựng bản tin và cổng giả, không cần app.
 
 Ví dụ:
   python3 tools/mock_gateway.py thresholds --dir build            # ngưỡng mẫu, chạy trước khi mở app
   python3 tools/mock_gateway.py tcp --scenario all --rate 2       # chạy trước, trong app nhập IP máy này (127.0.0.1) cổng 5000 rồi Kết nối
-  python3 tools/mock_gateway.py serial --drop 0.2 --corrupt 0.1   # thử cấu hình khi RS485 mất gói / ghi sai
+  python3 tools/mock_gateway.py tcp --drop 0.2 --corrupt 0.1     # thử cấu hình khi mất gói / ghi sai
 
-Mọi CMD phía PSU là 2 byte lặp (01 01, 03 03, 04 04, 81 81, 82 82, 90 90 .. 95 95), CRC phủ từ byte CMD.
+Mọi CMD phía PSU là 2 byte lặp (01 01, 03 03, 04 04, 81 81, 82 82, 90 90 .. 95 95), CRC phủ từ byte địa chỉ (ngay sau CMD).
 Bố cục bản tin lấy theo proto/trb_monitor_proto.cpp, proto/psu_monitor_proto.cpp và các proto cấu hình;
 nếu sửa bản tin bên C++ thì sửa hằng số tương ứng ở đây (selftest sẽ báo nếu độ dài không khớp).
 """
@@ -403,10 +403,10 @@ def tcp_session(args, ctx, sock):
     print(f"kịch bản '{args.scenario}', {args.rate} lượt/giây, mỗi lần gửi dồn 8 bản tin TRB của một MB (TRB không phản hồi thay bằng khung rỗng chỉ có địa chỉ).")
 
     stop = threading.Event()
-    rx = bytearray()
+    send_lock = threading.Lock()
+    resp = ConfigResponder(args.drop, args.corrupt, args.delay / 1000.0, random.Random(args.seed), log=lambda l: print("  <- app:", l.strip()))
 
     def reader():
-        nonlocal rx
         while not stop.is_set():
             try:
                 data = sock.recv(4096)
@@ -414,11 +414,9 @@ def tcp_session(args, ctx, sock):
                     print("app đã đóng kết nối")
                     stop.set()
                     return
-                rx += data
-                lines, rest = decode_control(bytes(rx))
-                rx = bytearray(rest)
-                for l in lines:
-                    print("  <- app:", l)
+                for reply in resp.feed(data):
+                    with send_lock:
+                        sock.sendall(reply)
             except socket.timeout:
                 continue
             except OSError:
@@ -436,9 +434,10 @@ def tcp_session(args, ctx, sock):
                 last_name = name
             for item in burst_frames(frames, args.mb, args.trb):
                 data, pause = item if isinstance(item, tuple) else (item, 0)
-                sock.setblocking(True)
-                sock.sendall(data)
-                sock.settimeout(0.01)
+                with send_lock:
+                    sock.settimeout(5)
+                    sock.sendall(data)
+                    sock.settimeout(0.01)
                 if pause:
                     time.sleep(pause)
             time.sleep(max(0.0, 1.0 / args.rate))
@@ -496,8 +495,8 @@ TRB_CFG_LEN, TRB_CFG_READ_LEN = 520, 10
 PSU_CFG_LEN, PSU_CFG_READ_LEN = 915, 13
 
 
-class SerialResponder:
-    """Trả lời cấu hình qua một luồng byte; nhớ cấu hình đã ghi theo thiết bị."""
+class ConfigResponder:
+    """Trả lời cấu hình qua một luồng byte (cùng kết nối TCP với giám sát); nhớ cấu hình đã ghi theo thiết bị."""
 
     def __init__(self, drop=0.0, corrupt=0.0, delay=0.0, rng=None, log=print):
         self.drop, self.corrupt, self.delay = drop, corrupt, delay
@@ -511,16 +510,16 @@ class SerialResponder:
         return frame[n - 2] == T1 and frame[n - 1] == T2 and crc16(bytes(frame[start:n - 4])) == (frame[n - 4] << 8 | frame[n - 3])
 
     def feed(self, data):
-        """Nhận byte, trả về danh sách bytes cần gửi lại. Vai Gateway: khung PC gửi xuống có byte thiết bị sau AB CD
-        (0x01 = TRB, 0x02 = PSU, 0x03 = TRSU); bỏ byte đó đi, ghép lại khung gốc rồi mới xử lý như TRB/PSU."""
+        """Nhận byte từ app, trả về danh sách bytes cần gửi lại: khung điều khiển tổng 107 byte (AB CD EF ...) chỉ in ra,
+        cấu hình TRB / PSU và Calib xử lý như thiết bị thật."""
         self.buf += data
         replies = []
-        while len(self.buf) >= 5:
+        while len(self.buf) >= 4:
             b = self.buf
             if b[0] != H1 or b[1] != H2:
                 del b[0]
                 continue
-            if b[2] == 0xEF:                                  # khung điều khiển tổng 107 byte (điều khiển TRB A2/14 đi đường RS485)
+            if b[2] == 0xEF:                                  # khung điều khiển tổng 107 byte
                 if len(b) < CTL_LEN:
                     break
                 lines, _ = decode_control(bytes(b[:CTL_LEN]))
@@ -531,29 +530,28 @@ class SerialResponder:
                 else:
                     del b[0]
                 continue
-            dev, cmd2 = b[2], bytes(b[3:5])
-            if dev == 1 and cmd2 == b"\xA1\xA1":
+            cmd2 = bytes(b[2:4])
+            if cmd2 == b"\xA1\xA1":
                 n, kind = TRB_CFG_LEN, "ghi TRB"
-            elif dev == 1 and cmd2 == b"\xA3\xA3":
+            elif cmd2 == b"\xA3\xA3":
                 n, kind = TRB_CFG_READ_LEN, "đọc TRB"
-            elif dev == 1 and cmd2 == b"\x18\x18":
+            elif cmd2 == b"\x18\x18":
                 n, kind = CALIB_LEN, "calib TRB"
-            elif dev == 2 and cmd2 == b"\x04\x04":
+            elif cmd2 == b"\x04\x04":
                 n, kind = PSU_CFG_LEN, "ghi PSU"
-            elif dev == 2 and cmd2 == b"\x03\x03":
+            elif cmd2 == b"\x03\x03":
                 n, kind = PSU_CFG_READ_LEN, "đọc PSU"
             else:
                 del b[0]
                 continue
-            if len(b) < n + 1:
+            if len(b) < n:
                 break
-            frame = bytes(b[:2] + b[3:n + 1])                 # bỏ byte thiết bị: khung gốc dài n
-            start = 4                                         # CRC từ byte địa chỉ (ngay sau CMD) cho cả TRB và PSU
-            if not self._crc_ok(frame, start):
+            frame = bytes(b[:n])
+            if not self._crc_ok(frame, 4):                    # CRC từ byte địa chỉ cho mọi khung
                 self.log(f"  khung {kind} sai CRC/tailer, bỏ qua 1 byte")
                 del b[0]
                 continue
-            del b[:n + 1]
+            del b[:n]
             replies += self._handle(kind, frame)
         return replies
 
@@ -594,24 +592,6 @@ class SerialResponder:
         if self.delay:
             time.sleep(self.delay)
         return [seal(reply, crc_start)]
-
-
-def cmd_serial(args):
-    import pty
-    import tty
-    master, slave = pty.openpty()
-    tty.setraw(slave)
-    tty.setraw(master)
-    print(f"Cổng RS485 giả: {os.ttyname(slave)}\nMở đường dẫn này trong ô cổng COM của app (baud tùy ý). Ctrl+C để dừng.")
-    resp = SerialResponder(args.drop, args.corrupt, args.delay / 1000.0, random.Random(args.seed))
-    try:
-        while True:
-            if select.select([master], [], [], 0.5)[0]:
-                data = os.read(master, 4096)
-                for r in resp.feed(data):
-                    os.write(master, r)
-    except KeyboardInterrupt:
-        pass
 
 
 # ----------------------------------------------------------------------------- tự kiểm tra
@@ -672,38 +652,33 @@ def cmd_selftest(_args):
     check(len(lines) == 1 and "[01] Esp=12.3 Beta=-4.5 Freq=2400 MHz Mode=5" in lines[0] and "[10] Esp=-1.0" in lines[0]
           and "[11] Esp=3276.7 Beta=-3276.8 Freq=65535 MHz Mode=255" in lines[0] and "đúng" in lines[0], "điều khiển beam (bit2, giá trị riêng từng mode, CRC từ header)")
 
-    print("RS485 giả (cấu hình, có byte thiết bị sau AB CD):")
-    def dev(d, f):
-        f = bytes(f)
-        return f[:2] + bytes([d]) + f[2:]
-    r = SerialResponder(rng=random.Random(2), log=lambda *_: None)
+    print("cấu hình qua cùng kết nối TCP (không có byte thiết bị):")
+    r = ConfigResponder(rng=random.Random(2), log=lambda *_: None)
     w = bytearray(TRB_CFG_LEN); w[2] = w[3] = 0xA1; w[4], w[5] = 6, 2; w[10:14] = b"\x01\x02\x03\x04"
-    check(r.feed(dev(1, seal(w, 4))) == [], "ghi TRB không có trả lời")
+    check(r.feed(seal(w, 4)) == [], "ghi TRB không có trả lời")
     rd = bytearray(TRB_CFG_READ_LEN); rd[2] = rd[3] = 0xA3; rd[4], rd[5] = 6, 2
-    out = r.feed(dev(1, seal(rd, 4)))
+    out = r.feed(seal(rd, 4))
     check(len(out) == 1 and len(out[0]) == TRB_CFG_LEN and out[0][2:4] == b"\xA4\xA4" and out[0][10:14] == b"\x01\x02\x03\x04"
           and crc16(out[0][4:516]) == (out[0][516] << 8 | out[0][517]), "đọc TRB trả đúng cấu hình đã ghi (A4A4)")
     w = bytearray(PSU_CFG_LEN); w[2] = w[3] = 0x04; w[PSU_ADDR] = 3; w[5] = w[6] = 0xFF; w[500:504] = b"\xDE\xAD\xBE\xEF"
-    r.feed(dev(2, seal(w, 4)))
+    r.feed(seal(w, 4))
     rd = bytearray(PSU_CFG_READ_LEN); rd[2] = rd[3] = 0x03; rd[PSU_ADDR] = 3
-    out = r.feed(dev(2, seal(rd, 4)))
+    out = r.feed(seal(rd, 4))
     check(len(out) == 1 and len(out[0]) == PSU_CFG_LEN and out[0][2:4] == b"\x82\x82" and out[0][500:504] == b"\xDE\xAD\xBE\xEF"
           and crc16(out[0][4:911]) == (out[0][911] << 8 | out[0][912]), "đọc PSU trả đúng cấu hình đã ghi (82 82)")
-    noisy = SerialResponder(drop=1.0, rng=random.Random(3), log=lambda *_: None)
-    check(noisy.feed(dev(2, seal(bytearray(rd), 4))) == [], "--drop 1.0: không trả lời")
-    chunks = dev(2, seal(bytearray(rd), 4))
+    noisy = ConfigResponder(drop=1.0, rng=random.Random(3), log=lambda *_: None)
+    check(noisy.feed(seal(bytearray(rd), 4)) == [], "--drop 1.0: không trả lời")
+    chunks = seal(bytearray(rd), 4)
     split = [r.feed(chunks[:5]), r.feed(chunks[5:])]
     check(split[0] == [] and len(split[1]) == 1, "nhận khung bị chia mảnh")
     logged = []
-    ctl_r = SerialResponder(rng=random.Random(4), log=logged.append)
+    ctl_r = ConfigResponder(rng=random.Random(4), log=logged.append)
     ctl = bytearray(14); ctl[2] = ctl[3] = 0xA2; ctl[4], ctl[5], ctl[6], ctl[7] = 7, 3, 5, 0x03
-    check(ctl_r.feed(wrap(0, seal(ctl, 4))) == [] and any("điều khiển TRB MB8/TRB4" in l for l in logged), "RS485 nhận khung điều khiển tổng 107 byte (A2)")
+    check(ctl_r.feed(wrap(0, seal(ctl, 4))) == [] and any("điều khiển TRB MB8/TRB4" in l for l in logged), "nhận khung điều khiển tổng 107 byte (A2)")
     cal = bytearray(CALIB_LEN); cal[2] = cal[3] = 0x18; cal[4], cal[5] = 2, 5; cal[6] = 0x80; cal[13] = 0x01; cal[14:18] = bytes([11, 12, 13, 14])
     logged.clear()
-    check(ctl_r.feed(dev(1, seal(cal, 4))) == [] and any("calib MB2/TRB5: RX_EN=80000000 TX_EN=00000001" in l and "phaseTX=11" in l for l in logged), "RS485 nhận bản tin Calib 18 18 (150 byte + byte thiết bị 01)")
-    check(r.feed(seal(bytearray(rd), 4)) == [], "khung PSU thiếu byte thiết bị bị bỏ qua")
-    check(r.feed(dev(1, seal(bytearray(rd), 4))) == [], "byte thiết bị sai loại (TRB cho khung PSU) bị bỏ qua")
-    junk = r.feed(b"\x00\xFF\xAB" + dev(2, seal(bytearray(rd), 4)))
+    check(ctl_r.feed(seal(cal, 4)) == [] and any("calib MB2/TRB5: RX_EN=80000000 TX_EN=00000001" in l and "phaseTX=11" in l for l in logged), "nhận bản tin Calib 18 18 (150 byte)")
+    junk = r.feed(b"\x00\xFF\xAB" + seal(bytearray(rd), 4))
     check(len(junk) == 1, "bỏ qua byte rác phía trước")
 
     print("không có lỗi" if not check.failed else f"{check.failed} lỗi")
@@ -736,16 +711,14 @@ def main():
     p.add_argument("--host", default="0.0.0.0", help="địa chỉ lắng nghe"); p.add_argument("--port", type=int, default=5000)
     p.add_argument("--rate", type=float, default=2.0, help="số lượt gửi đủ mọi thiết bị mỗi giây")
     p.add_argument("--duration", type=float, default=0, help="giây; 0 = chạy mãi")
+    p.add_argument("--drop", type=float, default=0.0, help="xác suất bỏ không trả lời lệnh đọc cấu hình")
+    p.add_argument("--corrupt", type=float, default=0.0, help="xác suất lưu sai một byte khi ghi cấu hình (thử đọc lại không khớp)")
+    p.add_argument("--delay", type=float, default=0.0, help="ms trễ trước khi trả lời cấu hình")
     p = sub.add_parser("hex"); common(p); p.set_defaults(fn=cmd_hex)
     p.add_argument("out"); p.add_argument("--ticks", type=int, default=10, help="số lượt")
     p.add_argument("--tick-seconds", type=float, default=1.0, help="thời gian mô phỏng mỗi lượt (cho 'lost', 'all')")
     p = sub.add_parser("thresholds"); p.set_defaults(fn=cmd_thresholds)
     p.add_argument("--dir", default=".", help="thư mục ghi (cạnh file chạy của app)")
-    p = sub.add_parser("serial"); p.set_defaults(fn=cmd_serial)
-    p.add_argument("--drop", type=float, default=0.0, help="xác suất bỏ không trả lời lệnh đọc")
-    p.add_argument("--corrupt", type=float, default=0.0, help="xác suất lưu sai một byte khi ghi (thử đọc lại không khớp)")
-    p.add_argument("--delay", type=float, default=0.0, help="ms trễ trước khi trả lời")
-    p.add_argument("--seed", type=int, default=1)
     p = sub.add_parser("selftest"); p.set_defaults(fn=cmd_selftest)
 
     args = ap.parse_args()

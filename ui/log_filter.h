@@ -13,7 +13,7 @@ enum LogGroup {
     LogPsuConfig = 8,
     LogFirmware = 16,       // nạp FPGA và STM32
     LogBeam = 32,           // điều khiển beam qua Ethernet
-    LogCalib = 64,          // bản tin Calib qua RS485
+    LogCalib = 64,          // bản tin Calib
     LogAll = 127
 };
 

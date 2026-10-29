@@ -57,7 +57,6 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         proto/trb_monitor_proto.h proto/trb_monitor_proto.cpp
         proto/trb_control_proto.h proto/trb_control_proto.cpp
         proto/control_frame_proto.h proto/control_frame_proto.cpp
-        proto/device_select_proto.h proto/device_select_proto.cpp
         services/trb_control.h services/trb_control.cpp
         proto/trb_config_proto.h proto/trb_config_proto.cpp
         services/trb_config.h services/trb_config.cpp
@@ -132,12 +131,12 @@ if(QT_VERSION_MAJOR EQUAL 6)
     qt_finalize_executable(ACTL_Tool)
 endif()
 
-# Giả lập TRB cắm vào phía thiết bị của Gateway qua RS485 (xem docs/simulator_design.md).
+# Giả lập TRB cắm vào phía thiết bị của Gateway qua cổng COM (xem docs/simulator_design.md).
 set(SIM_CORE_FILES
     core/transport.h core/serial_transport.h
     core/frame.cpp core/frame_parser.cpp
     core/serial_transport.cpp
-    proto/field_table.cpp proto/trb_monitor_proto.cpp proto/trb_control_proto.cpp proto/control_frame_proto.cpp proto/device_select_proto.cpp proto/trb_config_proto.cpp proto/trb_calib_proto.cpp
+    proto/field_table.cpp proto/trb_monitor_proto.cpp proto/trb_control_proto.cpp proto/control_frame_proto.cpp proto/trb_config_proto.cpp proto/trb_calib_proto.cpp
 )
 # Bản dòng lệnh (không cần giao diện): actl_sim_cli --serial COM5. Bản có giao diện là tab Giả lập trong ACTL_Tool.
 add_executable(actl_sim_cli sim/main_sim.cpp ${SIM_SOURCES} ${SIM_CORE_FILES})
@@ -153,7 +152,7 @@ if(Qt${QT_VERSION_MAJOR}Test_FOUND)
         core/transport.h core/link.h
         core/frame.cpp core/frame_parser.cpp core/link.cpp
         proto/field_table.cpp
-        proto/trb_monitor_proto.cpp proto/trb_control_proto.cpp proto/control_frame_proto.cpp proto/device_select_proto.cpp proto/trb_config_proto.cpp
+        proto/trb_monitor_proto.cpp proto/trb_control_proto.cpp proto/control_frame_proto.cpp proto/trb_config_proto.cpp
         proto/fpga_ota_proto.cpp proto/stm_ota_proto.cpp proto/beam_eth_proto.cpp proto/trb_calib_proto.cpp
         proto/psu_monitor_proto.cpp proto/psu_control_proto.cpp proto/psu_config_proto.cpp
         model/device_store.cpp model/psu_store.cpp model/thresholds.cpp

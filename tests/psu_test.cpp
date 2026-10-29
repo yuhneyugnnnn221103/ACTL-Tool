@@ -2,7 +2,6 @@
 #include "../core/link.h"
 #include "../model/device_store.h"
 #include "../model/psu_store.h"
-#include "../proto/device_select_proto.h"
 #include "../proto/psu_config_proto.h"
 #include "../proto/psu_control_proto.h"
 #include "../proto/psu_monitor_proto.h"
@@ -55,8 +54,7 @@ struct FakePsu {
     void attach(FakeTransport *t)
     {
         t->onWrite = [this, t](const QByteArray &raw) {
-            QVERIFY(quint8(raw.at(2)) == devsel::Psu);                      // byte thiết bị; vai Gateway bỏ đi rồi mới tới PSU
-            const QByteArray d = devsel::strip(raw);
+            const QByteArray &d = raw;
             const int addr = quint8(d.at(psucfg::kOffAddr));
             if (d.mid(2, 2) == psucfg::writeCmd()) {
                 lastWrite = d;
@@ -362,7 +360,7 @@ private slots:
         status[2] = status[3] = char(0x99);
         status[38] = char(0xE1); status[39] = char(0xE2);
         core::seal(status, 4);
-        tp->onWrite = [&](const QByteArray &raw) { const QByteArray d = devsel::strip(raw); if (d.size() == 269 && quint8(d[2]) == 0x88) tp->injectLater(status); };
+        tp->onWrite = [&](const QByteArray &d) { if (d.size() == 269 && quint8(d[2]) == 0x88) tp->injectLater(status); };
 
         services::FpgaOta ota(&link);
         ota.setNodes({{0, 0}, {0, 1}});
@@ -378,7 +376,7 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
 
         QList<quint8> cmds;                                      // chuỗi lệnh đã gửi
-        for (const QByteArray &d : tp->written) { QCOMPARE(quint8(d[2]), quint8(devsel::Trb)); cmds << quint8(d[3]); }   // mọi khung nạp FPGA mang DEV = TRB, CMD ngay sau đó
+        for (const QByteArray &d : tp->written) cmds << quint8(d[2]);
         const int loads = broadcast ? 3 : 6;                     // gửi riêng: 3 gói x 2 TRB
         QCOMPARE(cmds.mid(0, loads), QList<quint8>(loads, 0x55));   // toàn bộ gói đi trước, không xen lệnh hỏi
         QCOMPARE(cmds.mid(loads), (QList<quint8>{0x88, 0x88}));     // rồi mới hỏi từng TRB
@@ -403,8 +401,7 @@ private slots:
             return a;
         };
         QList<quint8> cmds;
-        tp->onWrite = [&](const QByteArray &raw) {
-            const QByteArray d = devsel::strip(raw);                        // nạp STM32 gửi cho PSU (byte thiết bị 0x02), Gateway bỏ đi
+        tp->onWrite = [&](const QByteArray &d) {
             const quint8 c = quint8(d[2]);
             cmds << c;
             switch (c) {
@@ -444,8 +441,7 @@ private slots:
             core::seal(a, 4);
             return a;
         };
-        tp->onWrite = [&](const QByteArray &raw) {
-            const QByteArray d = devsel::strip(raw);                        // nạp STM32 gửi cho PSU (byte thiết bị 0x02), Gateway bỏ đi
+        tp->onWrite = [&](const QByteArray &d) {
             const quint8 c = quint8(d[2]);
             if (c == stmota::kInfo) tp->injectLater(ack(c, stmota::Ok, 5, 'R'));                  // recovery
             else if (c == stmota::kErase) tp->injectLater(ack(c, stmota::EraseFail, 0x55, 'R'));

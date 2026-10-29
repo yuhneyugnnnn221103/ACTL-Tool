@@ -1,5 +1,4 @@
 #include "bus_port.h"
-#include "../proto/device_select_proto.h"
 #include <QTimer>
 
 namespace sim {
@@ -21,14 +20,9 @@ BusPort::BusPort(core::Transport *transport, SimWorld *world, bool checkCrc, qui
 
 void BusPort::onBytes(const QByteArray &data)
 {
-    m_parser.feed(data, [this](const core::Frame &parsed) {
+    m_parser.feed(data, [this](const core::Frame &frame) {
         ++m_stats.requests;
-        emit received(parsed.raw);
-        core::Frame frame = parsed;
-        if (frame.cmd.size() == 2 && frame.cmd.at(0) >= 1 && frame.cmd.at(0) <= 3) {   // vai Gateway: bỏ byte thiết bị, ghép lại khung gốc
-            frame.raw = proto::devsel::strip(frame.raw);
-            frame.cmd = frame.raw.mid(2, 2);
-        }
+        emit received(frame.raw);
         const QByteArray reply = m_world->handle(frame);
         if (!reply.isEmpty()) send(reply, true);
     });

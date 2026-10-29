@@ -38,8 +38,6 @@ private:
     void showConnBox();
     void watchLink(core::Link *link, const QString &title, StatusPill *pill, QPushButton *button);
     void toggleTcp();
-    void toggleSerial();
-    void refreshPorts();
     void showDetail(int mb, int trb);
     void showPsu(int addr);
     void refresh();
@@ -55,9 +53,8 @@ private:
 
     QLineEdit *m_tcpAddress;
     QSpinBox *m_tcpPort;
-    QComboBox *m_comPort, *m_comBaud;
-    QPushButton *m_tcpButton, *m_comButton;
-    StatusPill *m_tcpPill, *m_comPill, *m_sparePill;   // thẻ trạng thái các đường trong popup
+    QPushButton *m_tcpButton;
+    StatusPill *m_tcpPill;   // thẻ trạng thái đường Ethernet trong popup
     StatusPill *m_connPill;              // một thẻ cho đường của trang đang mở; bấm để xem đủ 4 đường
     QFrame *m_connPopup;
     QLabel *m_rxErrLabel = nullptr;      // thống kê lỗi nhận, ở cuối cửa sổ thả
@@ -67,7 +64,7 @@ private:
     qint64 m_lastRejectLogMs = 0;
     QString m_rxErrText = QStringLiteral("Lỗi CRC: 0 · Sai đuôi: 0 · Byte bỏ qua: 0");   // hiện trong cửa sổ thả của thẻ kết nối
     StatusPill *m_counterPills[5];
-    core::Transport::State m_tcpState = core::Transport::State::Closed, m_comState = core::Transport::State::Closed;
+    core::Transport::State m_tcpState = core::Transport::State::Closed;
 
     OverviewGrid *m_grid;
     TrbDetailPage *m_detail;

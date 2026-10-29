@@ -6,7 +6,7 @@
 //   RX_CHN_EN / TX_CHN_EN: bit c = kênh c bật (1). Byte đầu (7 hoặc 11) = kênh 24-31, byte cuối (10 hoặc 14) = kênh 0-7;
 //   trong mỗi byte bit 0 = kênh thấp nhất của byte đó.
 //   Mỗi kênh 4 byte: phase TX, phase RX, amp TX, amp RX (số nguyên không dấu 0..255).
-// Gửi qua đường RS485; khi gửi xuống Gateway có thêm byte thiết bị 0x01 (TRB) sau AB CD (xem device_select_proto.h), Gateway bỏ byte đó đi.
+// Gửi qua đường Ethernet tới Gateway, không có trả lời.
 #include <QByteArray>
 #include <QJsonObject>
 #include <QString>

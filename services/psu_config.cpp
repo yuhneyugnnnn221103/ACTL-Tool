@@ -1,5 +1,4 @@
 #include "psu_config.h"
-#include "../proto/device_select_proto.h"
 #include "../proto/psu_config_proto.h"
 
 namespace services {
@@ -85,7 +84,7 @@ void PsuConfig::sendRead(Stage stage)
 {
     m_stage = stage;
     core::Request r;
-    r.data = devsel::add(devsel::Psu, psucfg::buildReadRequest(m_task.addr));   // byte chọn thiết bị cho Gateway
+    r.data = psucfg::buildReadRequest(m_task.addr);
     r.replyCmd = psucfg::replyCmd();
     r.timeoutMs = m_readTimeoutMs;
     r.retries = 2; // hết thời gian chờ thì hỏi lại tối đa 2 lần nữa (tổng 3 lần)
@@ -96,7 +95,7 @@ void PsuConfig::sendWrite()
 {
     m_stage = Stage::Write;
     core::Request r;
-    r.data = devsel::add(devsel::Psu, psucfg::buildWrite(m_task.addr, m_task.values));
+    r.data = psucfg::buildWrite(m_task.addr, m_task.values);
     r.gapMs = m_writeGapMs; // chờ PSU lưu xong trước khi đọc lại
     m_waitId = m_link->send(r);
 }
@@ -108,7 +107,7 @@ void PsuConfig::onRequestFinished(quint64 id, bool ok, const core::Frame &reply)
 
     if (m_stage == Stage::Write) {
         if (ok) sendRead(Stage::Verify);
-        else done(false, QStringLiteral("không gửi được (chưa mở cổng RS485)"));
+        else done(false, QStringLiteral("không gửi được (chưa kết nối Gateway)"));
         return;
     }
 

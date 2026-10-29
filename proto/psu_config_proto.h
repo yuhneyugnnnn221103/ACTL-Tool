@@ -1,5 +1,5 @@
 #pragma once
-// Cấu hình PSU qua RS485 (theo "Định nghĩa bản tin"), CRC phủ từ byte CMD:
+// Cấu hình PSU qua Ethernet (theo "Định nghĩa bản tin"), CRC phủ từ byte CMD:
 //   Hỏi      CMD 03 03, 13 byte:  [AB CD][03 03][Addr][Dự phòng 4B][CRC][E1 E2]
 //   Ghi      CMD 04 04, 915 byte: [AB CD][04 04][Addr][Mask 2B][CỤM 1..4: 4x192B][INA 72B][Ngưỡng Supply 48B][Dự phòng 16B][CRC][E1 E2]
 //   Trả lời  CMD 82 82, 915 byte: giống khung ghi (Mask không dùng)

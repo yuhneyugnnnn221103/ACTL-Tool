@@ -1,5 +1,4 @@
 #include "trb_calib.h"
-#include "../proto/device_select_proto.h"
 
 namespace services {
 
@@ -21,7 +20,7 @@ void TrbCalib::send(int mb, int trb, const proto::calib::Data &d)
     const QString text = QStringLiteral("Calib %1 [RX bật %2 kênh, TX bật %3 kênh]").arg(target).arg(count(d.rxEn)).arg(count(d.txEn));
 
     core::Request r;
-    r.data = proto::devsel::add(proto::devsel::Trb, proto::calib::buildFrame(mb, trb, d));
+    r.data = proto::calib::buildFrame(mb, trb, d);
     r.priority = 10;
     m_pending.insert(m_link->send(r), text);
 }

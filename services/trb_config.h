@@ -5,7 +5,7 @@
 
 namespace services {
 
-// Đọc/ghi cấu hình TRB qua link RS485, lần lượt từng thiết bị.
+// Đọc/ghi cấu hình TRB qua link Ethernet, lần lượt từng thiết bị.
 // Ghi không có ACK nên luôn đọc lại để kiểm tra. Mỗi lần đọc được cấu hình thì cập nhật ngưỡng cảnh báo.
 class TrbConfig : public QObject {
     Q_OBJECT

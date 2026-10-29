@@ -140,7 +140,7 @@ CalibPage::CalibPage(const AppContext &ctx, QWidget *parent) : QWidget(parent), 
     buttons->addWidget(m_send);
     buttons->addWidget(m_result, 1);
 
-    m_hint = new QLabel(QStringLiteral("Chưa mở cổng COM (RS485): bấm thẻ kết nối ở góc trên bên trái, chọn dòng RS485, chọn cổng và mở. Bản tin Calib gửi qua đường này."));
+    m_hint = new QLabel(QStringLiteral("Chưa kết nối Gateway (Ethernet): bấm thẻ kết nối ở góc trên bên trái để nhập IP, cổng và kết nối."));
     theme::setRole(m_hint, "muted");
 
     auto *l = new QVBoxLayout(this);
@@ -153,7 +153,7 @@ CalibPage::CalibPage(const AppContext &ctx, QWidget *parent) : QWidget(parent), 
     l->addWidget(m_table, 1);
     l->addLayout(buttons);
 
-    connect(ctx.serviceLink, &core::Link::stateChanged, this, &CalibPage::showState);
+    connect(ctx.monitorLink, &core::Link::stateChanged, this, &CalibPage::showState);
     showState(State::Closed);
 }
 

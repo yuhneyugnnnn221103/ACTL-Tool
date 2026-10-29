@@ -29,7 +29,6 @@ public:
     int mb() const { return m_mb; }
     int trb() const { return m_trb; }
     void refresh();
-    void setControlLinkConnected(bool connected);   // đường RS485 gửi lệnh điều khiển/beam TRB đã mở chưa (hiện nhắc nếu chưa)
 
 signals:
     void deviceChanged(int mb, int trb);
@@ -51,7 +50,7 @@ private:
     QComboBox *m_mbBox, *m_trbBox, *m_target, *m_mode;
     QList<StatusPill *> m_pills;
     StatusPill *m_debugPill;   // m_debugPill: TRB đang ở chế độ Debug (nếu có)
-    QLabel *m_status, *m_linkHint;
+    QLabel *m_status;
     struct Table { QTableWidget *w; int firstField; };
     QList<Table> m_tables;
     QList<QLabel *> m_metrics, m_rawMetrics;   // m_rawMetrics: PERIOD/PULSE TXEN, BEAMSYNC (số thô, không có ngưỡng)

@@ -108,8 +108,8 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     setWindowTitle(QStringLiteral("ACTL Tool"));
     setMinimumSize(1100, 560);   // đặt sẵn để layout không tự nới cửa sổ quá màn hình; trang nào lớn hơn thì cuộn
     // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
-    // Đường kết nối của từng trang: 0 giám sát (Ethernet; điều khiển PSU và beam cũng đi đường này), 1 RS485 (cấu hình, nạp code, điều khiển và beam TRB), -1 không có.
-    m_pageConn = {0, 0, 1, 0, 1, 1, 0, 1, 0, -1};
+    // Đường kết nối của từng trang: 0 = Ethernet tới Gateway (mọi chức năng dùng chung), -1 = trang không dùng đường nào.
+    m_pageConn = {0, 0, 0, 0, 0, 0, 0, 0, 0, -1};
     m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogBeam, LogCalib, LogAll, LogSystem};
 
     // Điều hướng trái + các trang.
@@ -147,7 +147,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     m_pages->addWidget(scrollPage(calibPage));
     connect(ctx.trbCalib, &services::TrbCalib::commandFinished, this, [this](const QString &d, bool sent) {
         logEvent(tagged(sent ? EventKind::Ctrl : EventKind::Err,
-                         (sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa mở cổng RS485: ")) + d),
+                         (sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d),
                  LogCalib);
     });
     m_nav->addItem(QStringLiteral("Xem log"));
@@ -162,13 +162,11 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     connect(m_nav, &QListWidget::currentRowChanged, m_pages, &QStackedWidget::setCurrentIndex);
     connect(m_nav, &QListWidget::currentRowChanged, this, [this] { refilterLogs(); });
     m_nav->setCurrentRow(0);
-    connect(ctx.serviceLink, &core::Link::stateChanged, this, [this](core::Transport::State s) { m_detail->setControlLinkConnected(s == core::Transport::State::Connected); });
-    m_detail->setControlLinkConnected(false);
     connect(m_detail, &TrbDetailPage::deviceChanged, m_grid, &OverviewGrid::select);
     connect(m_detail, &TrbDetailPage::deviceChanged, this, [this] { refilterLogs(); });   // trang chi tiết chỉ hiện log của TRB đang xem
     connect(ctx.trbControl, &services::TrbControl::commandFinished, this, [this](const QString &d, bool sent) {
         logEvent(tagged(sent ? EventKind::Ctrl : EventKind::Err,
-                         (sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa mở cổng RS485: ")) + d),
+                         (sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d),
                  LogTrbMonitor);
     });
     connect(ctx.trbConfig, &services::TrbConfig::deviceFinished, this, [this](int mb, int trb, bool ok, const QString &m) {
@@ -239,14 +237,13 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
                  LogTrbMonitor, mb, trb);
     });
 
-    watchLink(ctx.monitorLink, QStringLiteral("Giám sát (TCP)"), m_tcpPill, m_tcpButton);
-    watchLink(ctx.serviceLink, QStringLiteral("Cấu hình (RS485)"), m_comPill, m_comButton);
+    watchLink(ctx.monitorLink, QStringLiteral("Gateway (TCP)"), m_tcpPill, m_tcpButton);
     // Khung đủ độ dài nhưng bị loại: ghi vào khung Sự kiện để biết lý do (tối đa một dòng mỗi 2 giây, không đầy log khi đường truyền lỗi liên tục).
     connect(ctx.monitorLink, &core::Link::frameRejected, this, [this](const QString &text) {
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
         if (now - m_lastRejectLogMs < 2000) return;
         m_lastRejectLogMs = now;
-        logEvent(tagged(EventKind::Err, QStringLiteral("Giám sát (TCP): ") + text), LogSystem);
+        logEvent(tagged(EventKind::Err, QStringLiteral("Gateway (TCP): ") + text), LogSystem);
     });
     connect(ctx.monitorLink, &core::Link::rxErrorsChanged, this, [this](quint64 crc, quint64 dropped, quint64 tailer) {
         m_rxErrText = QStringLiteral("Lỗi CRC: %1 · Sai đuôi: %2 · Byte bỏ qua: %3").arg(crc).arg(tailer).arg(dropped);
@@ -266,7 +263,7 @@ QWidget *MainWindow::buildTopBar()
     auto *l = new QHBoxLayout(bar);          // một hàng: thẻ đường kết nối, ô kết nối của trang, bộ đếm trạng thái
     l->setContentsMargins(0, 0, 0, 0);
 
-    // Thẻ cho đường của trang đang mở nằm đầu hàng, bên trái ô kết nối; bấm thì thả ra trạng thái đủ 4 đường (2 Ethernet + 2 RS485).
+    // Thẻ cho đường của trang đang mở nằm đầu hàng, bên trái ô kết nối; bấm thì thả ra cửa sổ kết nối.
     m_connPill = new StatusPill;
     m_connPill->setClickable(true);
     l->addWidget(m_connPill);
@@ -279,13 +276,8 @@ QWidget *MainWindow::buildTopBar()
     pl->setHorizontalSpacing(12);
     pl->setVerticalSpacing(8);
     m_tcpPill = new StatusPill;
-    m_comPill = new StatusPill;
-    m_sparePill = new StatusPill;
-    m_sparePill->setPill(theme::statusMark(Status::NoData) + QStringLiteral(" RS485 #2"), theme::statusColor(Status::NoData), theme::statusTextColor(Status::NoData));
-    m_sparePill->setToolTip(QStringLiteral("RS485 #2: dành cho chức năng chưa bổ sung"));
-    StatusPill *rowPill[] = {m_tcpPill, m_comPill, m_sparePill};   // thứ tự dòng: giám sát (Ethernet, dùng chung cho điều khiển PSU và beam), RS485 (cấu hình, nạp code, điều khiển TRB), RS485 #2
-    for (int r = 0; r < 3; ++r) pl->addWidget(rowPill[r], r, 0);
-    const int rowOf[2] = {0, 1};         // chỉ số "ô" (0 giám sát, 1 RS485 cấu hình) -> dòng trong cửa sổ
+    pl->addWidget(m_tcpPill, 0, 0);
+    const int rowOf[1] = {0};
     auto box = [&](int index) {
         auto *w = new QWidget;
         auto *bl = new QHBoxLayout(w);
@@ -315,29 +307,6 @@ QWidget *MainWindow::buildTopBar()
         }
     }
 
-    // Cấu hình và nạp code: cổng COM (RS485).
-    m_comPort = new QComboBox;
-    m_comPort->setMinimumWidth(90);
-    m_comBaud = new QComboBox;
-    m_comBaud->setEditable(true);
-    m_comBaud->addItems({"115200", "460800", "921600", "1000000"});
-    m_comBaud->setCurrentText(QString::number(cfg.serviceBaud));
-    auto *rescan = new QPushButton(QStringLiteral("↻"));
-    rescan->setFixedWidth(36);
-    theme::setRole(rescan, "secondary");
-    rescan->setToolTip(QStringLiteral("Quét lại cổng COM"));
-    m_comButton = new QPushButton;
-    connect(rescan, &QPushButton::clicked, this, &MainWindow::refreshPorts);
-    connect(m_comButton, &QPushButton::clicked, this, &MainWindow::toggleSerial);
-    refreshPorts();
-    {
-        auto *bl = box(1);
-        bl->addWidget(m_comPort);
-        bl->addWidget(rescan);
-        bl->addWidget(m_comBaud);
-        bl->addWidget(m_comButton);
-    }
-
     l->addStretch(1);
 
     for (StatusPill *&pill : m_counterPills) {
@@ -345,13 +314,10 @@ QWidget *MainWindow::buildTopBar()
         l->addWidget(pill);
     }
 
-    {   // dòng RS485 #2 (chưa có chức năng) và thống kê lỗi nhận
-        auto *spare = new QLabel(QStringLiteral("dành cho chức năng chưa bổ sung"));
-        theme::setRole(spare, "muted");
-        pl->addWidget(spare, 2, 1);
+    {   // thống kê lỗi nhận
         m_rxErrLabel = new QLabel(m_rxErrText);
         theme::setRole(m_rxErrLabel, "muted");
-        pl->addWidget(m_rxErrLabel, 3, 0, 1, 2);
+        pl->addWidget(m_rxErrLabel, 1, 0, 1, 2);
     }
     return bar;
 }
@@ -360,10 +326,9 @@ QWidget *MainWindow::buildTopBar()
 void MainWindow::syncConnPill()
 {
     if (!m_connPill) return;
-    StatusPill *pills[] = {m_tcpPill, m_comPill};
+    StatusPill *pills[] = {m_tcpPill};
     const int page = m_nav ? m_nav->currentRow() : 0;
     const int which = page >= 0 && page < m_pageConn.size() ? m_pageConn.at(page) : -1;
-    // m_pageConn: 0 giám sát (Ethernet), 1 RS485 -> chỉ số mảng pills theo cùng thứ tự
     if (which >= 0) {
         StatusPill *src = pills[which];
         m_connPill->setPill(src->text() + QStringLiteral(" ▾"), src->background(), src->foreground());
@@ -393,20 +358,17 @@ void MainWindow::showConnBox()
 void MainWindow::watchLink(core::Link *link, const QString &title, StatusPill *pillLabel, QPushButton *button)
 {
     using S = core::Transport::State;
-    const bool isTcp = link == m_ctx.monitorLink;
     auto show = [=](S s) {
-        (isTcp ? m_tcpState : m_comState) = s;
+        m_tcpState = s;
         const QString state = s == S::Connected ? QStringLiteral("đã kết nối")
-                            : s == S::Waiting   ? (isTcp ? QStringLiteral("đang nối Gateway") : QStringLiteral("chờ")) : QStringLiteral("đóng");
+                            : s == S::Waiting   ? QStringLiteral("đang nối Gateway") : QStringLiteral("đóng");
         const Status look = s == S::Connected ? Status::Ok : s == S::Waiting ? Status::Warning : Status::Lost;
-        pillLabel->setPill(theme::statusMark(look) + QLatin1Char(' ') + (isTcp ? QStringLiteral("Giám sát (ETH)") : QStringLiteral("Cấu hình (485)")),
+        pillLabel->setPill(theme::statusMark(look) + QLatin1Char(' ') + QStringLiteral("Gateway (ETH)"),
                            theme::statusColor(look), theme::statusTextColor(look));
         pillLabel->setToolTip(title + QStringLiteral(": ") + state);
-        button->setText(s == S::Closed ? (isTcp ? QStringLiteral("Kết nối") : QStringLiteral("Mở")) : (isTcp ? QStringLiteral("Ngắt") : QStringLiteral("Đóng")));
+        button->setText(s == S::Closed ? QStringLiteral("Kết nối") : QStringLiteral("Ngắt"));
         m_tcpAddress->setEnabled(m_tcpState == S::Closed);
         m_tcpPort->setEnabled(m_tcpState == S::Closed);
-        m_comPort->setEnabled(m_comState == S::Closed);
-        m_comBaud->setEnabled(m_comState == S::Closed);
         return title + QStringLiteral(": ") + state;
     };
     show(S::Closed);
@@ -435,27 +397,6 @@ void MainWindow::toggleTcp()
     Settings::save("monitor/gatewayPort", port);
     core::TcpClientTransport *t = m_ctx.tcp;
     QMetaObject::invokeMethod(link, [=] { t->configure(host, port); link->start(); });
-}
-
-void MainWindow::toggleSerial()
-{
-    core::Link *link = m_ctx.serviceLink;
-    if (m_comState != core::Transport::State::Closed) { QMetaObject::invokeMethod(link, &core::Link::stop); return; }
-    const QString port = m_comPort->currentText();
-    const int baud = m_comBaud->currentText().toInt();
-    if (port.isEmpty() || baud <= 0) { logEvent(tagged(EventKind::Err, QStringLiteral("Chưa chọn cổng COM hoặc baudrate không hợp lệ"))); return; }
-    Settings::save("service/port", port);
-    Settings::save("service/baud", baud);
-    core::SerialTransport *t = m_ctx.serial;
-    QMetaObject::invokeMethod(link, [=] { t->configure(port, baud); link->start(); });
-}
-
-void MainWindow::refreshPorts()
-{
-    const QString keep = m_comPort->count() ? m_comPort->currentText() : m_ctx.settings.servicePort;
-    m_comPort->clear();
-    for (const QSerialPortInfo &p : QSerialPortInfo::availablePorts()) m_comPort->addItem(p.portName());
-    if (m_comPort->findText(keep) >= 0) m_comPort->setCurrentText(keep);
 }
 
 QWidget *MainWindow::buildOverviewPage()

@@ -1,6 +1,6 @@
 # Khung điều khiển tổng PC -> Gateway (107 byte)
 
-Mọi lệnh điều khiển của app đi trong một khung cố định 107 byte; điều khiển TRB (`A2`, `14`) gửi qua **RS485**, điều khiển PSU và beam gửi qua **Ethernet** giám sát. **Không có CRC tổng; đuôi 3 byte `E1 E2 E3`.**
+Mọi lệnh điều khiển của app đi trong một khung cố định 107 byte; gửi qua đường **Ethernet** tới Gateway (cùng đường với giám sát, cấu hình, nạp code và Calib; không còn đường RS485 và không có byte thiết bị). **Không có CRC tổng; đuôi 3 byte `E1 E2 E3`.**
 
 | Byte (đếm từ 1) | Dài | Nội dung |
 |---|---|---|
@@ -25,26 +25,9 @@ Ba khung 14 byte nối nhau, ứng với ba mode (byte 10 của MODE lần lư�
 
 **CRC16-CCITT-FALSE của khung beam tính từ header (`AB CD`) tới hết MODE (byte 1..10)**, ghi byte thấp trước. Chỉ riêng khung beam tính như vậy.
 
-# Byte chọn thiết bị cho bản tin cấu hình và nạp code
-
-Các bản tin cấu hình và nạp code (đường RS485) có thêm **1 byte thiết bị ngay sau `AB CD` và trước CMD**:
-
-`AB CD | DEV | CMD ... | CRC | E1 E2`
-
-| DEV | Thiết bị |
-|---|---|
-| `01` | TRB |
-| `02` | PSU |
-| `03` | TRSU (dành cho sau này) |
-
-- Áp dụng cho: ghi/đọc cấu hình TRB (`A1`, `A3`), ghi/đọc cấu hình PSU (`04 04`, `03 03`), nạp FPGA của TRB (`0x88`, nạp, xóa, boot, `0x44`) và nạp STM32 của PSU (`90..97`). Khung hỏi/điều khiển/giám sát không đổi.
-- Gateway đọc DEV để biết gửi xuống thiết bị nào, **bỏ byte này đi**, ghép lại khung gốc rồi gửi xuống TRB/PSU. DEV không nằm trong phạm vi CRC nên CRC của khung gốc không đổi (TRB, PSU, STM32 đều tính từ byte địa chỉ, ngay sau CMD).
-- Chiều trả lời (thiết bị về PC) là khung gốc, không có DEV. Đây là giả định của ACTL, Gateway cần giữ nguyên.
-- Độ dài mỗi khung PC gửi xuống tăng thêm 1 byte (ví dụ ghi cấu hình PSU 916 byte, ghi cấu hình TRB 521 byte, gói DATA STM32 270 byte).
-
 # Bản tin Calib (CMD 18 18, 150 byte)
 
-PC gửi qua đường RS485, có byte thiết bị `01` (TRB) sau `AB CD` nên trên đường truyền xuống Gateway dài 151 byte; Gateway bỏ byte đó đi. Không có trả lời.
+PC gửi qua đường Ethernet tới Gateway, đúng 150 byte (không có byte thiết bị). Không có trả lời.
 
 | Byte (đếm từ 1) | Dài | Nội dung |
 |---|---|---|

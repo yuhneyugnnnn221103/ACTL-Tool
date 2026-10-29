@@ -20,15 +20,13 @@ Code đã biên dịch và chạy test trên Linux với Qt 6.4, dùng thiết b
 ## Kết nối
 
 ```
-PC ── TCP (Gateway là server, PC là client) ── Gateway ── MB 1..20 ── TRB 1..8
-PC ── RS485 (cổng COM)  ──    │
-                              └────── PSU
+PC ── TCP/Ethernet (Gateway là server, PC là client) ── Gateway ── MB 1..20 ── TRB 1..8
+                                                            └────── PSU
 ```
 
 | Đường | Dùng cho |
 |---|---|
-| TCP, link `monitor` | Giám sát và điều khiển. App nối tới Gateway (tự nối lại khi mất kết nối). Gateway tự hỏi từng thiết bị rồi chuyển bản tin lên PC, mỗi lần gửi dồn 8 bản tin TRB của một MB |
-| RS485, link `service` | Cấu hình và nạp code, hỏi-đáp, mỗi lúc một thao tác |
+| TCP, link `monitor` | **Mọi bản tin**: giám sát, điều khiển (khung tổng 107 byte), cấu hình, nạp code, Calib. App nối tới Gateway (tự nối lại khi mất kết nối). Gateway tự hỏi từng thiết bị rồi chuyển bản tin lên PC. Các chức năng hỏi-đáp (cấu hình, nạp code) dùng chung hàng đợi gửi, mỗi lúc một thao tác; không còn đường RS485 và không có byte thiết bị trong bản tin |
 
 Địa chỉ TRB là cặp (MB 0–19, TRB 0–7) trên đường truyền, hiển thị là MB1–MB20, TRB1–TRB8; `FF FF` là broadcast.
 
@@ -56,7 +54,7 @@ File chạy là `build/actl_tool`.
 - **Cấu hình PSU**: giống cấu hình TRB (đọc, sửa, ghi, đọc lại; hàng loạt bằng "Ghi toàn bộ"; hết thời gian chờ khi đọc lại thì hỏi lại tối đa 2 lần nữa). Thanh ghi hiển thị dạng hex, rê chuột để xem mô tả. Nút "Mặc định" điền giá trị hãng gợi ý (OPERATION, ENABLE_FAULTS, MASK_FAULTS, RETRY), hoặc lấy từ `psu_default_config.json` nếu có file này cạnh file chạy.
 - **Chi tiết TRB** có thêm: INIT DATA (7 ô: eMMC Init = bit 0, DDR3 Calib = 1, eMMC Config = 2, Array Calib = 3, Amp Calib = 4, LUT = 5, Geometry = 6; xám = 0, xanh = 1), "Bản tin lỗi" (tổng của 12 bộ đếm 2 byte, nằm cùng hàng với ô chọn MB/TRB, căn phải theo mép thẻ PA, bấm để mở bảng số bản tin từng loại: Beam, Calib PG, Config ADAR, ghi LUT, Control, tra LUT, dịch pha/biên, ghi / kiểm tra calib toàn mảng, ghi config, hỏi cấu hình, hỏi giám sát; tên đặt trong `proto::trbmon::errName`) và 4 thẻ số thô Period/Pulse của TXEN và BEAMSYNC.
 - **Cỡ cửa sổ**: cửa sổ nhỏ nhất 1100 x 560; mỗi trang nằm trong vùng cuộn nên màn hình nhỏ hơn kích thước thiết kế thì cuộn, không tràn ra ngoài màn hình. Thanh trên cùng một hàng: thẻ đường kết nối, ô kết nối của trang, bên phải là các thẻ đếm tốt / quá ngưỡng / trip / mất kết nối.
-- **Kết nối**: thẻ ở đầu thanh trên cùng cho biết trạng thái đường mà trang đang mở dùng; bấm vào thì mở cửa sổ popup gồm cả 4 đường, mỗi đường một dòng có thẻ trạng thái luôn hiện, ô cấu hình (IP/cổng hoặc cổng COM/baud) và nút kết nối: Giám sát (Ethernet tới Gateway), Cấu hình / nạp code (RS485) và RS485 #2 (dành cho chức năng chưa bổ sung). Cuối popup có thống kê lỗi CRC / byte bỏ qua. Trang Giả lập có cổng COM riêng trong trang.
+- **Kết nối**: một đường Ethernet duy nhất tới Gateway. Thẻ ở đầu thanh trên cùng cho biết trạng thái kết nối; bấm vào thì mở cửa sổ popup có thẻ trạng thái, ô IP/cổng Gateway và nút Kết nối / Ngắt, cùng thống kê lỗi CRC / sai đuôi / byte bỏ qua. Trang Giả lập có cổng COM riêng trong trang (phía thiết bị của Gateway).
 - **Beam Ethernet**: trang riêng điều khiển beam, gửi qua đường Ethernet giám sát/điều khiển chung với TRB và PSU (không có đường Ethernet riêng; kết nối bằng thẻ kết nối ở đầu thanh trên cùng). Nhập Esp, Beta (số thập phân có dấu, 1 chữ số sau dấu phẩy, bản tin gửi giá trị x 10 dạng 16 bit bù 2), Freq (MHz, số nguyên), và Mode (số nguyên 0..255, byte 9), riêng cho từng mode `01`, `10`, `11` ở ba cột. Mỗi lần gửi là một bản tin 42 byte ghép từ 3 khung 14 byte `AB CD | ESP | BETA | FREQ | MODE | CRC16 (từ header AB CD tới MODE) | EF FF`, mỗi khung có dữ liệu riêng và byte 10 của MODE lần lượt `01`, `10`, `11` (mỗi khung có CRC và đuôi riêng), **little endian** (byte thấp trước) cho Esp, Beta, Freq và CRC (riêng khung này, các khung khác vẫn byte cao trước), không chờ trả lời; ô hex phía dưới cho xem trước đúng bản tin sẽ gửi.
 - **Nạp code**: tab FPGA (chọn nhanh TRB: chọn tất cả, bỏ chọn, đảo chọn, theo từng MB; 4 bước riêng: kiểm tra kết nối, xóa flash, nạp code, boot và xác nhận; nạp khi chưa xóa thì có cảnh báo; cột "Phiên bản code" đọc từ bản tin `99 99`. Nạp xong không lỗi thì ghi version mới bằng bản tin `44 44` rồi hỏi lại để đối chiếu. Tên file .bin toàn chữ số, đặt theo ngày `YYYYMMDD` (cùng ngày thì thêm số thứ tự cuối, ví dụ `2026101302.bin`); tên được đổi thành số nguyên (≤ 4294967294), ghi 4 byte big-endian và hiển thị lại đúng số đó. Tên có chữ hoặc quá lớn thì không ghi version) và tab STM32 (nạp lần lượt từng PSU).
 - **Ghi log**: ở góc khung log có nút "Ghi log" (không màu khi không ghi; nền xanh và chữ "Đang ghi log" khi đang ghi; bấm để bật/tắt, rê chuột xem giờ hẹn) và nút "Hẹn giờ…" (chọn thời điểm bắt đầu và dừng, mỗi mốc dùng một lần). Khi dừng, file log được đóng, đổi tên kèm thời điểm kết thúc và không ghi thêm. Log lưu thân khung gốc dạng XOR với bản tin trước của cùng thiết bị rồi nén zlib theo khối ~1 MB hoặc 2 giây, nên nhỏ hơn dữ liệu thô hàng chục lần; file luôn đọc được tới khối cuối hoàn chỉnh kể cả khi app tắt đột ngột.
@@ -95,7 +93,7 @@ Các khóa hay dùng trong `actl_tool.ini`:
 ```
 python3 tools/mock_gateway.py thresholds --dir build          # ghi ngưỡng mẫu cạnh file chạy (làm trước khi mở app)
 python3 tools/mock_gateway.py tcp --scenario all --rate 2      # giả Gateway: là TCP server cổng 5000; trong app nhập IP máy này rồi Kết nối
-python3 tools/mock_gateway.py serial --drop 0.2                # RS485 giả (pty) để thử đọc/ghi cấu hình
+python3 tools/mock_gateway.py tcp --drop 0.2                   # cùng kết nối TCP còn trả lời đọc/ghi cấu hình, thử khi mất gói
 python3 tools/mock_gateway.py hex replay.hex --scenario trip   # file hex cho monitor/replayFile
 python3 tools/mock_gateway.py list                             # các kịch bản
 python3 tools/mock_gateway.py selftest
@@ -140,7 +138,7 @@ Card mạng của PC cần cùng dải mạng với Gateway, ví dụ Gateway `1
 
 Giả lập đóng vai 20 MB × 8 TRB ở **phía thiết bị của Gateway**, nối qua một cổng COM RS485 (xem `docs/simulator_design.md`); không có kết nối Ethernet.
 
-- **Tab "Giả lập"** trong ACTL Tool: chọn cổng COM (khác cổng RS485 cấu hình ở thanh trên cùng) và baud, bấm "Bắt đầu". Mục điều hướng đổi thành "Giả lập (đang chạy)" để không nhầm với thiết bị thật. Lưới 20 × 8 cho thấy từng TRB (OK, Mất, Ép giá trị, Trip, Debug); kéo chuột hoặc bấm tiêu đề MB/TRB để chọn nhiều, rồi bấm "Mất kết nối", "Trở lại", "Bình thường", ép một trường giám sát để thử vượt ngưỡng, đặt trip code theo từng bit. Ô "Bơm lỗi đường truyền" chỉnh tỉ lệ bỏ trả lời, sai CRC và độ trễ ngay khi đang chạy. Cấu hình được nhớ trong `actl_tool.ini` (`sim/*`).
+- **Tab "Giả lập"** trong ACTL Tool: chọn cổng COM (cổng nối phía thiết bị của Gateway, không liên quan tới kết nối Ethernet của app) và baud, bấm "Bắt đầu". Mục điều hướng đổi thành "Giả lập (đang chạy)" để không nhầm với thiết bị thật. Lưới 20 × 8 cho thấy từng TRB (OK, Mất, Ép giá trị, Trip, Debug); kéo chuột hoặc bấm tiêu đề MB/TRB để chọn nhiều, rồi bấm "Mất kết nối", "Trở lại", "Bình thường", ép một trường giám sát để thử vượt ngưỡng, đặt trip code theo từng bit. Ô "Bơm lỗi đường truyền" chỉnh tỉ lệ bỏ trả lời, sai CRC và độ trễ ngay khi đang chạy. Cấu hình được nhớ trong `actl_tool.ini` (`sim/*`).
 - **`actl_sim_cli`** (dòng lệnh, cho script và máy không có màn hình), dùng chung mô hình với tab Giả lập:
 
 ```
@@ -156,7 +154,7 @@ Gateway hỏi `AB CD 23 23 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giá
 
 - Trip code hiện 8 ô theo thứ tự bit 0 (LSB) ở trái đến bit 7 (MSB) ở phải. Các thẻ đếm trạng thái ở thanh trên đếm theo điều kiện, một TRB có thể tính vào nhiều thẻ (vừa trip vừa quá ngưỡng; mất kết nối nhưng trước đó đang trip hoặc quá ngưỡng), nên tổng có thể vượt số TRB.
 
-- Mỗi dòng trong khung Sự kiện bắt đầu bằng mã loại: `[TRIP]` vào trạng thái Trip, `[WARN]` giá trị vượt ngưỡng, `[OK]` trở lại bình thường, `[PG]` Power Good, `[CTRL]` lệnh điều khiển/beam đã gửi, `[CFG]` đọc/ghi cấu hình, `[DBG]` chế độ Debug, `[OTA]` nạp code, `[NET]` kết nối Gateway/RS485, `[ERR]` lỗi, `[AUTH]` khóa/mở khóa kỹ sư. Dòng sự kiện tô màu theo mã (TRIP/PG đỏ, WARN cam, OK xanh lá, CTRL xanh dương, CFG xanh ngọc, DBG/OTA tím, NET xám, ERR đỏ đậm, AUTH nâu; TRIP, PG, WARN có nền nhạt). Sự kiện TRB/PSU mất kết nối và có lại kết nối không được ghi (xem trạng thái ở lưới tổng quan và thẻ trạng thái); nếu TRB có lại tin mà đang Trip hoặc quá ngưỡng thì vẫn ghi sự kiện đó. Trang Chi tiết TRB hiện đủ các thẻ trạng thái của TRB đang xem (Trip, Quá ngưỡng, Mất kết nối cùng lúc).
+- Mỗi dòng trong khung Sự kiện bắt đầu bằng mã loại: `[TRIP]` vào trạng thái Trip, `[WARN]` giá trị vượt ngưỡng, `[OK]` trở lại bình thường, `[PG]` Power Good, `[CTRL]` lệnh điều khiển/beam đã gửi, `[CFG]` đọc/ghi cấu hình, `[DBG]` chế độ Debug, `[OTA]` nạp code, `[NET]` kết nối Gateway, `[ERR]` lỗi, `[AUTH]` khóa/mở khóa kỹ sư. Dòng sự kiện tô màu theo mã (TRIP/PG đỏ, WARN cam, OK xanh lá, CTRL xanh dương, CFG xanh ngọc, DBG/OTA tím, NET xám, ERR đỏ đậm, AUTH nâu; TRIP, PG, WARN có nền nhạt). Sự kiện TRB/PSU mất kết nối và có lại kết nối không được ghi (xem trạng thái ở lưới tổng quan và thẻ trạng thái); nếu TRB có lại tin mà đang Trip hoặc quá ngưỡng thì vẫn ghi sự kiện đó. Trang Chi tiết TRB hiện đủ các thẻ trạng thái của TRB đang xem (Trip, Quá ngưỡng, Mất kết nối cùng lúc).
 
 - TRB không phản hồi, sai CRC hoặc lỗi bản tin: Gateway thay bằng **khung rỗng** 310 byte `AB CD 23 23 MB TRB`, phần data và CRC toàn `0x00`, rồi `E1 E2` (vẫn nằm trong lượt gửi 8 TRB của MB). App nhận khung này không cần CRC, biết đúng TRB nào im lặng và đánh dấu mất kết nối (giữ số liệu cuối) sau `system/emptyFramesToLost` khung rỗng liên tiếp (mặc định 3); có bản tin thật trở lại thì hồi phục và đếm lại từ đầu. TRB chưa từng có số liệu giữ "chưa có dữ liệu". `system/staleMs` (mặc định 3000 ms) vẫn là chốt chặn khi không nhận được gì cho TRB đó.
 
@@ -173,13 +171,11 @@ Gateway hỏi `AB CD 23 23 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giá
 
 Mọi lệnh điều khiển (TRB `A2`, TRB `14`, beam, PSU) đi trong khung điều khiển tổng 107 byte `AB CD EF <mask> ...`, xem `docs/control_frame.md`.
 
-Bản tin cấu hình và nạp code (TRB `A1/A3`, PSU `03 03/04 04`, nạp FPGA, nạp STM32) có thêm 1 byte thiết bị sau `AB CD` (`01` TRB, `02` PSU, `03` TRSU) để Gateway biết gửi cho thiết bị nào rồi bỏ byte đó đi, xem `docs/control_frame.md`.
-
-Điều khiển và beam của TRB (bản tin `A2` và `14`) gửi qua đường **RS485** (cổng COM, cùng đường với cấu hình và nạp code), vẫn trong khung điều khiển tổng 107 byte có mask. Điều khiển PSU và beam Ethernet vẫn đi đường Ethernet giám sát. Trang Chi tiết TRB nhắc khi chưa mở cổng RS485.
+Mọi bản tin (giám sát, điều khiển TRB / PSU / beam, cấu hình, nạp code, Calib) đi qua đường Ethernet duy nhất tới Gateway; bản tin cấu hình, nạp code và Calib là khung gốc, không có byte thiết bị.
 
 Tab Hex thô cũng hiện các byte bị loại, hiện ở mọi trang: `RX LỖI CRC` và `RX LỖI ĐUÔI` (nguyên khung đủ độ dài nhưng sai CRC hoặc đuôi, một dòng cho cả khung), `RX BỎ QUA` (đoạn byte rác hoặc khung CMD lạ). Byte `0x00` đệm của Gateway không tính là rác nên không hiện.
 
-**Calib**: tab gửi bản tin Calib (`AB CD 18 18 MB TRB` + RX_CHN_EN 4 byte + TX_CHN_EN 4 byte + 32 kênh x (phase TX, phase RX, amp TX, amp RX) + 4 byte dự phòng + CRC + `E1 E2`, 150 byte, CRC từ byte MB) qua RS485 kèm byte thiết bị `01`. Tích chọn kênh RX/TX, nhập giá trị số nguyên không dấu, nhập/xuất file JSON để dùng lại; chi tiết ở `docs/control_frame.md`.
+**Calib**: tab gửi bản tin Calib (`AB CD 18 18 MB TRB` + RX_CHN_EN 4 byte + TX_CHN_EN 4 byte + 32 kênh x (phase TX, phase RX, amp TX, amp RX) + 4 byte dự phòng + CRC + `E1 E2`, 150 byte, CRC từ byte MB) qua Ethernet. Tích chọn kênh RX/TX, nhập giá trị số nguyên không dấu, nhập/xuất file JSON để dùng lại; chi tiết ở `docs/control_frame.md`.
 
 Bản tin giám sát PSU (`81 81`) dài 310 byte như TRB (byte 263..306 dự phòng). PSU cũng có X (khung rỗng của Gateway, hiện ngay), ? (quá hạn) và OFF (cụm tắt) trên tổng quan; một lượt Gateway gửi 20 TRB + 5 PSU (7750 byte) được tách theo CMD `23 23` / `81 81`.
 

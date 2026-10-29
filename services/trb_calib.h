@@ -4,7 +4,7 @@
 
 namespace services {
 
-// Gửi bản tin Calib (CMD 18 18) cho TRB qua đường RS485: thêm byte thiết bị 0x01 trước khi gửi xuống Gateway. Không có ACK:
+// Gửi bản tin Calib (CMD 18 18) cho TRB qua đường Ethernet tới Gateway. Không có ACK:
 // "đã gửi" nghĩa là đã ghi ra đường truyền.
 class TrbCalib : public QObject {
     Q_OBJECT

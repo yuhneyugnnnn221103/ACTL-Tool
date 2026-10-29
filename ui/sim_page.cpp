@@ -115,7 +115,7 @@ QWidget *SimPage::buildConnection()
 
     m_ports = new QComboBox;
     m_ports->setEditable(true);
-    m_ports->setToolTip(QStringLiteral("Cổng COM riêng cho giả lập, khác cổng RS485 cấu hình ở thanh trên cùng"));
+    m_ports->setToolTip(QStringLiteral("Cổng COM riêng cho giả lập, cổng này nối với phía thiết bị của Gateway, không liên quan tới kết nối Ethernet của ACTL Tool"));
     auto *refresh = button(QStringLiteral("↻"), this, "secondary");
     refresh->setToolTip(QStringLiteral("Quét lại danh sách cổng COM"));
     refresh->setMaximumWidth(36);
@@ -198,10 +198,6 @@ void SimPage::start()
 {
     const QString port = m_ports->currentText().trimmed();
     if (port.isEmpty()) { log(tagged(EventKind::Err, QStringLiteral("Chưa chọn cổng COM"))); return; }
-    if (m_ctx.serial && port.compare(m_ctx.settings.servicePort, Qt::CaseInsensitive) == 0 && m_ctx.serial->state() != core::Transport::State::Closed) {
-        log(tagged(EventKind::Err, QStringLiteral("%1 đang được dùng cho đường RS485 cấu hình của ACTL Tool; hãy chọn cổng COM khác").arg(port)));
-        return;
-    }
     core::Transport *t = new core::SerialTransport(port, m_baud->currentText().toInt());
     m_transport.reset(t);
     m_port = std::make_unique<sim::BusPort>(t, m_world.get());

@@ -4,7 +4,6 @@
 #include "../core/link.h"
 #include "../model/device_store.h"
 #include "../model/thresholds.h"
-#include "../proto/device_select_proto.h"
 #include "../proto/trb_calib_proto.h"
 #include "../proto/trb_config_proto.h"
 #include "../proto/trb_control_proto.h"
@@ -69,8 +68,7 @@ struct FakeTrb {
     void attach(FakeTransport *t)
     {
         t->onWrite = [this, t](const QByteArray &raw) {
-            QVERIFY(quint8(raw.at(2)) == devsel::Trb);                      // byte thiết bị; vai Gateway bỏ đi rồi mới tới TRB
-            const QByteArray d = devsel::strip(raw);
+            const QByteArray &d = raw;
             const int mb = quint8(d.at(4)), trb = quint8(d.at(5));
             if (quint8(d.at(2)) == 0xA1) {
                 ++writes;
@@ -327,10 +325,10 @@ private slots:
         QVERIFY(!cb::fromJson(QJsonObject(), keep).isEmpty());
     }
 
-    // Gửi Calib: đi qua đường RS485 với byte thiết bị 0x01 (TRB) sau AB CD, Gateway bỏ byte đó ra khung 150 byte; không chờ trả lời.
-    void calibServiceAddsDeviceByte()
+    // Gửi Calib: khung 150 byte gửi nguyên vẹn qua đường Ethernet (không thêm byte nào), không chờ trả lời.
+    void calibServiceSendsPlainFrame()
     {
-        Rig rig("service");
+        Rig rig("monitor");
         rig.link.start();
         services::TrbCalib calib(&rig.link);
         QSignalSpy done(&calib, &services::TrbCalib::commandFinished);
@@ -343,41 +341,15 @@ private slots:
         QVERIFY(done.last().at(0).toString().contains("MB2 / TRB3"));
         QCOMPARE(rig.transport->written.size(), 1);
         const QByteArray sent = rig.transport->written.first();
-        QCOMPARE(sent.size(), 151);
-        QCOMPARE(sent.left(5).toHex(), QByteArray("abcd011818"));              // AB CD DEV(01) 18 18
-        QCOMPARE(proto::devsel::strip(sent), proto::calib::buildFrame(1, 2, d));
+        QCOMPARE(sent.size(), 150);
+        QCOMPARE(sent.left(4).toHex(), QByteArray("abcd1818"));
+        QCOMPARE(sent, proto::calib::buildFrame(1, 2, d));
         calib.send(proto::calib::kBroadcast, proto::calib::kBroadcast, d);
         QVERIFY(done.wait(1000));
         QVERIFY(done.last().at(0).toString().contains("tất cả TRB"));
-        // nhóm log của khung Calib (có hoặc không có byte thiết bị)
+        // nhóm log của các khung gửi xuống
         QCOMPARE(ui::classifyFrame(sent).group, int(ui::LogCalib));
-        QCOMPARE(ui::classifyFrame(proto::devsel::strip(sent)).group, int(ui::LogCalib));
-        QCOMPARE(ui::classifyFrame(proto::devsel::add(proto::devsel::Trb, trbcfg::buildReadRequest(1, 1))).group, int(ui::LogTrbConfig));   // khung cấu hình có DEV vẫn vào đúng nhóm
-    }
-
-    // ---------- Byte chọn thiết bị ----------
-    void deviceSelectByte()
-    {
-        namespace ds = proto::devsel;
-        const QByteArray orig = trbcfg::buildReadRequest(2, 3);
-        const QByteArray w = ds::add(ds::Psu, orig);
-        QCOMPARE(w.size(), orig.size() + 1);
-        QCOMPARE(w.left(3).toHex(), QByteArray("abcd02"));                 // AB CD DEV
-        QCOMPARE(w.mid(3), orig.mid(2));                                    // CMD và phần sau giữ nguyên
-        QCOMPARE(ds::strip(w), orig);                                       // Gateway bỏ DEV: khung gốc, CRC vẫn đúng
-        QVERIFY(crcOk(ds::strip(w), 4));
-        QCOMPARE(quint8(ds::add(ds::Trb, orig).at(2)), quint8(0x01));
-        QCOMPARE(quint8(ds::add(ds::Trsu, orig).at(2)), quint8(0x03));
-
-        Rig rig("service");                                                 // các service cấu hình/nạp code đều thêm DEV đúng loại
-        services::TrbConfig::registerFrames(rig.registry, true);
-        rig.link.start();
-        services::TrbConfig cfg(&rig.link, nullptr, QString(), 50, 0);
-        cfg.readDevices({{1, 2}});
-        QTRY_VERIFY_WITH_TIMEOUT(!rig.transport->written.isEmpty(), 1000);
-        const QByteArray sent = rig.transport->written.first();
-        QCOMPARE(quint8(sent.at(2)), quint8(0x01));
-        QCOMPARE(ds::strip(sent), trbcfg::buildReadRequest(1, 2));
+        QCOMPARE(ui::classifyFrame(trbcfg::buildReadRequest(1, 1)).group, int(ui::LogTrbConfig));
     }
 
     // ---------- Khung điều khiển tổng ----------

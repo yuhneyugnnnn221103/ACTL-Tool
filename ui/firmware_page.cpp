@@ -60,8 +60,8 @@ bool FirmwarePage::ready()
 {
     m_ctx.auth->touch();
     if (m_ctx.serviceBusy()) {
-        QMessageBox::information(this, QStringLiteral("Đường RS485 đang bận"),
-                                 QStringLiteral("Đang có thao tác cấu hình hoặc nạp code khác chạy trên đường RS485."));
+        QMessageBox::information(this, QStringLiteral("Đang bận"),
+                                 QStringLiteral("Đang có thao tác cấu hình hoặc nạp code khác đang chạy."));
         return false;
     }
     return true;
