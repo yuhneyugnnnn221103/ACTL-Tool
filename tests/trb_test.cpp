@@ -969,6 +969,21 @@ private slots:
         QVERIFY(store.trb(0, 3).frames > 0);
         rig.transport->inject(burst({}));                    // có tin lại: hồi phục
         QCOMPARE(store.trb(0, 3).status, model::Status::Ok);
+        {   // thống kê trả lời: TRB 3 đã nhận 6 lần = rỗng, có, rỗng, rỗng, rỗng, có
+            const model::ReplyStats &r = store.trb(0, 3).reply;
+            QCOMPARE(r.okTotal, quint64(2));
+            QCOMPARE(r.emptyTotal, quint64(4));
+            QCOMPARE(r.count(), 6);
+            QCOMPARE(r.windowEmpty, 4);
+            QVERIFY(qAbs(r.rate() - 4.0 / 6) < 1e-9);
+            QCOMPARE(store.trb(0, 4).reply.emptyTotal, quint64(0));
+            model::ReplyStats w;   // cửa sổ trượt: 150 lần rỗng rồi 100 lần có dữ liệu -> cửa sổ chỉ còn lần có dữ liệu, tổng cộng dồn vẫn giữ
+            for (int i = 0; i < 150; ++i) w.add(true);
+            QCOMPARE(w.rate(), 1.0);
+            for (int i = 0; i < model::ReplyStats::kWindow; ++i) w.add(false);
+            QCOMPARE(w.rate(), 0.0);
+            QCOMPARE(w.emptyTotal, quint64(150));
+        }
         rig.transport->inject(burst({3}));                   // chuỗi liên tiếp phải tính lại từ đầu sau khi có tin
         rig.transport->inject(burst({3}));
         QCOMPARE(store.trb(0, 3).status, model::Status::Ok);

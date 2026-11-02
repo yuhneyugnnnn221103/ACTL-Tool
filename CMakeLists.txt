@@ -26,6 +26,7 @@ set(PROJECT_SOURCES
         ui/firmware_page.h ui/firmware_page.cpp
         ui/main_window.h ui/main_window.cpp
         ui/overview_grid.h ui/overview_grid.cpp
+        ui/reply_error_map.h ui/reply_error_map.cpp
         ui/trb_detail_page.h ui/trb_detail_page.cpp
         ui/psu_page.h ui/psu_page.cpp
         ui/theme.h ui/theme.cpp

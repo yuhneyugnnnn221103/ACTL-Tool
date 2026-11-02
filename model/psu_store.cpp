@@ -78,6 +78,16 @@ void PsuStore::markStale(qint64 nowMs, int staleMs)
     }
 }
 
+void PsuStore::recordReply(int addr, bool empty)
+{
+    if (contains(addr)) m_psus[addr - m_firstAddr].reply.add(empty);
+}
+
+void PsuStore::resetReplyStats()
+{
+    for (PsuState &s : m_psus) s.reply.reset();
+}
+
 void PsuStore::setNoReply(int addr, bool on)
 {
     if (contains(addr)) m_psus[addr - m_firstAddr].noReply = on;

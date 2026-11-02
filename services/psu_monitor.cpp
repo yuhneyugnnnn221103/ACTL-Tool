@@ -22,6 +22,7 @@ void PsuMonitor::onFrame(const core::Frame &frame)
     const int addr = frame.at(psumon::kOffAddr);
     if (!m_store->contains(addr)) { ++m_badAddress; return; }
 
+    m_store->recordReply(addr, frame.empty);
     int &empty = m_emptyRun[addr];
     if (frame.empty) {                    // Gateway báo PSU này không phản hồi: đánh dấu X ngay; đủ m_emptyLimit lần liên tiếp thì coi là mất kết nối
         m_store->setNoReply(addr, true);

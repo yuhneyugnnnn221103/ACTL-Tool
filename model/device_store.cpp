@@ -74,6 +74,25 @@ void DeviceStore::markStale(qint64 nowMs, int staleMs)
     }
 }
 
+void ReplyStats::add(bool empty)
+{
+    if (window == kWindow) windowEmpty -= m_ring[m_pos]; else ++window;
+    m_ring[m_pos] = empty ? 1 : 0;
+    windowEmpty += m_ring[m_pos];
+    m_pos = (m_pos + 1) % kWindow;
+    (empty ? emptyTotal : okTotal)++;
+}
+
+void DeviceStore::recordReply(int mb, int trb, bool empty)
+{
+    if (contains(mb, trb)) m_trbs[mb * m_trbPerMb + trb].reply.add(empty);
+}
+
+void DeviceStore::resetReplyStats()
+{
+    for (TrbState &s : m_trbs) s.reply.reset();
+}
+
 void DeviceStore::setNoReply(int mb, int trb, bool on)
 {
     if (contains(mb, trb)) m_trbs[mb * m_trbPerMb + trb].noReply = on;

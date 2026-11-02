@@ -1,5 +1,6 @@
 #include "main_window.h"
 #include "overview_grid.h"
+#include "reply_error_map.h"
 #include "auth.h"
 #include "beam_eth_page.h"
 #include "calib_page.h"
@@ -425,11 +426,34 @@ QWidget *MainWindow::buildOverviewPage()
     grids->addWidget(new QLabel(QStringLiteral("PSU · 4 cụm DCM")));
     grids->addWidget(m_psuGrid);
 
-    auto *page = new QWidget;
-    auto *l = new QHBoxLayout(page);
+    auto *status = new QWidget;
+    auto *l = new QHBoxLayout(status);
     l->addLayout(grids, 1);
     l->addWidget(side);
-    return page;
+
+    // Tab "Tỉ lệ lỗi bản tin": khung rỗng (toàn 00) trên tổng số trả lời giám sát, theo cửa sổ trượt của từng thiết bị.
+    m_errMap = new ReplyErrorMap(m_store, m_ctx.psuStore);
+    m_errSummary = new QLabel;
+    auto *reset = new QPushButton(QStringLiteral("Xóa thống kê"));
+    theme::setRole(reset, "secondary");
+    connect(reset, &QPushButton::clicked, this, [this] {
+        m_store->resetReplyStats();
+        m_ctx.psuStore->resetReplyStats();
+        m_errMap->update();
+        refresh();
+    });
+    auto *errPage = new QWidget;
+    auto *el = new QVBoxLayout(errPage);
+    auto *top = new QHBoxLayout;
+    top->addWidget(m_errSummary, 1);
+    top->addWidget(reset);
+    el->addLayout(top);
+    el->addWidget(m_errMap, 1);
+
+    m_overviewTabs = new QTabWidget;
+    m_overviewTabs->addTab(status, QStringLiteral("Trạng thái"));
+    m_overviewTabs->addTab(errPage, QStringLiteral("Tỉ lệ lỗi bản tin"));
+    return m_overviewTabs;
 }
 
 QWidget *MainWindow::buildLogPanel()
@@ -639,6 +663,12 @@ void MainWindow::refresh()
     m_grid->setDebugTrb(debug ? debug->first : -1, debug ? debug->second : -1);
     m_grid->update();
     m_psuGrid->update();
+    if (m_overviewTabs->currentIndex() == 1) {
+        m_errMap->update();
+        const double avg = m_errMap->averageRate();
+        m_errSummary->setText(avg < 0 ? QStringLiteral("Chưa có bản tin trả lời giám sát nào.")
+                                      : QStringLiteral("Tỉ lệ lỗi trung bình: %1%  (khung rỗng / tổng trả lời)").arg(avg * 100, 0, 'f', 1));
+    }
     m_ctx.psuStore->markStale(QDateTime::currentMSecsSinceEpoch(), m_ctx.settings.staleMs);
     if (m_pages->currentWidget() == m_detailHolder) m_detail->refresh();
     if (m_pages->currentWidget() == m_psuHolder) m_psu->refresh();

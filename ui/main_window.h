@@ -14,11 +14,13 @@ class QPlainTextEdit;
 class QPushButton;
 class QSpinBox;
 class QStackedWidget;
+class QTabWidget;
 
 namespace ui {
 
 class OverviewGrid;
 class PsuGrid;
+class ReplyErrorMap;
 class StatusPill;
 class PsuPage;
 class TrbDetailPage;
@@ -71,6 +73,9 @@ private:
     PsuPage *m_psu;
     QWidget *m_detailHolder = nullptr, *m_psuHolder = nullptr;   // vùng cuộn bọc quanh trang chi tiết / PSU
     PsuGrid *m_psuGrid;
+    QTabWidget *m_overviewTabs;
+    ReplyErrorMap *m_errMap;
+    QLabel *m_errSummary;
     QListWidget *m_nav, *m_abnormal;
     QStackedWidget *m_pages;
     struct LogEntry { QString text; int group = LogSystem; int mb = -1, trb = -1; };

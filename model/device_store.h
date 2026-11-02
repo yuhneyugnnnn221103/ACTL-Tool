@@ -11,7 +11,23 @@ enum class Status { NoData, Ok, Warning, Trip, Lost, Updating };
 constexpr int kStatusCount = 6;
 QString statusText(Status s);
 
+// Thống kê trả lời giám sát của một thiết bị: bản tin có dữ liệu so với khung rỗng (toàn 00, Gateway báo thiết bị không trả lời).
+// Tỉ lệ lỗi tính theo cửa sổ trượt kWindow lần trả lời gần nhất; tổng cộng dồn giữ riêng để xem lâu dài.
+struct ReplyStats {
+    static constexpr int kWindow = 100;
+    quint64 okTotal = 0, emptyTotal = 0;
+    int window = 0, windowEmpty = 0;    // số lần trả lời đang nằm trong cửa sổ, và trong đó số khung rỗng
+    void add(bool empty);
+    int count() const { return window; }
+    double rate() const { return window ? double(windowEmpty) / window : 0.0; }
+    void reset() { *this = ReplyStats(); }
+private:
+    quint8 m_ring[kWindow] = {};
+    int m_pos = 0;
+};
+
 struct TrbState {
+    ReplyStats reply;
     Status status = Status::NoData;
     Status lastLive = Status::NoData;   // trạng thái gần nhất khác Lost (Ok, Warning, Trip, Updating): biết trước khi mất kết nối là gì
     qint64 lastSeenMs = 0;
@@ -43,6 +59,8 @@ public:
     void updateTrb(int mb, int trb, const QList<double> &values, const QByteArray &raw,
                    qint64 timestampMs, Status status, const QList<int> &alarms = {});
     void markStale(qint64 nowMs, int staleMs); // quá hạn -> Lost
+    void recordReply(int mb, int trb, bool empty);
+    void resetReplyStats();
     void setNoReply(int mb, int trb, bool on); // đặt/xóa cờ noReply (xem TrbState)
     void markSilent(int mb, int trb);          // Gateway báo thiết bị không phản hồi: Ok/Warning/Trip -> Lost (giữ số liệu cuối)
 

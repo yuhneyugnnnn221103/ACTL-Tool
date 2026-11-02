@@ -5,6 +5,7 @@
 namespace model {
 
 struct PsuState {
+    ReplyStats reply;
     Status status = Status::NoData;
     Status lastLive = Status::NoData;   // trạng thái gần nhất khác Lost / NoData
     qint64 lastSeenMs = 0;
@@ -40,6 +41,8 @@ public:
     void updatePsu(int addr, const QList<double> &values, const QByteArray &raw, qint64 timestampMs,
                    Status status, const QList<int> &alarms = {});
     void markStale(qint64 nowMs, int staleMs); // quá hạn -> Lost
+    void recordReply(int addr, bool empty);
+    void resetReplyStats();
     void setNoReply(int addr, bool on);
     void markSilent(int addr);                 // Gateway báo PSU không phản hồi đủ số khung rỗng liên tiếp: Ok/Warning/Trip -> Lost (giữ số liệu cuối)
 
