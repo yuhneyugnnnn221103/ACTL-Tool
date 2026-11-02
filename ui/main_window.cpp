@@ -139,7 +139,7 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     m_pages->addWidget(scrollPage(new PsuConfigPage(ctx)));
     m_nav->addItem(QStringLiteral("Nạp code"));
     m_pages->addWidget(scrollPage(new FirmwarePage(ctx)));
-    m_nav->addItem(QStringLiteral("Beam Ethernet"));
+    m_nav->addItem(QStringLiteral("Giả lập beam RDPU"));
     auto *beamPage = new BeamEthPage(ctx);
     m_pages->addWidget(scrollPage(beamPage));
     connect(beamPage, &BeamEthPage::logEvent, this, [this](const QString &text) { logEvent(text, LogBeam); });

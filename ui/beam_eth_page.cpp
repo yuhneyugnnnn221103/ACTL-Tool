@@ -1,6 +1,7 @@
 #include "beam_eth_page.h"
 #include "log_filter.h"
 #include "theme.h"
+#include <QCheckBox>
 #include <QDoubleSpinBox>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -10,6 +11,7 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTime>
+#include <QTimer>
 
 namespace ui {
 
@@ -78,9 +80,24 @@ BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(paren
     m_result = new QLabel;
     theme::setRole(m_result, "muted");
     auto *sendRow = new QHBoxLayout;
+    m_periodic = new QCheckBox(QStringLiteral("Gửi liên tục, chu kỳ"));
+    m_periodMs = new QSpinBox;
+    m_periodMs->setRange(1, 60000);
+    m_periodMs->setValue(10);
+    m_periodMs->setSuffix(QStringLiteral(" ms"));
+    m_timer = new QTimer(this);
+    m_timer->setTimerType(Qt::PreciseTimer);
+    connect(m_timer, &QTimer::timeout, this, [this] { send(true); });
+    connect(m_periodMs, &QSpinBox::valueChanged, this, [this](int ms) { if (m_timer->isActive()) m_timer->setInterval(ms); });   // đổi chu kỳ khi đang chạy có hiệu lực ngay
+    connect(m_periodic, &QCheckBox::toggled, this, [this](bool on) {
+        if (!on && m_timer->isActive()) stopPeriodic(QStringLiteral("tắt chế độ gửi liên tục"));
+        m_send->setText(on ? QStringLiteral("Bắt đầu gửi") : QStringLiteral("Gửi bản tin beam"));
+    });
     sendRow->addWidget(m_send);
+    sendRow->addWidget(m_periodic);
+    sendRow->addWidget(m_periodMs);
     sendRow->addWidget(m_result, 1);
-    connect(m_send, &QPushButton::clicked, this, &BeamEthPage::send);
+    connect(m_send, &QPushButton::clicked, this, &BeamEthPage::onSendClicked);
 
     auto *l = new QVBoxLayout(this);
     m_hint = new QLabel(QStringLiteral("Chưa kết nối đường giám sát (Ethernet tới Gateway): bấm thẻ kết nối ở góc trên bên trái để nhập IP, cổng và kết nối. Bản tin beam đi chung đường này."));
@@ -118,17 +135,46 @@ void BeamEthPage::updatePreview()
 void BeamEthPage::showState(State s)
 {
     m_send->setEnabled(s == State::Connected);
+    if (s != State::Connected && m_timer->isActive()) stopPeriodic(QStringLiteral("mất kết nối"));
     m_hint->setVisible(s != State::Connected);
 }
 
-void BeamEthPage::send()
+void BeamEthPage::onSendClicked()
+{
+    if (!m_periodic->isChecked()) { send(); return; }
+    if (m_timer->isActive()) { stopPeriodic(QStringLiteral("người dùng dừng")); return; }
+    m_sentCount = 0;
+    if (!send(true)) return;
+    m_timer->start(m_periodMs->value());
+    m_send->setText(QStringLiteral("Dừng"));
+    emit logEvent(tagged(EventKind::Ctrl, QStringLiteral("Beam RDPU: bắt đầu gửi liên tục, chu kỳ %1 ms").arg(m_periodMs->value())));
+}
+
+void BeamEthPage::stopPeriodic(const QString &why)
+{
+    m_timer->stop();
+    m_send->setText(m_periodic->isChecked() ? QStringLiteral("Bắt đầu gửi") : QStringLiteral("Gửi bản tin beam"));
+    m_result->setText(QStringLiteral("Đã dừng gửi liên tục (%1), tổng %2 bản tin").arg(why).arg(m_sentCount));
+    emit logEvent(tagged(EventKind::Ctrl, QStringLiteral("Beam RDPU: dừng gửi liên tục (%1), đã gửi %2 bản tin").arg(why).arg(m_sentCount)));
+}
+
+bool BeamEthPage::send(bool quiet)
 {
     const Params p = params();
     const QString error = validate(p);
-    if (!error.isEmpty()) { m_result->setText(error); return; }
+    if (!error.isEmpty()) {
+        m_result->setText(error);
+        if (m_timer->isActive()) stopPeriodic(QStringLiteral("giá trị không hợp lệ"));
+        return false;
+    }
     core::Request r;
     r.data = proto::ctlframe::wrap(proto::ctlframe::SecBeam, buildFrame(p));                       // không có trả lời: gửi xong là xong
     m_ctx.monitorLink->send(r);
+    ++m_sentCount;
+    if (quiet) {   // theo chu kỳ: chỉ cập nhật bộ đếm, nhật ký đã ghi lúc bắt đầu và dừng
+        m_result->setText(QStringLiteral("Đang gửi liên tục, đã gửi %1 bản tin").arg(m_sentCount));
+        return true;
+    }
     QStringList parts;
     for (int k = 0; k < kFrameCount; ++k) {
         const FrameParams &f = p.frame[k];
@@ -139,6 +185,7 @@ void BeamEthPage::send()
     m_result->setText(QStringLiteral("Đã gửi lúc %1: %2").arg(QTime::currentTime().toString(QStringLiteral("HH:mm:ss")), text));
     emit logEvent(tagged(EventKind::Ctrl, QStringLiteral("Đã gửi (không chờ ACK): Beam Ethernet, %1 [%2]")
                                               .arg(text, QString::fromLatin1(r.data.toHex(' ').toUpper()))));
+    return true;
 }
 
 } // namespace ui

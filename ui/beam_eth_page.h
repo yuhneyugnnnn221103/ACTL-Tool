@@ -3,7 +3,9 @@
 #include "../proto/beam_eth_proto.h"
 #include <QWidget>
 
+class QCheckBox;
 class QDoubleSpinBox;
+class QTimer;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -11,7 +13,7 @@ class QSpinBox;
 
 namespace ui {
 
-// Điều khiển beam, gửi qua đường Ethernet giám sát/điều khiển chung với TRB và PSU: nhập Esp, Beta, Freq, Mode riêng cho từng mode 01, 10, 11 (3 cột) rồi gửi một bản tin 42 byte (3 khung 14 byte) (xem proto/beam_eth_proto.h).
+// Giả lập beam RDPU (điều khiển beam), gửi qua đường Ethernet giám sát/điều khiển chung với TRB và PSU: nhập Esp, Beta, Freq, Mode riêng cho từng mode 01, 10, 11 (3 cột) rồi gửi một bản tin 42 byte (3 khung 14 byte) (xem proto/beam_eth_proto.h).
 class BeamEthPage : public QWidget {
     Q_OBJECT
 public:
@@ -24,13 +26,19 @@ private:
     proto::beameth::Params params() const;
     void showState(core::Transport::State s);
     void updatePreview();
-    void send();
+    bool send(bool quiet = false);   // quiet: lần gửi theo chu kỳ, không ghi từng lần vào nhật ký
+    void onSendClicked();
+    void stopPeriodic(const QString &why);
 
     AppContext m_ctx;
     core::Transport::State m_state = core::Transport::State::Closed;
     QSpinBox *m_freq[proto::beameth::kFrameCount], *m_modeValue[proto::beameth::kFrameCount];   // mỗi cột một mode (01, 10, 11)
     QDoubleSpinBox *m_esp[proto::beameth::kFrameCount], *m_beta[proto::beameth::kFrameCount];
     QPushButton *m_send;
+    QCheckBox *m_periodic;
+    QSpinBox *m_periodMs;
+    QTimer *m_timer;
+    quint64 m_sentCount = 0;
     QLabel *m_preview, *m_result, *m_hint;
 };
 
