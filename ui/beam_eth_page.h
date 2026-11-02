@@ -28,6 +28,8 @@ private:
     void updatePreview();
     bool send(bool quiet = false);   // quiet: lần gửi theo chu kỳ, không ghi từng lần vào nhật ký
     void onSendClicked();
+    void applyPending();
+    void updatePending();   // so giá trị đang nhập với giá trị đang gửi: bật nút Áp dụng khi khác nhau
     void stopPeriodic(const QString &why);
 
     AppContext m_ctx;
@@ -36,8 +38,10 @@ private:
     QDoubleSpinBox *m_esp[proto::beameth::kFrameCount], *m_beta[proto::beameth::kFrameCount];
     QPushButton *m_send;
     QCheckBox *m_periodic;
+    QPushButton *m_apply = nullptr;
+    proto::beameth::Params m_active;   // giá trị đang được gửi theo chu kỳ; chỉ đổi khi bấm Áp dụng
     QSpinBox *m_periodMs;
-    QTimer *m_timer;
+    QTimer *m_timer = nullptr;
     quint64 m_sentCount = 0;
     QLabel *m_preview, *m_result, *m_hint;
 };

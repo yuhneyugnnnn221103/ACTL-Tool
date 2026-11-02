@@ -93,7 +93,12 @@ BeamEthPage::BeamEthPage(const AppContext &ctx, QWidget *parent) : QWidget(paren
         if (!on && m_timer->isActive()) stopPeriodic(QStringLiteral("tắt chế độ gửi liên tục"));
         m_send->setText(on ? QStringLiteral("Bắt đầu gửi") : QStringLiteral("Gửi bản tin beam"));
     });
+    m_apply = new QPushButton(QStringLiteral("Áp dụng"));
+    m_apply->setToolTip(QStringLiteral("Khi đang gửi liên tục, giá trị sửa chỉ được gửi đi sau khi bấm nút này (sửa nhiều ô rồi áp dụng một lần)."));
+    m_apply->setEnabled(false);
+    connect(m_apply, &QPushButton::clicked, this, &BeamEthPage::applyPending);
     sendRow->addWidget(m_send);
+    sendRow->addWidget(m_apply);
     sendRow->addWidget(m_periodic);
     sendRow->addWidget(m_periodMs);
     sendRow->addWidget(m_result, 1);
@@ -130,6 +135,28 @@ void BeamEthPage::updatePreview()
 {
     const QByteArray frame = buildFrame(params());
     m_preview->setText(frame.isEmpty() ? validate(params()) : QString::fromLatin1(frame.toHex(' ').toUpper()));
+    updatePending();
+}
+
+void BeamEthPage::updatePending()
+{
+    if (!m_timer || !m_apply) return;
+    const bool running = m_timer->isActive();
+    const QByteArray now = buildFrame(params()), active = buildFrame(m_active);
+    const bool pending = running && now != active;
+    m_apply->setEnabled(pending && !now.isEmpty());
+    if (running && pending) m_result->setText(QStringLiteral("Có giá trị chưa áp dụng: bản tin đang gửi vẫn là giá trị cũ. Bấm Áp dụng để đổi."));
+}
+
+void BeamEthPage::applyPending()
+{
+    const QString error = validate(params());
+    if (!error.isEmpty()) { m_result->setText(error); return; }
+    m_active = params();
+    m_apply->setEnabled(false);
+    m_result->setText(QStringLiteral("Đã áp dụng giá trị mới, đã gửi %1 bản tin").arg(m_sentCount));
+    emit logEvent(tagged(EventKind::Ctrl, QStringLiteral("Beam RDPU: áp dụng giá trị mới cho gửi liên tục [%1]")
+                                              .arg(QString::fromLatin1(buildFrame(m_active).toHex(' ').toUpper()))));
 }
 
 void BeamEthPage::showState(State s)
@@ -144,6 +171,7 @@ void BeamEthPage::onSendClicked()
     if (!m_periodic->isChecked()) { send(); return; }
     if (m_timer->isActive()) { stopPeriodic(QStringLiteral("người dùng dừng")); return; }
     m_sentCount = 0;
+    m_active = params();
     if (!send(true)) return;
     m_timer->start(m_periodMs->value());
     m_send->setText(QStringLiteral("Dừng"));
@@ -153,6 +181,7 @@ void BeamEthPage::onSendClicked()
 void BeamEthPage::stopPeriodic(const QString &why)
 {
     m_timer->stop();
+    m_apply->setEnabled(false);
     m_send->setText(m_periodic->isChecked() ? QStringLiteral("Bắt đầu gửi") : QStringLiteral("Gửi bản tin beam"));
     m_result->setText(QStringLiteral("Đã dừng gửi liên tục (%1), tổng %2 bản tin").arg(why).arg(m_sentCount));
     emit logEvent(tagged(EventKind::Ctrl, QStringLiteral("Beam RDPU: dừng gửi liên tục (%1), đã gửi %2 bản tin").arg(why).arg(m_sentCount)));
@@ -160,7 +189,7 @@ void BeamEthPage::stopPeriodic(const QString &why)
 
 bool BeamEthPage::send(bool quiet)
 {
-    const Params p = params();
+    const Params p = quiet ? m_active : params();   // theo chu kỳ: gửi giá trị đã áp dụng, không phải giá trị đang nhập dở
     const QString error = validate(p);
     if (!error.isEmpty()) {
         m_result->setText(error);
