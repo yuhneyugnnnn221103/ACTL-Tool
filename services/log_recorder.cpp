@@ -56,7 +56,6 @@ void LogRecorder::tick(const QDateTime &now)
 // Tạo file khi có bản ghi đầu tiên của lần ghi; tên chứa thời điểm bắt đầu ghi (không phải thời điểm bản ghi đầu).
 bool LogRecorder::ensureOpen(qint64 nowMs)
 {
-    Q_UNUSED(nowMs)
     if (m_writer.isOpen()) return true;
     QDir().mkpath(m_dir);
     QString error;
@@ -65,6 +64,10 @@ bool LogRecorder::ensureOpen(qint64 nowMs)
         if (!m_errorReported) emit errorOccurred(QStringLiteral("Không ghi được log: %1 (%2)").arg(path, error));
         m_errorReported = true;
         return false;
+    }
+    if (m_continued) {
+        m_continued = false;
+        m_writer.addEvent(nowMs, QStringLiteral("Tiếp tục ghi log: file trước đạt giới hạn %1 MB nên tự chia file").arg(m_maxFileBytes / (1024 * 1024)));
     }
     return true;
 }
@@ -112,6 +115,15 @@ void LogRecorder::logEvent(const QString &text)
     m_writer.addEvent(now, text);
 }
 
-void LogRecorder::flush() { if (m_writer.isOpen()) m_writer.flush(); }
+void LogRecorder::flush()
+{
+    if (!m_writer.isOpen()) return;
+    m_writer.flush();
+    if (m_maxFileBytes > 0 && m_writer.fileSize() >= m_maxFileBytes) {   // chia file: file này đóng và đổi tên, file mới mở khi có bản ghi kế tiếp
+        closeFile();
+        m_startedAt = QDateTime::currentDateTime();
+        m_continued = true;
+    }
+}
 
 } // namespace services

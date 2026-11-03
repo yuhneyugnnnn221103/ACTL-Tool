@@ -73,6 +73,7 @@ int main(int argc, char *argv[])
     services::PsuControl psuControl(ctx.monitorLink);
     services::PsuConfig psuConfig(ctx.monitorLink, &psuThresholds, cfg.psuThresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
     services::LogRecorder logger(cfg.logDir, cfg.logPeriodMs);
+    logger.setMaxFileBytes(qint64(cfg.logMaxFileMb) * 1024 * 1024);
     services::TrbCalib trbCalib(ctx.monitorLink);
     ctx.trbCalib = &trbCalib;
     services::FpgaOta fpgaOta(ctx.monitorLink);

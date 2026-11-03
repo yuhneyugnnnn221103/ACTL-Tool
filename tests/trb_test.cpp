@@ -1305,6 +1305,40 @@ private slots:
 
     // ---------- Log nhị phân nén (.alog) ----------
     // Một lần ghi = một file; tên có thời điểm bắt đầu và kết thúc; hẹn giờ bắt đầu/dừng; sau khi dừng không ghi thêm; bật lại ra file mới.
+    void logRecorderSplitsLargeFile()
+    {
+        QTemporaryDir dir;
+        services::LogRecorder logger(dir.path(), 0);
+        logger.setMaxFileBytes(20000);                         // nhỏ để thử; dữ liệu ngẫu nhiên gần như không nén được
+        model::TrbState s;
+        s.lastSeenMs = 1'700'000'000'000;
+        int total = 0;
+        for (int i = 0; i < 300; ++i) {
+            s.raw.resize(310);
+            for (char &c : s.raw) c = char(QRandomGenerator::global()->bounded(256));
+            s.lastSeenMs += 10;
+            logger.logTrb(0, 0, s, false);
+            ++total;
+            if (i % 10 == 9) logger.flush();                   // chia file chỉ xét sau flush
+        }
+        logger.flush();
+        const QStringList files = QDir(dir.path()).entryList({"*.alog"}, QDir::Files, QDir::Name);
+        QVERIFY2(files.size() >= 4, qPrintable(QString::number(files.size())));
+        int samples = 0, closed = 0;
+        for (const QString &f : files) {
+            logfile::Data d;
+            QVERIFY(logfile::load(dir.path() + "/" + f, d));
+            samples += d.series.value(logfile::deviceKey(logfile::KindTrb, 0, 0)).count();
+            if (!f.contains("dang-ghi")) ++closed;
+            QVERIFY(QFileInfo(dir.path() + "/" + f).size() < 20000 + 10000);   // không vượt giới hạn quá một khối nhỏ
+        }
+        QCOMPARE(samples, total);                              // chia file không mất bản ghi nào
+        QCOMPARE(closed, files.size() - 1);                    // chỉ file cuối còn "dang-ghi"
+        logfile::Data last;
+        QVERIFY(logfile::load(dir.path() + "/" + files.last(), last));
+        QVERIFY(!last.events.isEmpty() && last.events.first().text.contains("tự chia file"));
+    }
+
     void logRecorderStartsAndStopsBySchedule()
     {
         QTemporaryDir dir;

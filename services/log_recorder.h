@@ -15,6 +15,10 @@ public:
     LogRecorder(const QString &dir, int minIntervalMs, QObject *parent = nullptr);
     ~LogRecorder() override;
 
+    // Tự chia file: khi file đang ghi đạt chừng này byte (đã nén, kiểm tra mỗi lần flush ~2 s nên có thể vượt vài trăm KB) thì đóng file,
+    // bản ghi kế tiếp mở file mới (tên theo thời điểm chia). 0 = không chia. Mặc định 100 MB.
+    void setMaxFileBytes(qint64 bytes) { m_maxFileBytes = bytes; }
+    qint64 maxFileBytes() const { return m_maxFileBytes; }
     QString dir() const { return m_dir; }
     QString currentFile() const { return m_writer.isOpen() ? m_writer.path() : QString(); }
 
@@ -43,6 +47,8 @@ private:
 
     QString m_dir;
     int m_minIntervalMs;
+    qint64 m_maxFileBytes = 100LL * 1024 * 1024;
+    bool m_continued = false;               // file vừa chia: bản ghi đầu của file mới là sự kiện báo tiếp tục từ file trước
     logfile::Writer m_writer;
     QHash<int, qint64> m_lastLogged;       // khóa deviceKey
     QTimer m_flushTimer, m_scheduleTimer;

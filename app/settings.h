@@ -14,6 +14,7 @@ struct Settings {
     bool logEnabled, logAutoStart;
     QString logDir, thresholdsFile, psuThresholdsFile, psuDefaultConfigFile;
     int logPeriodMs;
+    int logMaxFileMb;      // tự chia file log khi đạt chừng này MB; 0 = không chia
     int fpgaEraseWaitSec, fpgaPacketGapMs, fpgaBootWaitMs;
     int psuCount, psuFirstAddr;
     QString passwordHash;      // rỗng = mật khẩu mặc định
@@ -50,6 +51,7 @@ struct Settings {
         s.logAutoStart = get("log/autoStart", true).toBool(); // false: mở app ở trạng thái chưa ghi, bấm "Bắt đầu ghi" hoặc hẹn giờ
         s.logDir = get("log/dir", appDir + "/logs").toString();
         s.logPeriodMs = get("log/minIntervalMs", 0).toInt(); // 0: ghi mọi bản tin nhận được; >0: tối thiểu ms giữa hai dòng của một thiết bị (đổi trạng thái thì ghi ngay). Khóa mới vì khóa cũ log/periodMs đã bị ghi 10000 vào file ini ở các lần chạy trước
+        s.logMaxFileMb = get("log/maxFileMb", 100).toInt();
         s.thresholdsFile = get("alarm/thresholdsFile", appDir + "/thresholds.json").toString();
         s.psuThresholdsFile = get("alarm/psuThresholdsFile", appDir + "/psu_thresholds.json").toString();
         s.psuDefaultConfigFile = get("psu/defaultConfigFile", appDir + "/psu_default_config.json").toString();
