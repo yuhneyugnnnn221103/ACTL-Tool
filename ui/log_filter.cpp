@@ -29,6 +29,7 @@ FrameClass classifyFrame(const QByteArray &raw)
     const QByteArray inner = proto::gwhdr::strip(raw);   // khung PC gửi xuống Gateway có DEV + LEN sau AB CD: phân loại theo khung gốc
     if (!inner.isEmpty()) return classifyFrame(inner);
     if (raw.size() < 4) return c;
+    if (raw.size() == 42 && quint8(raw.at(12)) == 0xEF && quint8(raw.at(13)) == 0xFF) { c.group = LogBeam; return c; }   // bản tin beam: 3 khung 14 byte, đuôi EF FF
     const quint16 cmd = quint16(quint8(raw.at(2)) << 8 | quint8(raw.at(3)));
     switch (cmd) {
     case 0x2323:            // giám sát TRB

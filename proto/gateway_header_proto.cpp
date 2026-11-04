@@ -1,8 +1,12 @@
 #include "gateway_header_proto.h"
-#include "control_frame_proto.h"
 #include "../core/frame.h"
+#include <atomic>
 
 namespace proto::gwhdr {
+
+static std::atomic<bool> g_direct{false};
+void setDirectMode(bool on) { g_direct = on; }
+bool directMode() { return g_direct; }
 
 QByteArray insert(Device dev, const QByteArray &frame)
 {
@@ -19,7 +23,7 @@ QByteArray insert(Device dev, const QByteArray &frame)
 
 QByteArray add(Device dev, const QByteArray &frame)
 {
-    return ctlframe::standalone() ? frame : insert(dev, frame);
+    return directMode() ? frame : insert(dev, frame);
 }
 
 QByteArray strip(const QByteArray &frame)

@@ -1,21 +1,16 @@
-# Khung điều khiển tổng PC -> Gateway (107 byte)
+# Bản tin điều khiển PC -> Gateway
 
-Mọi lệnh điều khiển của app đi trong một khung cố định 107 byte; gửi qua đường **Ethernet** tới Gateway (cùng đường với giám sát, cấu hình, nạp code và Calib; không còn đường RS485; khung điều khiển tổng này không có DEV + LEN). **Không có CRC tổng; đuôi 3 byte `E1 E2 E3`.**
+Không còn khung điều khiển tổng 107 byte có mask: mỗi lệnh điều khiển là một **bản tin độc lập**, gửi như mọi bản tin khác qua đường **Ethernet** tới Gateway, có thêm phần đầu `DEV + LEN` sau `AB CD` (xem `proto/gateway_header_proto.h`): `[AB CD][DEV][LEN 2B big-endian][CMD ...][...][CRC][E1 E2]`, LEN = tổng độ dài cả khung sau khi chèn, CRC vẫn tính từ byte địa chỉ. Chế độ Debug COM gửi khung gốc, không có DEV + LEN.
 
-| Byte (đếm từ 1) | Dài | Nội dung |
-|---|---|---|
-| 1-3 | 3 | `AB CD EF` |
-| 4 | 1 | Mask: bit0 = A2, bit1 = 14, bit2 = beam, bit3 = PSU |
-| 5-18 | 14 | Bản tin điều khiển TRB `A2 A2` |
-| 19-35 | 17 | Bản tin điều khiển TRB `14 14` (beam TRB) |
-| 36-77 | 42 | Bản tin điều khiển beam (3 khung x 14 byte, mục dưới) |
-| 78-90 | 13 | Bản tin điều khiển PSU `01 01` |
-| 91-104 | 14 | Dự phòng cho một module sau này |
-| 105-107 | 3 | Đuôi `E1 E2 E3` |
+| Bản tin | CMD | Khung gốc | DEV | LEN (cả DEV + LEN) |
+|---|---|---|---|---|
+| Điều khiển TRB | `A2 A2` | 14 byte | `01` | 17 |
+| Beam TRB | `14 14` | 17 byte | `01` | 20 |
+| Điều khiển beam (RDPU, 3 khung x 14 byte, mục dưới) | không có CMD chung | 42 byte | `01` | 45 (chèn sau `AB CD` của khung đầu tiên) |
+| Điều khiển PSU | `01 01` | 13 byte | `02` | 16 |
 
-- Mỗi lần gửi chỉ **một** phần có lệnh: phần đó chứa nguyên khung con (giữ header, CRC, đuôi riêng của nó), bit mask tương ứng = 1, các bit còn lại = 0, mọi phần khác đệm `00`.
-- Tổng 4 + 14 + 17 + 42 + 13 + 14 + 3 (đuôi) = 107 byte (`kLength` trong `proto/control_frame_proto.h`).
-- Khung con TRB tính CRC từ byte địa chỉ (như cũ); khung PSU cũng tính từ byte địa chỉ (ngay sau CMD), giống TRB.
+- Mọi khung TRB và PSU tính CRC từ byte địa chỉ (ngay sau CMD); khung beam tính CRC từ header (mục dưới).
+- DEV của bản tin beam (RDPU) đang đặt là `01` (TRB) vì beam do các TRB thực thi; đổi ở `proto::gwhdr::kDevBeam` nếu Gateway quy định khác.
 
 ## Phần điều khiển beam (42 byte)
 

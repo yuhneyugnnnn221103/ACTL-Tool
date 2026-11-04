@@ -7,7 +7,7 @@
 //   FREQ: số nguyên MHz (không dấu)
 //   MODE: byte 9 = số nguyên 0..255 (người dùng nhập riêng cho từng khung); byte 10 = 0x01 / 0x10 / 0x11 theo thứ tự khung
 //   CRC16-CCITT-FALSE tính từ HEADER (AB CD) tới hết MODE (byte 1..10), ghi byte thấp trước; riêng khung beam tính như vậy. Đuôi khung là EF FF (khác E1 E2 của các khung khác).
-// Khi gửi, 42 byte này được đặt vào phần "điều khiển beam" của khung điều khiển tổng 107 byte (control_frame_proto.h).
+// 42 byte này là một bản tin độc lập: khi gửi qua Gateway có thêm DEV + LEN sau AB CD đầu tiên (gateway_header_proto.h), LEN = 45.
 #include <QByteArray>
 #include <QString>
 

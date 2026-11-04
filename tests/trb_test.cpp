@@ -8,7 +8,6 @@
 #include "../proto/trb_config_proto.h"
 #include "../proto/trb_control_proto.h"
 #include "../proto/beam_eth_proto.h"
-#include "../proto/control_frame_proto.h"
 #include "../proto/trb_monitor_proto.h"
 #include "../services/alarm_engine.h"
 #include "../sim/sim_world.h"
@@ -358,38 +357,31 @@ private slots:
     // ---------- Khung điều khiển tổng ----------
     void controlFrameLayout()
     {
-        namespace cf = proto::ctlframe;
-        QCOMPARE(cf::sectionOffset(cf::SecTrbControl), 4);
-        QCOMPARE(cf::sectionOffset(cf::SecTrbBeam), 18);
-        QCOMPARE(cf::sectionOffset(cf::SecBeam), 35);
-        QCOMPARE(cf::sectionOffset(cf::SecPsu), 77);
-        QCOMPARE(cf::sectionOffset(cf::SecPsu) + 13 + cf::kReserved + cf::kTailLength, 107);
-
+        namespace gh = proto::gwhdr;
+        // Không còn khung tổng 107 byte có mask: mỗi lệnh điều khiển là một bản tin độc lập, qua Gateway có thêm DEV + LEN sau AB CD.
         const QByteArray a2 = trbctl::buildControl(1, 2, trbctl::ControlCmd{});
-        const QByteArray w = cf::wrap(cf::SecTrbControl, a2);
-        QCOMPARE(w.size(), 107);
-        QCOMPARE(w.right(3).toHex(), QByteArray("e1e2e3"));
-        QCOMPARE(w.left(4).toHex(), QByteArray("abcdef01"));
-        QCOMPARE(w.mid(4, 14), a2);
-        QVERIFY(w.mid(18, 86).count(char(0)) == 86);                 // mọi phần khác đệm 00
-        QCOMPARE(cf::section(w, cf::SecTrbControl), a2);
-        QVERIFY(cf::section(w, cf::SecPsu).isEmpty());                      // bit mask phần PSU không bật
+        QCOMPARE(a2.size(), 14);
+        const QByteArray s = gh::insert(gh::kDevTrbControl, a2);
+        QCOMPARE(s.size(), 17);
+        QCOMPARE(s.left(5).toHex(), QByteArray("abcd010011"));              // DEV 01 (TRB), LEN = 17
+        QCOMPARE(gh::strip(s), a2);
+        QVERIFY(testsupport::crcOk(s, 4 + 3));                              // CRC vẫn tính từ byte địa chỉ
 
-        const QByteArray psu = proto::psuctl::buildControl(3, proto::psuctl::ControlCmd{});
-        const QByteArray p = cf::wrap(cf::SecPsu, psu);
-        QCOMPARE(quint8(p.at(3)), quint8(0x08));
-        QCOMPARE(p.mid(77, 13), psu);
-        proto::beameth::Params bp;
-        QCOMPARE(quint8(cf::wrap(cf::SecBeam, proto::beameth::buildFrame(bp)).at(3)), quint8(0x04));
-        QCOMPARE(quint8(cf::wrap(cf::SecTrbBeam, trbctl::buildBeam(0, 0, trbctl::BeamCmd{})).at(3)), quint8(0x02));
-        QVERIFY(cf::wrap(cf::SecPsu, a2).isEmpty());                        // sai độ dài khung con
+        const QByteArray bt = trbctl::buildBeam(0, 0, trbctl::BeamCmd{});    // 14 14, 17 byte
+        QCOMPARE(gh::insert(gh::kDevTrbControl, bt).size(), 20);
+        QCOMPARE(gh::insert(gh::kDevTrbControl, bt).left(5).toHex(), QByteArray("abcd010014"));
 
-        core::FrameRegistry reg;                                            // bên nhận (sim) ghép khung 107 byte không cần đuôi/CRC
-        sim::registerRequestFrames(reg, true);
-        core::FrameParser parser(&reg);
-        int n = 0;
-        parser.feed(w + w, [&](const core::Frame &f) { ++n; QCOMPARE(f.raw.size(), 107); });
-        QCOMPARE(n, 2);
+        const QByteArray psu = proto::psuctl::buildControl(3, proto::psuctl::ControlCmd{});   // 13 byte
+        const QByteArray sp = gh::insert(gh::kDevPsuControl, psu);
+        QCOMPARE(sp.left(5).toHex(), QByteArray("abcd020010"));             // DEV 02 (PSU), LEN = 16
+        QCOMPARE(gh::strip(sp), psu);
+
+        const QByteArray beam = proto::beameth::buildFrame(proto::beameth::Params{});         // 42 byte = 3 khung 14 byte
+        QCOMPARE(beam.size(), 42);
+        const QByteArray sb = gh::insert(gh::kDevBeam, beam);
+        QCOMPARE(sb.size(), 45);
+        QCOMPARE(sb.left(5).toHex(), QByteArray("abcd01002d"));             // một bản tin: LEN = 45, chèn sau AB CD đầu tiên
+        QCOMPARE(gh::strip(sb), beam);
     }
 
     // ---------- Beam Ethernet ----------
@@ -481,8 +473,8 @@ private slots:
         QVERIFY(done.last().at(0).toString().contains("MB3 / TRB5"));
         QVERIFY(done.last().at(0).toString().contains("Start"));
         QCOMPARE(rig.transport->written.size(), 1);
-        QCOMPARE(rig.transport->written.first(), proto::ctlframe::wrap(proto::ctlframe::SecTrbControl, trbctl::buildControl(2, 4, c)));
-        QCOMPARE(rig.transport->written.first().size(), 107);
+        QCOMPARE(rig.transport->written.first(), proto::gwhdr::insert(proto::gwhdr::Trb, trbctl::buildControl(2, 4, c)));
+        QCOMPARE(rig.transport->written.first().size(), 17);          // A2 14 byte + DEV + LEN
 
         control.sendControl(trbctl::kBroadcast, trbctl::kBroadcast, {});
         QVERIFY(done.wait(1000));
@@ -532,8 +524,8 @@ private slots:
         QCOMPARE(control.sendControlSwitchDebug(2, 2, debug), Check::Ok);
         settle(4);
         QCOMPARE(control.debugTrb().value(), services::TrbControl::Device(2, 2));
-        QList<QByteArray> w;                                           // bóc khung con A2 ra khỏi khung điều khiển tổng
-        for (const QByteArray &f : rig.transport->written) w << proto::ctlframe::section(f, proto::ctlframe::SecTrbControl);
+        QList<QByteArray> w;                                           // bỏ DEV + LEN của khung A2
+        for (const QByteArray &f : rig.transport->written) w << proto::gwhdr::strip(f);
         trbctl::ControlCmd released = debug;
         released.debugMode = false;
         QCOMPARE(w.at(w.size() - 2), trbctl::buildControl(1, 1, released));
@@ -940,17 +932,16 @@ private slots:
         QByteArray bad = sent;
         bad[4] = char(0x0E);
         QVERIFY(gh::strip(bad).isEmpty());                                        // LEN sai
-        // Bộ tách dòng byte: chia mảnh, nối hai khung, xen khung điều khiển tổng.
-        const QByteArray ctl = proto::ctlframe::wrap(proto::ctlframe::SecTrbControl, QByteArray(14, '\0'));
-        const QByteArray stream = sent + ctl + gh::insert(gh::Psu, psucfg::buildReadRequest(2));
+        // Bộ tách dòng byte: chia mảnh, nối nhiều khung.
+        const QByteArray stream = sent + gh::insert(gh::Trb, trbctl::buildControl(1, 1, trbctl::ControlCmd{})) + gh::insert(gh::Psu, psucfg::buildReadRequest(2));
         gh::Unwrapper u;
         QByteArray out;
         for (int i = 0; i < stream.size(); i += 7) out += u.feed(stream.mid(i, 7));
-        QCOMPARE(out, cfg + ctl + psucfg::buildReadRequest(2));
+        QCOMPARE(out, cfg + trbctl::buildControl(1, 1, trbctl::ControlCmd{}) + psucfg::buildReadRequest(2));
         // Chế độ Debug COM: không chèn.
-        proto::ctlframe::setStandalone(true);
+        gh::setDirectMode(true);
         QCOMPARE(gh::add(gh::Trb, cfg), cfg);
-        proto::ctlframe::setStandalone(false);
+        gh::setDirectMode(false);
         QCOMPARE(gh::add(gh::Trb, cfg), sent);
     }
 
@@ -969,19 +960,6 @@ private slots:
         QCOMPARE(p.mid(5, 4), QByteArray(4, '\0'));
         QCOMPARE(p.right(2), QByteArray::fromHex("E1E2"));
         QVERIFY(testsupport::crcOk(p, 4));
-    }
-
-    void standaloneControlFramesAreNotWrapped()
-    {
-        using namespace proto::ctlframe;
-        const QByteArray inner(kSectionLength[SecTrbControl], char(0x5A));
-        QCOMPARE(pack(SecTrbControl, inner).size(), kLength);       // có Gateway: khung tổng 107 byte
-        setStandalone(true);
-        QCOMPARE(pack(SecTrbControl, inner), inner);                // Debug COM: gửi riêng khung con
-        QCOMPARE(pack(SecBeam, QByteArray(42, 'x')).size(), 42);
-        QVERIFY(pack(SecBeam, inner).isEmpty());                    // độ dài sai vẫn bị từ chối
-        setStandalone(false);
-        QCOMPARE(pack(SecTrbControl, inner).size(), kLength);
     }
 
     void directPollerQueriesAndMarksSilentDevice()

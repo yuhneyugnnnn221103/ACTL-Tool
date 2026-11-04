@@ -1,6 +1,7 @@
 #include "beam_eth_page.h"
 #include "log_filter.h"
 #include "theme.h"
+#include "../proto/gateway_header_proto.h"
 #include <QCheckBox>
 #include <QDoubleSpinBox>
 #include <QGridLayout>
@@ -197,7 +198,7 @@ bool BeamEthPage::send(bool quiet)
         return false;
     }
     core::Request r;
-    r.data = proto::ctlframe::pack(proto::ctlframe::SecBeam, buildFrame(p));                       // không có trả lời: gửi xong là xong
+    r.data = proto::gwhdr::add(proto::gwhdr::kDevBeam, buildFrame(p));                      // bản tin độc lập, không có trả lời: gửi xong là xong
     m_ctx.monitorLink->send(r);
     ++m_sentCount;
     if (quiet) {   // theo chu kỳ: chỉ cập nhật bộ đếm, nhật ký đã ghi lúc bắt đầu và dừng

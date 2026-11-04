@@ -12,7 +12,7 @@ class QSpinBox;
 namespace ui {
 
 // Chế độ Debug COM: bỏ Ethernet và Gateway, nối cổng COM (RS422 qua bộ chuyển đổi) thẳng xuống MỘT thiết bị TRB hoặc PSU để thử riêng
-// giao tiếp phần mềm - phần cứng khi Gateway chưa sẵn sàng. Khung giống khung hiện tại; bản tin điều khiển gửi riêng từng khung (không ghép khung tổng 107 byte).
+// giao tiếp phần mềm - phần cứng khi Gateway chưa sẵn sàng. Khung giống khung hiện tại; mọi bản tin gửi khung gốc (không có DEV + LEN như khi đi qua Gateway).
 // Vì không có Gateway tự hỏi thiết bị, trang này chủ động gửi lệnh hỏi giám sát (xem services/direct_poller.h).
 class DirectPage : public QWidget {
     Q_OBJECT

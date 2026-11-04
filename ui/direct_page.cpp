@@ -1,6 +1,7 @@
 #include "direct_page.h"
 #include "log_filter.h"
 #include "theme.h"
+#include "../proto/gateway_header_proto.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
@@ -30,7 +31,7 @@ DirectPage::DirectPage(const AppContext &ctx, QWidget *parent) : QWidget(parent)
     l->addWidget(m_direct);
     auto *note = new QLabel(QStringLiteral(
         "Mỗi lúc chỉ một thiết bị (TRB hoặc PSU) trên cổng COM; mọi trang khác (Chi tiết, Cấu hình, Nạp code, Calib, Giả lập beam…) vẫn dùng được nhưng đi qua cổng COM này. "
-        "Bản tin điều khiển gửi riêng từng khung, không ghép khung tổng 107 byte."));
+        "Mọi bản tin gửi khung gốc, không có byte thiết bị và độ dài như khi đi qua Gateway."));
     note->setWordWrap(true);
     theme::setRole(note, "muted");
     l->addWidget(note);
@@ -187,7 +188,7 @@ void DirectPage::refreshPorts()
 void DirectPage::setDirect(bool on)
 {
     m_ctx.directPoller->stop();
-    proto::ctlframe::setStandalone(on);
+    proto::gwhdr::setDirectMode(on);
     core::SwitchTransport *sw = m_ctx.sw;
     core::Link *link = m_ctx.monitorLink;
     if (on) {
@@ -196,7 +197,7 @@ void DirectPage::setDirect(bool on)
         QMetaObject::invokeMethod(link, [=] { sw->setMode(core::SwitchTransport::Mode::Ethernet); link->setIdleResetMs(0); link->start(); });   // TCP tự nối lại Gateway
     }
     emit directModeChanged(on);
-    emit logEvent(tagged(EventKind::Net, on ? QStringLiteral("Chế độ Debug COM: đã ngắt Ethernet, dùng cổng COM trực tiếp; điều khiển gửi riêng từng khung")
+    emit logEvent(tagged(EventKind::Net, on ? QStringLiteral("Chế độ Debug COM: đã ngắt Ethernet, dùng cổng COM trực tiếp; gửi khung gốc không DEV + LEN")
                                             : QStringLiteral("Chế độ Debug COM: tắt, quay lại Ethernet tới Gateway")));
     showState(State::Closed);
 }

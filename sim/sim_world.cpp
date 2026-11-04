@@ -1,5 +1,4 @@
 #include "sim_world.h"
-#include "../proto/control_frame_proto.h"
 #include "../proto/trb_calib_proto.h"
 #include "../proto/trb_config_proto.h"
 #include "../proto/trb_control_proto.h"
@@ -17,9 +16,6 @@ bool registerRequestFrames(core::FrameRegistry &registry, bool checkCrc)
     ok &= registry.add({QByteArray::fromHex("A1A1"), trbcfg::kLength, 4, checkCrc, QStringLiteral("TRB ghi cấu hình")});
     ok &= registry.add({QByteArray::fromHex("A3A3"), 10, 4, checkCrc, QStringLiteral("TRB hỏi cấu hình")});
     ok &= registry.add({QByteArray::fromHex("1818"), proto::calib::kLength, 4, checkCrc, QStringLiteral("TRB Calib")});
-    core::FrameSpec control{QByteArray(1, char(ctlframe::kCmd)), ctlframe::kLength, 0, false, QStringLiteral("Điều khiển tổng")};
-    control.tailer = false;                          // khung điều khiển tổng không có CRC tổng, đuôi 3 byte E1 E2 E3 nên không dùng kiểm tra đuôi 2 byte của parser
-    ok &= registry.add(control);
     return ok;
 }
 
@@ -69,15 +65,6 @@ void SimWorld::noteDebug()
 
 QByteArray SimWorld::handle(const core::Frame &frame)
 {
-    if (quint8(frame.at(2)) == ctlframe::kCmd) {      // khung điều khiển tổng: xử lý từng khung con có bit mask bật (beam điều khiển và PSU chưa mô phỏng)
-        QByteArray reply;
-        for (ctlframe::Section sec : {ctlframe::SecTrbControl, ctlframe::SecTrbBeam}) {
-            const QByteArray inner = ctlframe::section(frame.raw, sec);
-            if (inner.isEmpty()) continue;
-            reply += handle(core::Frame{inner.mid(2, 2), inner, frame.timestampMs});
-        }
-        return reply;
-    }
     const int mb = frame.at(trbmon::kOffMb), t = frame.at(trbmon::kOffTrb);
     const quint8 cmd = frame.at(2);
     const QList<TrbModel *> list = targets(mb, t);

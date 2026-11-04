@@ -312,8 +312,8 @@ def scenario_frames(name, ctx):
 # ----------------------------------------------------------------------------- TCP (giả Gateway)
 
 
-CTL_LEN = 107
-CTL_SECTIONS = [(0, 14), (1, 17), (2, 42), (3, 13)]   # bit mask, độ dài: A2, 14, beam, PSU
+# Bản tin điều khiển là các bản tin độc lập (không còn khung tổng 107 byte có mask); qua Gateway có thêm DEV + LEN sau AB CD.
+# Loại theo độ dài khung gốc và CMD: 0 = TRB A2 (14 byte), 1 = TRB beam 14 14 (17), 2 = beam RDPU (42, ba khung 14 byte, đuôi EF FF), 3 = PSU 01 01 (13).
 
 
 def decode_section(bit, f):
@@ -334,25 +334,17 @@ def decode_section(bit, f):
     return f"điều khiển PSU {f[4]}: bật cụm={f[5]:04b} clearTrip={f[6]}"
 
 
-def decode_control(buf):
-    """Tách khung điều khiển tổng 107 byte (AB CD EF Mask ...) app gửi xuống Gateway; trả về (danh sách mô tả, phần dư)."""
-    out = []
-    while len(buf) >= 3:
-        if buf[0] != H1 or buf[1] != H2 or buf[2] != 0xEF:
-            buf = buf[1:]
-            continue
-        if len(buf) < CTL_LEN:
-            break                                      # chưa đủ byte
-        if buf[CTL_LEN - 3:CTL_LEN] != b"\xE1\xE2\xE3":
-            buf = buf[1:]                              # sai đuôi E1 E2 E3: bỏ byte đầu, tìm lại header
-            continue
-        mask, off = buf[3], 4
-        for bit, n in CTL_SECTIONS:
-            if mask >> bit & 1:
-                out.append(decode_section(bit, buf[off:off + n]))
-            off += n
-        buf = buf[CTL_LEN:]
-    return out, buf
+def control_kind(f):
+    """Loại bản tin điều khiển của khung gốc (đã bỏ DEV + LEN), hoặc None nếu không phải."""
+    if len(f) == 14 and f[2:4] == b"\xA2\xA2":
+        return 0
+    if len(f) == 17 and f[2:4] == b"\x14\x14":
+        return 1
+    if len(f) == 42 and f[12:14] == b"\xEF\xFF" and f[26:28] == b"\xEF\xFF" and f[40:42] == b"\xEF\xFF":
+        return 2
+    if len(f) == 13 and f[2:4] == b"\x01\x01":
+        return 3
+    return None
 
 
 def cmd_tcp(args):
@@ -510,8 +502,8 @@ class ConfigResponder:
         return frame[n - 2] == T1 and frame[n - 1] == T2 and crc16(bytes(frame[start:n - 4])) == (frame[n - 4] << 8 | frame[n - 3])
 
     def feed(self, data):
-        """Nhận byte từ app, trả về danh sách bytes cần gửi lại: khung điều khiển tổng 107 byte (AB CD EF ...) chỉ in ra,
-        cấu hình TRB / PSU và Calib (có DEV + LEN sau AB CD) xử lý như thiết bị thật sau khi bỏ DEV + LEN."""
+        """Nhận byte từ app, trả về danh sách bytes cần gửi lại: bản tin điều khiển (TRB A2, 14 14, beam, PSU) chỉ in ra,
+        cấu hình TRB / PSU và Calib xử lý như thiết bị thật; mọi bản tin có DEV + LEN sau AB CD, bỏ đi trước khi xử lý."""
         self.buf += data
         replies = []
         unwrapped = False                                     # khung đầu buffer vừa được bỏ DEV + LEN: không xét DEV nữa (CMD 03 03 trông giống DEV 03)
@@ -519,17 +511,6 @@ class ConfigResponder:
             b = self.buf
             if b[0] != H1 or b[1] != H2:
                 del b[0]
-                continue
-            if b[2] == 0xEF:                                  # khung điều khiển tổng 107 byte
-                if len(b) < CTL_LEN:
-                    break
-                lines, _ = decode_control(bytes(b[:CTL_LEN]))
-                if lines:
-                    for line in lines:
-                        self.log(f"  {line}")
-                    del b[:CTL_LEN]
-                else:
-                    del b[0]
                 continue
             if b[2] in (1, 2, 3) and not unwrapped:           # DEV (01 TRB, 02 PSU, 03 TRSU) + LEN 2 byte big-endian = tổng độ dài khung
                 if len(b) < 5:
@@ -541,8 +522,14 @@ class ConfigResponder:
                 if len(b) < n:
                     break
                 dev = b[2]
-                b[:n] = bytes(b[:2]) + bytes(b[5:n])             # Gateway bỏ DEV + LEN, ghép lại khung gốc; CRC (từ byte địa chỉ) không đổi
+                inner = bytes(b[:2]) + bytes(b[5:n])             # Gateway bỏ DEV + LEN, ghép lại khung gốc; CRC (từ byte địa chỉ) không đổi
                 self.log(f"  [DEV {dev:02X}, LEN {n}] -> khung gốc {n - 3} byte")
+                kind = control_kind(inner)
+                if kind is not None:                             # bản tin điều khiển: không có trả lời, chỉ in ra
+                    self.log(f"  {decode_section(kind, inner)}")
+                    del b[:n]
+                    continue
+                b[:n] = inner
                 unwrapped = True
                 continue
             unwrapped = False
@@ -645,34 +632,36 @@ def cmd_selftest(_args):
     ctx.t = 10
     check(len(sc_lost(ctx)) == len(sc_normal(ctx)) - 8 - 2, "'lost' bỏ 8 TRB của MB0 và 2 PSU trong giai đoạn mất kết nối")
 
-    print("giải mã lệnh app gửi xuống:")
-    def wrap(bit, inner):
-        f = bytearray(CTL_LEN); f[0], f[1], f[2], f[3] = H1, H2, 0xEF, 1 << bit
-        off = 4 + sum(n for b_, n in CTL_SECTIONS if b_ < bit)
-        f[off:off + len(inner)] = inner
-        f[CTL_LEN - 3:] = b"\xE1\xE2\xE3"
-        return bytes(f)
+    print("giải mã lệnh app gửi xuống (bản tin độc lập, có DEV + LEN sau AB CD):")
+    def env(dev, f):
+        f = bytes(f)
+        n = len(f) + 3
+        return f[:2] + bytes([dev]) + n.to_bytes(2, "big") + f[2:]
+    def decoded(dev, f):
+        lines = []
+        ConfigResponder(rng=random.Random(9), log=lines.append).feed(env(dev, f))
+        return [l for l in lines if "DEV" not in l]
     ctl = bytearray(14); ctl[2] = ctl[3] = 0xA2; ctl[4], ctl[5], ctl[6], ctl[7] = 7, 3, 5, 0x03
-    lines, rest = decode_control(wrap(0, seal(ctl, 4)))
-    check(len(lines) == 1 and "MB8/TRB4" in lines[0] and rest == b"", "điều khiển TRB (khung tổng 107 byte, bit0)")
+    lines = decoded(1, seal(ctl, 4))
+    check(len(lines) == 1 and "MB8/TRB4" in lines[0], "điều khiển TRB A2 (14 byte + DEV 01 + LEN)")
+    bt = bytearray(17); bt[2] = bt[3] = 0x14; bt[4], bt[5], bt[6], bt[10] = 1, 2, 9, 0b0101
+    lines = decoded(1, seal(bt, 4))
+    check(len(lines) == 1 and "beam TRB MB2/TRB3" in lines[0] and "phaseTX=9" in lines[0], "beam TRB 14 14 (17 byte)")
     pc = bytearray(13); pc[2] = pc[3] = 0x01; pc[4], pc[5], pc[6] = 4, 0b1010, 1
-    lines, _ = decode_control(wrap(3, seal(pc, 4)))
-    check(len(lines) == 1 and "PSU 4" in lines[0] and "1010" in lines[0], "điều khiển PSU (bit3)")
+    lines = decoded(2, seal(pc, 4))
+    check(len(lines) == 1 and "PSU 4" in lines[0] and "1010" in lines[0], "điều khiển PSU 01 01 (13 byte + DEV 02 + LEN)")
     bm = bytearray()
     for m, (esp, beta, freq, mode) in zip((0x01, 0x10, 0x11), ((123, -45, 2400, 5), (-10, 0, 100, 6), (32767, -32768, 65535, 255))):
         k = bytearray(14); k[0], k[1] = H1, H2; k[2:4] = esp.to_bytes(2, "little", signed=True); k[4:6] = beta.to_bytes(2, "little", signed=True)
         k[6:8] = freq.to_bytes(2, "little"); k[8], k[9] = mode, m
         k[10:12] = crc16(bytes(k[:10])).to_bytes(2, "little"); k[12], k[13] = 0xEF, 0xFF
         bm += k
-    lines, _ = decode_control(wrap(2, bytes(bm)))
+    check(env(1, bytes(bm))[:5] == b"\xAB\xCD\x01\x00\x2D", "beam 42 byte: DEV 01, LEN = 45, chèn sau AB CD đầu tiên")
+    lines = decoded(1, bytes(bm))
     check(len(lines) == 1 and "[01] Esp=12.3 Beta=-4.5 Freq=2400 MHz Mode=5" in lines[0] and "[10] Esp=-1.0" in lines[0]
-          and "[11] Esp=3276.7 Beta=-3276.8 Freq=65535 MHz Mode=255" in lines[0] and "đúng" in lines[0], "điều khiển beam (bit2, giá trị riêng từng mode, CRC từ header)")
+          and "[11] Esp=3276.7 Beta=-3276.8 Freq=65535 MHz Mode=255" in lines[0] and "đúng" in lines[0], "điều khiển beam (giá trị riêng từng mode, CRC từ header)")
 
-    print("cấu hình qua cùng kết nối TCP (có DEV + LEN sau AB CD):")
-    def env(dev, f):
-        f = bytes(f)
-        n = len(f) + 3
-        return f[:2] + bytes([dev]) + n.to_bytes(2, "big") + f[2:]
+    print("cấu hình, Calib qua cùng kết nối TCP (có DEV + LEN sau AB CD):")
     r = ConfigResponder(rng=random.Random(2), log=lambda *_: None)
     w = bytearray(TRB_CFG_LEN); w[2] = w[3] = 0xA1; w[4], w[5] = 6, 2; w[10:14] = b"\x01\x02\x03\x04"
     check(r.feed(env(1, seal(w, 4))) == [], "ghi TRB không có trả lời")
@@ -693,8 +682,6 @@ def cmd_selftest(_args):
     check(split[0] == [] and len(split[1]) == 1, "nhận khung bị chia mảnh")
     logged = []
     ctl_r = ConfigResponder(rng=random.Random(4), log=logged.append)
-    ctl = bytearray(14); ctl[2] = ctl[3] = 0xA2; ctl[4], ctl[5], ctl[6], ctl[7] = 7, 3, 5, 0x03
-    check(ctl_r.feed(wrap(0, seal(ctl, 4))) == [] and any("điều khiển TRB MB8/TRB4" in l for l in logged), "nhận khung điều khiển tổng 107 byte (A2)")
     cal = bytearray(CALIB_LEN); cal[2] = cal[3] = 0x18; cal[4], cal[5] = 2, 5; cal[6] = 0x80; cal[13] = 0x01; cal[14:18] = bytes([11, 12, 13, 14])
     logged.clear()
     check(ctl_r.feed(env(1, seal(cal, 4))) == [] and any("calib MB2/TRB5: RX_EN=80000000 TX_EN=00000001" in l and "phaseTX=11" in l for l in logged), "nhận bản tin Calib 18 18 (150 byte)")
