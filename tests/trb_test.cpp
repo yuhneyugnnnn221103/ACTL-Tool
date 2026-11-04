@@ -13,6 +13,8 @@
 #include "../services/alarm_engine.h"
 #include "../sim/sim_world.h"
 #include "../services/log_recorder.h"
+#include "../services/direct_poller.h"
+#include "../proto/direct_query_proto.h"
 #include "../services/trb_calib.h"
 #include "../services/trb_config.h"
 #include "../services/trb_control.h"
@@ -920,6 +922,94 @@ private slots:
         QSet<QString> tags;
         for (int k = int(ui::EventKind::Trip); k <= int(ui::EventKind::Auth); ++k) tags.insert(ui::eventTag(ui::EventKind(k)));
         QCOMPARE(tags.size(), 11);                                // mọi loại có mã riêng
+    }
+
+    // ---------- Chế độ Debug COM ----------
+    void directQueryFrames()
+    {
+        const QByteArray t = proto::directq::buildTrb(3, 5);      // AB CD 23 23 MB TRB 00 00 CRC E1 E2
+        QCOMPARE(t.size(), 12);
+        QCOMPARE(t.left(6), QByteArray::fromHex("ABCD23230305"));
+        QCOMPARE(t.mid(6, 2), QByteArray(2, '\0'));
+        QCOMPARE(t.right(2), QByteArray::fromHex("E1E2"));
+        QVERIFY(testsupport::crcOk(t, 4));                          // CRC từ byte địa chỉ
+        const QByteArray p = proto::directq::buildPsu(2);         // AB CD 02 02 PSU 00 00 00 00 CRC E1 E2
+        QCOMPARE(p.size(), 13);
+        QCOMPARE(p.left(5), QByteArray::fromHex("ABCD020202"));
+        QCOMPARE(p.mid(5, 4), QByteArray(4, '\0'));
+        QCOMPARE(p.right(2), QByteArray::fromHex("E1E2"));
+        QVERIFY(testsupport::crcOk(p, 4));
+    }
+
+    void standaloneControlFramesAreNotWrapped()
+    {
+        using namespace proto::ctlframe;
+        const QByteArray inner(kSectionLength[SecTrbControl], char(0x5A));
+        QCOMPARE(pack(SecTrbControl, inner).size(), kLength);       // có Gateway: khung tổng 107 byte
+        setStandalone(true);
+        QCOMPARE(pack(SecTrbControl, inner), inner);                // Debug COM: gửi riêng khung con
+        QCOMPARE(pack(SecBeam, QByteArray(42, 'x')).size(), 42);
+        QVERIFY(pack(SecBeam, inner).isEmpty());                    // độ dài sai vẫn bị từ chối
+        setStandalone(false);
+        QCOMPARE(pack(SecTrbControl, inner).size(), kLength);
+    }
+
+    void directPollerQueriesAndMarksSilentDevice()
+    {
+        Rig rig("monitor");
+        services::TrbMonitor::registerFrames(rig.registry, true);
+        model::DeviceStore store(2, 8);
+        model::PsuStore psuStore(1, 5);
+        services::TrbMonitor trbMon(&rig.link, &store, nullptr);
+        services::PsuMonitor psuMon(&rig.link, &psuStore, nullptr);
+        services::DirectPoller poller(&rig.link, &trbMon, &psuMon);
+        poller.setReplyTimeoutMs(60);
+        rig.link.start();                                           // sau khi poller đã nghe trạng thái đường truyền
+        QList<double> v = zeros(trbmon::kNumFields);
+        v[trbmon::kIdxPg] = 0x0F;
+        bool answer = true;
+        rig.transport->onWrite = [&](const QByteArray &d) {         // TRB thật: trả bản tin giám sát đúng địa chỉ được hỏi
+            if (answer && d.size() == 12 && d.mid(2, 2) == QByteArray::fromHex("2323"))
+                rig.transport->injectLater(monitorFrame(quint8(d.at(4)), quint8(d.at(5)), v));
+        };
+
+        poller.setTarget(services::DirectPoller::Kind::Trb, 1, 4);
+        QCOMPARE(poller.query(), proto::directq::buildTrb(1, 4));
+        poller.pollOnce();
+        QTRY_COMPARE_WITH_TIMEOUT(poller.replied(), quint64(1), 1000);
+        QCOMPARE(rig.transport->written.last(), proto::directq::buildTrb(1, 4));
+        QCOMPARE(store.trb(1, 4).status, model::Status::Ok);        // trả lời đi qua đường giám sát bình thường
+        QVERIFY(!store.trb(1, 4).noReply);
+        QCOMPARE(store.trb(1, 4).reply.okTotal, quint64(1));
+
+        answer = false;                                             // thiết bị im lặng: hết thời gian chờ = X ngay, rồi mất kết nối
+        poller.pollOnce();
+        QTRY_COMPARE_WITH_TIMEOUT(poller.timeouts(), quint64(1), 1000);
+        QVERIFY(store.trb(1, 4).noReply);
+        QCOMPARE(store.trb(1, 4).status, model::Status::Ok);
+        for (int i = 2; i <= 3; ++i) {
+            poller.pollOnce();
+            QTRY_COMPARE_WITH_TIMEOUT(poller.timeouts(), quint64(i), 1000);
+        }
+        QCOMPARE(store.trb(1, 4).status, model::Status::Lost);      // đủ 3 lần liên tiếp như khung rỗng của Gateway
+        QCOMPARE(store.trb(1, 4).reply.emptyTotal, quint64(3));
+
+        poller.setTarget(services::DirectPoller::Kind::Psu, 2);     // PSU: lệnh 02 02, im lặng thì cũng X
+        poller.pollOnce();
+        QTRY_COMPARE_WITH_TIMEOUT(poller.timeouts(), quint64(4), 1000);
+        QCOMPARE(rig.transport->written.last(), proto::directq::buildPsu(2));
+        QVERIFY(psuStore.psu(2).noReply);
+
+        const int before = rig.transport->written.size();           // đang chờ lệnh trước thì không gửi chồng, đóng đường thì không hỏi
+        poller.pollOnce();
+        poller.pollOnce();
+        QTest::qWait(10);                                           // Link gửi qua hàng đợi sự kiện
+        QCOMPARE(rig.transport->written.size(), before + 1);
+        QTRY_COMPARE_WITH_TIMEOUT(poller.timeouts(), quint64(5), 1000);
+        rig.transport->close();
+        QTest::qWait(20);
+        poller.pollOnce();
+        QCOMPARE(rig.transport->written.size(), before + 1);
     }
 
     void gatewayEmptyFrameMarksTheSilentTrbAsLost()

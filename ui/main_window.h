@@ -2,6 +2,7 @@
 #include "../app/context.h"
 #include "log_filter.h"
 #include <QMainWindow>
+#include <functional>
 
 class QCheckBox;
 class QFrame;
@@ -55,6 +56,8 @@ private:
 
     QLineEdit *m_tcpAddress;
     QSpinBox *m_tcpPort;
+    bool m_directMode = false;           // chế độ Debug COM: đường giám sát là cổng COM trực tiếp, không phải Ethernet tới Gateway
+    std::function<void()> m_refreshConn;
     QPushButton *m_tcpButton;
     StatusPill *m_tcpPill;   // thẻ trạng thái đường Ethernet trong popup
     StatusPill *m_connPill;              // một thẻ cho đường của trang đang mở; bấm để xem đủ 4 đường

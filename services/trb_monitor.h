@@ -19,6 +19,8 @@ public:
 
 public slots:
     void onFrame(const core::Frame &frame);
+    // TRB không trả lời: như một khung rỗng của Gateway (X ngay, đủ số lần liên tiếp thì mất kết nối). Chế độ Debug COM gọi khi hỏi mà hết thời gian chờ.
+    void onSilent(int mb, int trb);
 
 signals:
     void trbUpdated(int mb, int trb, bool statusChanged);

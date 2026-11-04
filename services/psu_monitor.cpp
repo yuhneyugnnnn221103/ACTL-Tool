@@ -16,20 +16,23 @@ PsuMonitor::PsuMonitor(core::Link *link, model::PsuStore *store, AlarmEngine *al
     connect(link, &core::Link::frameReceived, this, &PsuMonitor::onFrame);
 }
 
+void PsuMonitor::onSilent(int addr)
+{
+    if (!m_store->contains(addr)) return;
+    m_store->recordReply(addr, true);
+    m_store->setNoReply(addr, true);
+    if (++m_emptyRun[addr] >= m_emptyLimit) m_store->markSilent(addr);
+}
+
 void PsuMonitor::onFrame(const core::Frame &frame)
 {
     if (frame.cmd != psumon::cmd()) return;
     const int addr = frame.at(psumon::kOffAddr);
     if (!m_store->contains(addr)) { ++m_badAddress; return; }
 
-    m_store->recordReply(addr, frame.empty);
-    int &empty = m_emptyRun[addr];
-    if (frame.empty) {                    // Gateway báo PSU này không phản hồi: đánh dấu X ngay; đủ m_emptyLimit lần liên tiếp thì coi là mất kết nối
-        m_store->setNoReply(addr, true);
-        if (++empty >= m_emptyLimit) m_store->markSilent(addr);
-        return;
-    }
-    empty = 0;
+    if (frame.empty) { onSilent(addr); return; }   // Gateway báo PSU này không phản hồi
+    m_store->recordReply(addr, false);
+    m_emptyRun[addr] = 0;
 
     const QList<double> v = psumon::table().decode(frame.raw);
     // Như TRB: có trip code khác 0 là Trip, ưu tiên hơn Quá ngưỡng. Thêm: một cụm DCM ở TRIPPED/LOCKOUT (safe_state của cụm) cũng là Trip.

@@ -3,6 +3,7 @@
 #include "reply_error_map.h"
 #include "auth.h"
 #include "beam_eth_page.h"
+#include "direct_page.h"
 #include "calib_page.h"
 #include "log_viewer_page.h"
 #include "firmware_page.h"
@@ -110,8 +111,8 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     setMinimumSize(1100, 560);   // đặt sẵn để layout không tự nới cửa sổ quá màn hình; trang nào lớn hơn thì cuộn
     // Nhóm log hiển thị ở từng trang (theo thứ tự trang bên dưới); Tổng quan hiện tất cả.
     // Đường kết nối của từng trang: 0 = Ethernet tới Gateway (mọi chức năng dùng chung), -1 = trang không dùng đường nào.
-    m_pageConn = {0, 0, 0, 0, 0, 0, 0, 0, 0, -1};
-    m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogBeam, LogCalib, LogAll, LogSystem};
+    m_pageConn = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1};
+    m_pageGroups = {LogAll, LogTrbMonitor, LogTrbConfig, LogPsuMonitor, LogPsuConfig, LogFirmware, LogBeam, LogCalib, LogAll, LogAll, LogSystem};
 
     // Điều hướng trái + các trang.
     m_nav = new QListWidget;
@@ -150,6 +151,20 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
         logEvent(tagged(sent ? EventKind::Ctrl : EventKind::Err,
                          (sent ? QStringLiteral("Đã gửi (không chờ ACK): ") : QStringLiteral("KHÔNG gửi được, chưa kết nối Gateway: ")) + d),
                  LogCalib);
+    });
+    m_nav->addItem(QStringLiteral("Debug COM"));
+    auto *directPage = new DirectPage(ctx);
+    m_pages->addWidget(scrollPage(directPage));
+    const int directRow = m_nav->count() - 1;
+    connect(directPage, &DirectPage::logEvent, this, [this](const QString &text) { logEvent(text, LogAll); });
+    connect(directPage, &DirectPage::showTrb, this, &MainWindow::showDetail);
+    connect(directPage, &DirectPage::showPsu, this, &MainWindow::showPsu);
+    connect(directPage, &DirectPage::directModeChanged, this, [this, directRow](bool on) {
+        m_directMode = on;
+        m_tcpState = core::Transport::State::Closed;
+        if (m_refreshConn) m_refreshConn();
+        m_nav->item(directRow)->setText(on ? QStringLiteral("Debug COM (đang bật)") : QStringLiteral("Debug COM"));
+        syncConnPill();
     });
     m_nav->addItem(QStringLiteral("Xem log"));
     m_pages->addWidget(new LogViewerPage(ctx));       // tự có vùng cuộn riêng cho đồ thị
@@ -364,15 +379,17 @@ void MainWindow::watchLink(core::Link *link, const QString &title, StatusPill *p
         const QString state = s == S::Connected ? QStringLiteral("đã kết nối")
                             : s == S::Waiting   ? QStringLiteral("đang nối Gateway") : QStringLiteral("đóng");
         const Status look = s == S::Connected ? Status::Ok : s == S::Waiting ? Status::Warning : Status::Lost;
-        pillLabel->setPill(theme::statusMark(look) + QLatin1Char(' ') + QStringLiteral("Gateway (ETH)"),
+        pillLabel->setPill(theme::statusMark(look) + QLatin1Char(' ') + (m_directMode ? QStringLiteral("COM trực tiếp") : QStringLiteral("Gateway (ETH)")),
                            theme::statusColor(look), theme::statusTextColor(look));
         pillLabel->setToolTip(title + QStringLiteral(": ") + state);
         button->setText(s == S::Closed ? QStringLiteral("Kết nối") : QStringLiteral("Ngắt"));
-        m_tcpAddress->setEnabled(m_tcpState == S::Closed);
-        m_tcpPort->setEnabled(m_tcpState == S::Closed);
+        m_tcpAddress->setEnabled(!m_directMode && m_tcpState == S::Closed);
+        m_tcpPort->setEnabled(!m_directMode && m_tcpState == S::Closed);
+        button->setEnabled(!m_directMode);   // Debug COM: cổng COM mở ở tab Debug COM, không dùng nút này
         return title + QStringLiteral(": ") + state;
     };
     show(S::Closed);
+    m_refreshConn = [=] { show(m_tcpState); };
     connect(link, &core::Link::stateChanged, this, [=](S s) { logEvent(tagged(EventKind::Net, show(s))); });
     connect(link, &core::Link::errorOccurred, this,
             [=](const QString &m) { logEvent(tagged(EventKind::Err, QStringLiteral("Lỗi %1: %2").arg(title, m))); });

@@ -17,6 +17,7 @@ public:
 
 public slots:
     void onFrame(const core::Frame &frame);
+    void onSilent(int addr);   // PSU không trả lời (xem TrbMonitor::onSilent)
 
 signals:
     void psuUpdated(int addr, bool statusChanged);

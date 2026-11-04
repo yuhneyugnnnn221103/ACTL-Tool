@@ -85,6 +85,10 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         services/psu_monitor.h services/psu_monitor.cpp
         services/psu_control.h services/psu_control.cpp
         services/psu_config.h services/psu_config.cpp
+        core/switch_transport.h core/switch_transport.cpp
+        proto/direct_query_proto.h proto/direct_query_proto.cpp
+        services/direct_poller.h services/direct_poller.cpp
+        ui/direct_page.h ui/direct_page.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET ACTL_Tool APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -161,6 +165,7 @@ if(Qt${QT_VERSION_MAJOR}Test_FOUND)
         services/trb_monitor.cpp services/trb_control.cpp services/trb_config.cpp services/trb_calib.cpp
         services/fpga_ota.cpp services/stm_ota.cpp
         services/psu_monitor.cpp services/psu_control.cpp services/psu_config.cpp
+        proto/direct_query_proto.cpp services/direct_poller.cpp
         ui/log_filter.cpp
     )
     foreach(name psu_test trb_test sim_test)

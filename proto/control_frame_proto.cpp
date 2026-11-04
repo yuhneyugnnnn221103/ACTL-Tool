@@ -1,7 +1,13 @@
 #include "control_frame_proto.h"
 #include "../core/frame.h"
+#include <atomic>
 
 namespace proto::ctlframe {
+
+static std::atomic<bool> g_standalone{false};
+void setStandalone(bool on) { g_standalone = on; }
+bool standalone() { return g_standalone; }
+
 
 int sectionOffset(Section s)
 {
@@ -21,6 +27,12 @@ QByteArray wrap(Section s, const QByteArray &inner)
     for (int i = 0; i < kTailLength; ++i) f[kLength - kTailLength + i] = char(kTail[i]);
     f.replace(sectionOffset(s), inner.size(), inner);
     return f;
+}
+
+QByteArray pack(Section s, const QByteArray &inner)
+{
+    if (!g_standalone) return wrap(s, inner);
+    return s >= 0 && s < kSections && inner.size() == kSectionLength[s] ? inner : QByteArray();
 }
 
 QByteArray section(const QByteArray &frame, Section s)

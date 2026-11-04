@@ -16,20 +16,23 @@ TrbMonitor::TrbMonitor(core::Link *link, model::DeviceStore *store, AlarmEngine 
     connect(link, &core::Link::frameReceived, this, &TrbMonitor::onFrame);
 }
 
+void TrbMonitor::onSilent(int mb, int trb)
+{
+    if (!m_store->contains(mb, trb)) return;
+    m_store->recordReply(mb, trb, true);
+    m_store->setNoReply(mb, trb, true);   // đánh dấu X ngay; đủ m_emptyLimit lần liên tiếp thì coi là mất kết nối
+    if (++m_emptyRun[mb << 8 | trb] >= m_emptyLimit) m_store->markSilent(mb, trb);
+}
+
 void TrbMonitor::onFrame(const core::Frame &frame)
 {
     if (frame.cmd != trbmon::cmd()) return;
     const int mb = frame.at(trbmon::kOffMb), trb = frame.at(trbmon::kOffTrb);
     if (!m_store->contains(mb, trb)) { ++m_badAddress; return; }
 
-    m_store->recordReply(mb, trb, frame.empty);
-    int &empty = m_emptyRun[mb << 8 | trb];
-    if (frame.empty) {                    // Gateway báo TRB này không phản hồi: đánh dấu X ngay; đủ m_emptyLimit lần liên tiếp thì coi là mất kết nối
-        m_store->setNoReply(mb, trb, true);
-        if (++empty >= m_emptyLimit) m_store->markSilent(mb, trb);
-        return;
-    }
-    empty = 0;
+    if (frame.empty) { onSilent(mb, trb); return; }   // Gateway báo TRB này không phản hồi
+    m_store->recordReply(mb, trb, false);
+    m_emptyRun[mb << 8 | trb] = 0;
 
     const QList<double> v = trbmon::table().decode(frame.raw);
     // Tạm quy ước: có trip code khác 0 hoặc mất PG (Power Good) là Trip; Trip được ưu tiên hơn Quá ngưỡng.

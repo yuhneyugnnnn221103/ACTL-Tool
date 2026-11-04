@@ -23,6 +23,12 @@ constexpr quint8 kPad = 0x00;
 int sectionOffset(Section s);
 // Đặt khung con vào đúng phần của nó trong khung 107 byte (rỗng nếu độ dài khung con không khớp).
 QByteArray wrap(Section s, const QByteArray &inner);
+// Chế độ Debug COM (nối thẳng xuống thiết bị, không có Gateway ghép khung tổng): gửi riêng từng khung con, không đặt vào khung 107 byte.
+// Cờ dùng chung toàn chương trình, bật/tắt từ thread giao diện.
+void setStandalone(bool on);
+bool standalone();
+// Khung để gửi đi: khung tổng 107 byte (có Gateway) hoặc chính khung con (standalone). Rỗng nếu độ dài khung con không khớp.
+QByteArray pack(Section s, const QByteArray &inner);
 // Tách khung con ra từ khung tổng; trả về rỗng nếu bit mask của phần đó không bật hoặc khung tổng sai độ dài.
 QByteArray section(const QByteArray &frame, Section s);
 

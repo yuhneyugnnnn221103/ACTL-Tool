@@ -1,7 +1,8 @@
 #pragma once
 // Mọi thứ giao diện cần, gom lại để thêm service mới không phải sửa chữ ký hàm ở nhiều nơi.
 #include "../app/settings.h"
-#include "../core/tcp_client_transport.h"
+#include "../core/switch_transport.h"
+#include "../services/direct_poller.h"
 #include "../services/log_recorder.h"
 #include "../model/psu_store.h"
 #include "../services/fpga_ota.h"
@@ -21,7 +22,10 @@ struct AppContext {
     model::PsuStore *psuStore = nullptr;
     model::Thresholds *psuThresholds = nullptr;
     core::Link *monitorLink = nullptr;       // TCP: PC là client, Gateway là server; mọi bản tin (giám sát, điều khiển, cấu hình, nạp code, Calib) đi đường này
+    core::SwitchTransport *sw = nullptr;     // chuyển Ethernet <-> COM trực tiếp (chế độ Debug COM); nullptr khi đang phát lại file hex
     core::TcpClientTransport *tcp = nullptr; // nullptr khi đang phát lại file hex
+    core::SerialTransport *serial = nullptr; // cổng COM của chế độ Debug COM; nullptr khi đang phát lại file hex
+    services::DirectPoller *directPoller = nullptr;
     services::TrbControl *trbControl = nullptr;
     services::TrbConfig *trbConfig = nullptr;
     services::TrbCalib *trbCalib = nullptr;

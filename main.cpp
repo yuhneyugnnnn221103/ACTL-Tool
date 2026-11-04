@@ -33,7 +33,11 @@ int main(int argc, char *argv[])
     // Một đường truyền duy nhất (Ethernet tới Gateway) chạy trên thread I/O riêng: giám sát, điều khiển, cấu hình, nạp code, Calib đều đi đường này.
     core::Transport *monitorTransport;
     if (cfg.monitorReplayFile.isEmpty())
-        monitorTransport = ctx.tcp = new core::TcpClientTransport(cfg.monitorAddress, cfg.monitorPort);
+    {
+        ctx.tcp = new core::TcpClientTransport(cfg.monitorAddress, cfg.monitorPort);
+        ctx.serial = new core::SerialTransport(cfg.directPort, cfg.directBaud);
+        monitorTransport = ctx.sw = new core::SwitchTransport(ctx.tcp, ctx.serial);   // Ethernet mặc định; chuyển sang COM ở tab Debug COM
+    }
     else
         monitorTransport = new core::ReplayTransport(cfg.monitorReplayFile, cfg.replayIntervalMs, true);
     ctx.monitorLink = new core::Link(QStringLiteral("monitor"), monitorTransport, &registry);
@@ -74,6 +78,9 @@ int main(int argc, char *argv[])
     services::PsuConfig psuConfig(ctx.monitorLink, &psuThresholds, cfg.psuThresholdsFile, cfg.cfgReadTimeoutMs, cfg.cfgWriteGapMs);
     services::LogRecorder logger(cfg.logDir, cfg.logPeriodMs);
     logger.setMaxFileBytes(qint64(cfg.logMaxFileMb) * 1024 * 1024);
+    services::DirectPoller directPoller(ctx.monitorLink, &trbMonitor, &psuMonitor);
+    directPoller.setPeriodMs(cfg.directPeriodMs);
+    ctx.directPoller = &directPoller;
     services::TrbCalib trbCalib(ctx.monitorLink);
     ctx.trbCalib = &trbCalib;
     services::FpgaOta fpgaOta(ctx.monitorLink);
@@ -98,6 +105,7 @@ int main(int argc, char *argv[])
             logger.logTrb(mb, trb, store.trb(mb, trb), changed);
         });
 
+    directPoller.setPauseCheck([&ctx] { return ctx.serviceBusy(); });
     ui::MainWindow window(ctx);
     QObject::connect(&trbMonitor, &services::TrbMonitor::powerGoodChanged, &window, [&](int mb, int trb, int bits) {
         QStringList bad;

@@ -197,7 +197,7 @@ bool BeamEthPage::send(bool quiet)
         return false;
     }
     core::Request r;
-    r.data = proto::ctlframe::wrap(proto::ctlframe::SecBeam, buildFrame(p));                       // không có trả lời: gửi xong là xong
+    r.data = proto::ctlframe::pack(proto::ctlframe::SecBeam, buildFrame(p));                       // không có trả lời: gửi xong là xong
     m_ctx.monitorLink->send(r);
     ++m_sentCount;
     if (quiet) {   // theo chu kỳ: chỉ cập nhật bộ đếm, nhật ký đã ghi lúc bắt đầu và dừng
