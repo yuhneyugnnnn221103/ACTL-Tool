@@ -376,7 +376,7 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
 
         QList<quint8> cmds;                                      // chuỗi lệnh đã gửi
-        for (const QByteArray &d : tp->written) cmds << quint8(d[2]);
+        for (const QByteArray &d : tp->written) cmds << quint8(FakeTransport::unwrapped(d)[2]);
         const int loads = broadcast ? 3 : 6;                     // gửi riêng: 3 gói x 2 TRB
         QCOMPARE(cmds.mid(0, loads), QList<quint8>(loads, 0x55));   // toàn bộ gói đi trước, không xen lệnh hỏi
         QCOMPARE(cmds.mid(loads), (QList<quint8>{0x88, 0x88}));     // rồi mới hỏi từng TRB

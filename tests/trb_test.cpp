@@ -343,14 +343,15 @@ private slots:
         QVERIFY(done.last().at(0).toString().contains("MB2 / TRB3"));
         QCOMPARE(rig.transport->written.size(), 1);
         const QByteArray sent = rig.transport->written.first();
-        QCOMPARE(sent.size(), 150);
-        QCOMPARE(sent.left(4).toHex(), QByteArray("abcd1818"));
-        QCOMPARE(sent, proto::calib::buildFrame(1, 2, d));
+        QCOMPARE(sent.size(), 150 + 3);                       // có thêm DEV (01 = TRB) và LEN (2 byte) sau AB CD
+        QCOMPARE(sent.left(7).toHex(), QByteArray("abcd0100991818"));   // LEN = 153 = 0x0099
+        QCOMPARE(proto::gwhdr::strip(sent), proto::calib::buildFrame(1, 2, d));   // bỏ 3 byte thì ra đúng khung gốc, CRC không đổi
+        QVERIFY(testsupport::crcOk(sent, 4 + 3));
         calib.send(proto::calib::kBroadcast, proto::calib::kBroadcast, d);
         QVERIFY(done.wait(1000));
         QVERIFY(done.last().at(0).toString().contains("tất cả TRB"));
         // nhóm log của các khung gửi xuống
-        QCOMPARE(ui::classifyFrame(sent).group, int(ui::LogCalib));
+        QCOMPARE(ui::classifyFrame(proto::gwhdr::strip(sent)).group, int(ui::LogCalib));
         QCOMPARE(ui::classifyFrame(trbcfg::buildReadRequest(1, 1)).group, int(ui::LogTrbConfig));
     }
 
@@ -922,6 +923,35 @@ private slots:
         QSet<QString> tags;
         for (int k = int(ui::EventKind::Trip); k <= int(ui::EventKind::Auth); ++k) tags.insert(ui::eventTag(ui::EventKind(k)));
         QCOMPARE(tags.size(), 11);                                // mọi loại có mã riêng
+    }
+
+    // ---------- Phần đầu DEV + LEN cho bản tin PC -> Gateway (Ethernet) ----------
+    void gatewayHeaderInsertAndStrip()
+    {
+        namespace gh = proto::gwhdr;
+        const QByteArray cfg = trbcfg::buildReadRequest(3, 4);                    // 10 byte
+        const QByteArray sent = gh::insert(gh::Trb, cfg);
+        QCOMPARE(sent.size(), 13);
+        QCOMPARE(sent.left(5), QByteArray::fromHex("ABCD01000D"));                // DEV 01, LEN 0x000D = 13 (tổng cả khung, big-endian)
+        QCOMPARE(sent.mid(5), cfg.mid(2));                                        // phần còn lại giữ nguyên, CRC không đổi
+        QCOMPARE(gh::strip(sent), cfg);
+        QCOMPARE(gh::insert(gh::Psu, QByteArray(915, 'x').prepend("\xAB\xCD").left(915)).mid(2, 3), QByteArray::fromHex("02" "0396"));   // 915 + 3 = 918 = 0x0396
+        QVERIFY(gh::strip(cfg).isEmpty());                                        // khung gốc không có phần đầu
+        QByteArray bad = sent;
+        bad[4] = char(0x0E);
+        QVERIFY(gh::strip(bad).isEmpty());                                        // LEN sai
+        // Bộ tách dòng byte: chia mảnh, nối hai khung, xen khung điều khiển tổng.
+        const QByteArray ctl = proto::ctlframe::wrap(proto::ctlframe::SecTrbControl, QByteArray(14, '\0'));
+        const QByteArray stream = sent + ctl + gh::insert(gh::Psu, psucfg::buildReadRequest(2));
+        gh::Unwrapper u;
+        QByteArray out;
+        for (int i = 0; i < stream.size(); i += 7) out += u.feed(stream.mid(i, 7));
+        QCOMPARE(out, cfg + ctl + psucfg::buildReadRequest(2));
+        // Chế độ Debug COM: không chèn.
+        proto::ctlframe::setStandalone(true);
+        QCOMPARE(gh::add(gh::Trb, cfg), cfg);
+        proto::ctlframe::setStandalone(false);
+        QCOMPARE(gh::add(gh::Trb, cfg), sent);
     }
 
     // ---------- Chế độ Debug COM ----------

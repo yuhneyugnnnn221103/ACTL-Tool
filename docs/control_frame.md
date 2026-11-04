@@ -1,6 +1,6 @@
 # Khung điều khiển tổng PC -> Gateway (107 byte)
 
-Mọi lệnh điều khiển của app đi trong một khung cố định 107 byte; gửi qua đường **Ethernet** tới Gateway (cùng đường với giám sát, cấu hình, nạp code và Calib; không còn đường RS485 và không có byte thiết bị). **Không có CRC tổng; đuôi 3 byte `E1 E2 E3`.**
+Mọi lệnh điều khiển của app đi trong một khung cố định 107 byte; gửi qua đường **Ethernet** tới Gateway (cùng đường với giám sát, cấu hình, nạp code và Calib; không còn đường RS485; khung điều khiển tổng này không có DEV + LEN). **Không có CRC tổng; đuôi 3 byte `E1 E2 E3`.**
 
 | Byte (đếm từ 1) | Dài | Nội dung |
 |---|---|---|
@@ -27,7 +27,7 @@ Ba khung 14 byte nối nhau, ứng với ba mode (byte 10 của MODE lần lư�
 
 # Bản tin Calib (CMD 18 18, 150 byte)
 
-PC gửi qua đường Ethernet tới Gateway, đúng 150 byte (không có byte thiết bị). Không có trả lời.
+PC gửi qua đường Ethernet tới Gateway: khung gốc 150 byte, có thêm DEV `01` và LEN (2 byte, big-endian, tổng cả khung = 153) sau `AB CD` khi gửi xuống Gateway (xem `proto/gateway_header_proto.h`); chế độ Debug COM gửi khung gốc. Không có trả lời.
 
 | Byte (đếm từ 1) | Dài | Nội dung |
 |---|---|---|

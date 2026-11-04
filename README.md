@@ -26,7 +26,7 @@ PC ── TCP/Ethernet (Gateway là server, PC là client) ── Gateway ──
 
 | Đường | Dùng cho |
 |---|---|
-| TCP, link `monitor` | **Mọi bản tin**: giám sát, điều khiển (khung tổng 107 byte), cấu hình, nạp code, Calib. App nối tới Gateway (tự nối lại khi mất kết nối). Gateway tự hỏi từng thiết bị rồi chuyển bản tin lên PC. Các chức năng hỏi-đáp (cấu hình, nạp code) dùng chung hàng đợi gửi, mỗi lúc một thao tác; không còn đường RS485 và không có byte thiết bị trong bản tin |
+| TCP, link `monitor` | **Mọi bản tin**: giám sát, điều khiển (khung tổng 107 byte), cấu hình, nạp code, Calib. App nối tới Gateway (tự nối lại khi mất kết nối). Gateway tự hỏi từng thiết bị rồi chuyển bản tin lên PC. Các chức năng hỏi-đáp (cấu hình, nạp code) dùng chung hàng đợi gửi, mỗi lúc một thao tác; không còn đường RS485. Bản tin cấu hình, nạp code và Calib gửi xuống Gateway có thêm phần đầu DEV + LEN sau `AB CD` (xem mục "Phần đầu DEV + LEN" bên dưới) |
 
 Địa chỉ TRB là cặp (MB 0–19, TRB 0–7) trên đường truyền, hiển thị là MB1–MB20, TRB1–TRB8; `FF FF` là broadcast.
 
@@ -172,9 +172,11 @@ Gateway hỏi `AB CD 23 23 MB TRB 00 00 CRC E1 E2`, giả lập trả khung giá
 
 Mọi lệnh điều khiển (TRB `A2`, TRB `14`, beam, PSU) đi trong khung điều khiển tổng 107 byte `AB CD EF <mask> ...`, xem `docs/control_frame.md`.
 
-Mọi bản tin (giám sát, điều khiển TRB / PSU / beam, cấu hình, nạp code, Calib) đi qua đường Ethernet duy nhất tới Gateway; bản tin cấu hình, nạp code và Calib là khung gốc, không có byte thiết bị.
+Mọi bản tin (giám sát, điều khiển TRB / PSU / beam, cấu hình, nạp code, Calib) đi qua đường Ethernet duy nhất tới Gateway; bản tin cấu hình, nạp code và Calib có thêm phần đầu DEV + LEN khi gửi xuống Gateway.
 
 Tab Hex thô cũng hiện các byte bị loại, hiện ở mọi trang: `RX LỖI CRC` và `RX LỖI ĐUÔI` (nguyên khung đủ độ dài nhưng sai CRC hoặc đuôi, một dòng cho cả khung), `RX BỎ QUA` (đoạn byte rác hoặc khung CMD lạ). Byte `0x00` đệm của Gateway không tính là rác nên không hiện.
+
+**Phần đầu DEV + LEN (chỉ đường Ethernet, PC -> Gateway)**: bản tin cấu hình, nạp code và Calib có thêm 3 byte ngay sau `AB CD`, trước CMD: `[AB CD][DEV][LEN 2B big-endian][CMD ...][...][CRC][E1 E2]`. `DEV`: `01` TRB, `02` PSU, `03` TRSU (sau này). `LEN`: **tổng độ dài của cả khung sau khi chèn** (tính cả `AB CD`, DEV, LEN và `E1 E2`; ví dụ Calib 150 + 3 = 153 = `00 99`). CRC vẫn tính từ byte địa chỉ nên không đổi; Gateway bỏ 3 byte này để ghép lại khung gốc gửi xuống thiết bị. DEV theo chức năng: cấu hình TRB, nạp FPGA, Calib = `01`; cấu hình PSU, nạp STM32 = `02`. Không áp dụng cho khung điều khiển tổng 107 byte (đã có mask chọn thiết bị), cho chiều trả lời (Gateway -> PC, vẫn là khung gốc) và cho chế độ Debug COM (nối thẳng, khung gốc). Định nghĩa: `proto/gateway_header_proto.h`; mô phỏng phía Gateway (`tools/mock_gateway.py`, `sim::BusPort::setGatewayHeader`) tự bỏ phần đầu này.
 
 **Calib**: tab gửi bản tin Calib (`AB CD 18 18 MB TRB` + RX_CHN_EN 4 byte + TX_CHN_EN 4 byte + 32 kênh x (phase TX, phase RX, amp TX, amp RX) + 4 byte dự phòng + CRC + `E1 E2`, 150 byte, CRC từ byte MB) qua Ethernet. Tích chọn kênh RX/TX, nhập giá trị số nguyên không dấu, nhập/xuất file JSON để dùng lại; chi tiết ở `docs/control_frame.md`.
 

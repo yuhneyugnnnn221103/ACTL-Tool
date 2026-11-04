@@ -20,7 +20,7 @@ BusPort::BusPort(core::Transport *transport, SimWorld *world, bool checkCrc, qui
 
 void BusPort::onBytes(const QByteArray &data)
 {
-    m_parser.feed(data, [this](const core::Frame &frame) {
+    m_parser.feed(m_gatewayHeader ? m_unwrap.feed(data) : data, [this](const core::Frame &frame) {
         ++m_stats.requests;
         emit received(frame.raw);
         const QByteArray reply = m_world->handle(frame);

@@ -511,9 +511,10 @@ class ConfigResponder:
 
     def feed(self, data):
         """Nhận byte từ app, trả về danh sách bytes cần gửi lại: khung điều khiển tổng 107 byte (AB CD EF ...) chỉ in ra,
-        cấu hình TRB / PSU và Calib xử lý như thiết bị thật."""
+        cấu hình TRB / PSU và Calib (có DEV + LEN sau AB CD) xử lý như thiết bị thật sau khi bỏ DEV + LEN."""
         self.buf += data
         replies = []
+        unwrapped = False                                     # khung đầu buffer vừa được bỏ DEV + LEN: không xét DEV nữa (CMD 03 03 trông giống DEV 03)
         while len(self.buf) >= 4:
             b = self.buf
             if b[0] != H1 or b[1] != H2:
@@ -530,6 +531,21 @@ class ConfigResponder:
                 else:
                     del b[0]
                 continue
+            if b[2] in (1, 2, 3) and not unwrapped:           # DEV (01 TRB, 02 PSU, 03 TRSU) + LEN 2 byte big-endian = tổng độ dài khung
+                if len(b) < 5:
+                    break
+                n = b[3] << 8 | b[4]
+                if n < 9 or n > 8192:
+                    del b[0]
+                    continue
+                if len(b) < n:
+                    break
+                dev = b[2]
+                b[:n] = bytes(b[:2]) + bytes(b[5:n])             # Gateway bỏ DEV + LEN, ghép lại khung gốc; CRC (từ byte địa chỉ) không đổi
+                self.log(f"  [DEV {dev:02X}, LEN {n}] -> khung gốc {n - 3} byte")
+                unwrapped = True
+                continue
+            unwrapped = False
             cmd2 = bytes(b[2:4])
             if cmd2 == b"\xA1\xA1":
                 n, kind = TRB_CFG_LEN, "ghi TRB"
@@ -652,23 +668,27 @@ def cmd_selftest(_args):
     check(len(lines) == 1 and "[01] Esp=12.3 Beta=-4.5 Freq=2400 MHz Mode=5" in lines[0] and "[10] Esp=-1.0" in lines[0]
           and "[11] Esp=3276.7 Beta=-3276.8 Freq=65535 MHz Mode=255" in lines[0] and "đúng" in lines[0], "điều khiển beam (bit2, giá trị riêng từng mode, CRC từ header)")
 
-    print("cấu hình qua cùng kết nối TCP (không có byte thiết bị):")
+    print("cấu hình qua cùng kết nối TCP (có DEV + LEN sau AB CD):")
+    def env(dev, f):
+        f = bytes(f)
+        n = len(f) + 3
+        return f[:2] + bytes([dev]) + n.to_bytes(2, "big") + f[2:]
     r = ConfigResponder(rng=random.Random(2), log=lambda *_: None)
     w = bytearray(TRB_CFG_LEN); w[2] = w[3] = 0xA1; w[4], w[5] = 6, 2; w[10:14] = b"\x01\x02\x03\x04"
-    check(r.feed(seal(w, 4)) == [], "ghi TRB không có trả lời")
+    check(r.feed(env(1, seal(w, 4))) == [], "ghi TRB không có trả lời")
     rd = bytearray(TRB_CFG_READ_LEN); rd[2] = rd[3] = 0xA3; rd[4], rd[5] = 6, 2
-    out = r.feed(seal(rd, 4))
+    out = r.feed(env(1, seal(rd, 4)))
     check(len(out) == 1 and len(out[0]) == TRB_CFG_LEN and out[0][2:4] == b"\xA4\xA4" and out[0][10:14] == b"\x01\x02\x03\x04"
           and crc16(out[0][4:516]) == (out[0][516] << 8 | out[0][517]), "đọc TRB trả đúng cấu hình đã ghi (A4A4)")
     w = bytearray(PSU_CFG_LEN); w[2] = w[3] = 0x04; w[PSU_ADDR] = 3; w[5] = w[6] = 0xFF; w[500:504] = b"\xDE\xAD\xBE\xEF"
-    r.feed(seal(w, 4))
+    r.feed(env(2, seal(w, 4)))
     rd = bytearray(PSU_CFG_READ_LEN); rd[2] = rd[3] = 0x03; rd[PSU_ADDR] = 3
-    out = r.feed(seal(rd, 4))
+    out = r.feed(env(2, seal(rd, 4)))
     check(len(out) == 1 and len(out[0]) == PSU_CFG_LEN and out[0][2:4] == b"\x82\x82" and out[0][500:504] == b"\xDE\xAD\xBE\xEF"
           and crc16(out[0][4:911]) == (out[0][911] << 8 | out[0][912]), "đọc PSU trả đúng cấu hình đã ghi (82 82)")
     noisy = ConfigResponder(drop=1.0, rng=random.Random(3), log=lambda *_: None)
-    check(noisy.feed(seal(bytearray(rd), 4)) == [], "--drop 1.0: không trả lời")
-    chunks = seal(bytearray(rd), 4)
+    check(noisy.feed(env(2, seal(bytearray(rd), 4))) == [], "--drop 1.0: không trả lời")
+    chunks = env(2, seal(bytearray(rd), 4))
     split = [r.feed(chunks[:5]), r.feed(chunks[5:])]
     check(split[0] == [] and len(split[1]) == 1, "nhận khung bị chia mảnh")
     logged = []
@@ -677,8 +697,8 @@ def cmd_selftest(_args):
     check(ctl_r.feed(wrap(0, seal(ctl, 4))) == [] and any("điều khiển TRB MB8/TRB4" in l for l in logged), "nhận khung điều khiển tổng 107 byte (A2)")
     cal = bytearray(CALIB_LEN); cal[2] = cal[3] = 0x18; cal[4], cal[5] = 2, 5; cal[6] = 0x80; cal[13] = 0x01; cal[14:18] = bytes([11, 12, 13, 14])
     logged.clear()
-    check(ctl_r.feed(seal(cal, 4)) == [] and any("calib MB2/TRB5: RX_EN=80000000 TX_EN=00000001" in l and "phaseTX=11" in l for l in logged), "nhận bản tin Calib 18 18 (150 byte)")
-    junk = r.feed(b"\x00\xFF\xAB" + seal(bytearray(rd), 4))
+    check(ctl_r.feed(env(1, seal(cal, 4))) == [] and any("calib MB2/TRB5: RX_EN=80000000 TX_EN=00000001" in l and "phaseTX=11" in l for l in logged), "nhận bản tin Calib 18 18 (150 byte)")
+    junk = r.feed(b"\x00\xFF\xAB" + env(2, seal(bytearray(rd), 4)))
     check(len(junk) == 1, "bỏ qua byte rác phía trước")
 
     print("không có lỗi" if not check.failed else f"{check.failed} lỗi")

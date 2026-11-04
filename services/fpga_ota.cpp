@@ -1,4 +1,5 @@
 #include "fpga_ota.h"
+#include "../proto/gateway_header_proto.h"
 
 namespace services {
 
@@ -53,7 +54,7 @@ bool FpgaOta::nextNode(bool onlyUsable)
 void FpgaOta::query()
 {
     core::Request r;
-    r.data = fpgaota::buildQuery(m_nodes.at(m_node).dev.first, m_nodes.at(m_node).dev.second);
+    r.data = gwhdr::add(gwhdr::Trb, fpgaota::buildQuery(m_nodes.at(m_node).dev.first, m_nodes.at(m_node).dev.second));
     r.replyCmd = fpgaota::replyCmd();
     r.timeoutMs = 200;
     r.retries = kMaxTries;
@@ -63,7 +64,7 @@ void FpgaOta::query()
 void FpgaOta::send(const QByteArray &frame, int gapMs, bool wait)
 {
     core::Request r;
-    r.data = frame;
+    r.data = gwhdr::add(gwhdr::Trb, frame);   // mọi khung nạp FPGA đều gửi cho TRB
     r.gapMs = gapMs;
     const quint64 id = m_link->send(r);
     if (wait) m_waitId = id;

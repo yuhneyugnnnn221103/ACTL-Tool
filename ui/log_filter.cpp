@@ -1,4 +1,5 @@
 #include "log_filter.h"
+#include "../proto/gateway_header_proto.h"
 
 namespace ui {
 
@@ -25,6 +26,8 @@ QString tagged(EventKind k, const QString &text) { return QStringLiteral("[%1] %
 FrameClass classifyFrame(const QByteArray &raw)
 {
     FrameClass c;
+    const QByteArray inner = proto::gwhdr::strip(raw);   // khung PC gửi xuống Gateway có DEV + LEN sau AB CD: phân loại theo khung gốc
+    if (!inner.isEmpty()) return classifyFrame(inner);
     if (raw.size() < 4) return c;
     const quint16 cmd = quint16(quint8(raw.at(2)) << 8 | quint8(raw.at(3)));
     switch (cmd) {

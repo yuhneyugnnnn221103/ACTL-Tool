@@ -9,6 +9,8 @@
 #include "../services/trb_control.h"
 #include "../services/trb_monitor.h"
 #include "../sim/bus_port.h"
+#include "../proto/gateway_header_proto.h"
+#include "../proto/control_frame_proto.h"
 #include "test_support.h"
 #include <QSignalSpy>
 #include <QtTest>
@@ -262,6 +264,31 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(updated.size() >= 1, 2000);
         QCOMPARE(updated.last().at(0).toInt(), 1);
         QCOMPARE(updated.last().at(1).toInt(), 2);
+    }
+
+    void gatewayRoleStripsDeviceAndLengthHeader()
+    {
+        FakeTransport t;
+        sim::SimWorld w(1, 1, 1);
+        sim::BusPort port(&t, &w);
+        port.setGatewayHeader(true);
+        t.open();
+        const QByteArray sent = proto::gwhdr::insert(proto::gwhdr::Trb, proto::trbcfg::buildReadRequest(0, 0));
+        QCOMPARE(sent.size(), 10 + 3);
+        QCOMPARE(sent.left(5).toHex(), QByteArray("abcd01000d"));   // DEV 01, LEN = 13
+        t.inject(sent.left(6));                                       // khung chia mảnh: chưa đủ thì chưa xử lý
+        QTest::qWait(20);
+        QVERIFY(t.written.isEmpty());
+        t.inject(sent.mid(6));
+        QTRY_COMPARE_WITH_TIMEOUT(t.written.size(), 1, 500);
+        QCOMPARE(t.written.first().mid(2, 2).toHex(), QByteArray("a4a4"));   // trả lời cấu hình TRB như khi nhận khung gốc
+        // Khung điều khiển tổng 107 byte (AB CD EF ...) không có DEV + LEN: cho qua nguyên vẹn.
+        const QByteArray ctl = proto::ctlframe::wrap(proto::ctlframe::SecTrbControl, QByteArray(14, '\0'));
+        proto::gwhdr::Unwrapper u;
+        QCOMPARE(u.feed(ctl.left(50)) + u.feed(ctl.mid(50)), ctl);
+        // Mặc định (cổng COM nối thẳng): khung gốc, kể cả CMD 01 01 trông giống DEV + LEN, không bị bỏ nhầm.
+        sim::BusPort direct(&t, &w);
+        QVERIFY(!direct.rxStats().droppedBytes);
     }
 
     void faultInjectionDropsAndCorrupts()
