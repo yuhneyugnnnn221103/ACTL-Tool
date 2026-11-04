@@ -65,17 +65,18 @@ QString statusText(quint8 s)
 {
     switch (s) {
     case Ok:              return QStringLiteral("OK");
-    case Refused:         return QStringLiteral("từ chối (thiết bị chưa ở SAFE_OFF)");
-    case BadSize:         return QStringLiteral("ảnh quá lớn so với slot");
+    case Refused:         return QStringLiteral("từ chối (còn cụm DCM chưa OFF)");
+    case BadSize:         return QStringLiteral("kích thước ảnh quá lớn (tối đa 639 KB)");
     case BadSeq:          return QStringLiteral("sai thứ tự chunk");
     case CrcFail:         return QStringLiteral("CRC32 không khớp");
     case Busy:            return QStringLiteral("thiết bị đang bận");
-    case NoCommitPending: return QStringLiteral("chưa có FW_END thành công để commit");
+    case NoCommitPending: return QStringLiteral("chưa có END thành công để commit");
     case EraseFail:       return QStringLiteral("xóa sector thất bại");
-    case WrongSlot:       return QStringLiteral("SAI SLOT: ảnh được link cho slot khác");
+    case WrongSlot:       return QStringLiteral("SAI VÙNG: Reset_Handler của ảnh nằm ngoài vùng app (ảnh link sai địa chỉ)");
     case ProgFail:        return QStringLiteral("lỗi ghi flash");
-    case NoTarget:        return QStringLiteral("slot còn lại không khởi động được");
-    case NotErased:       return QStringLiteral("chưa ERASE slot đích");
+    case Reserved10:      return QStringLiteral("mã dự phòng 10");
+    case NotErased:       return QStringLiteral("chưa ERASE vùng app");
+    case NotRecovery:     return QStringLiteral("app đang chạy không nhận lệnh nạp: phải vào recovery trước (ENTER_REC)");
     default:              return QStringLiteral("mã lạ %1").arg(s);
     }
 }

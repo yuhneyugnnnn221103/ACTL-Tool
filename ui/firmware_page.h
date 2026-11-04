@@ -45,7 +45,7 @@ private:
     QCheckBox *m_stmAutoCommit;
     QList<QPushButton *> m_stmActions;
     QPushButton *m_stmCancel;
-    QByteArray m_stmImageA, m_stmImageB;
+    QByteArray m_stmImage;
 };
 
 } // namespace ui

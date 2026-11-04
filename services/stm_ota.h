@@ -4,9 +4,10 @@
 
 namespace services {
 
-// Nạp firmware STM32 cho các PSU, lần lượt từng thiết bị:
-// INFO (biết đang chạy slot nào) -> ERASE (xóa slot đích, một ACK khi xong) -> BEGIN -> DATA... -> END (CRC32) -> COMMIT.
-// Ngoài ra có ROLLBACK (quay về slot kia khi slot đang chạy hỏng).
+// Nạp firmware STM32 cho các PSU, lần lượt từng thiết bị. Firmware đang chạy (app) không nhận firmware, chỉ bootloader recovery ('R') mới nạp:
+//   INFO -> (slot 'A') ENTER_REC -> hỏi INFO lặp lại tới khi slot = 'R' -> ERASE (một ACK khi xóa xong) -> BEGIN -> DATA... -> END (CRC32) -> COMMIT.
+// Thiết bị đã ở recovery sẵn (board mới, app hỏng) thì bỏ qua ENTER_REC. Một file .bin duy nhất; muốn về bản cũ thì nạp lại file cũ.
+// Nếu app treo, cấp nguồn lại PSU: bootloader ở lại recovery khi nhận INFO trong 300 ms đầu, nên INFO đầu tiên được hỏi lặp lại một lúc.
 class StmOta : public QObject {
     Q_OBJECT
 public:
@@ -16,11 +17,7 @@ public:
     bool busy() const { return m_state != State::Idle; }
 
     void queryInfo(const QList<int> &addrs);
-    // imageA/imageB: file .bin link cho slot A/B. Thiết bị đang chạy slot A sẽ nhận imageB và ngược lại;
-    // thiết bị ở recovery ('R') nhận imageA nếu có, không thì imageB.
-    void start(const QList<int> &addrs, const QByteArray &imageA, const QByteArray &imageB,
-               quint32 version, bool autoCommit);
-    void rollback(const QList<int> &addrs);   // ROLLBACK: đánh dấu slot đang chạy hỏng rồi reset (chỉ khi SAFE_OFF)
+    void start(const QList<int> &addrs, const QByteArray &image, quint32 version, bool autoCommit);
     void confirmCommit(bool commit); // trả lời cho commitRequested() khi không tự commit
     void cancel();
 
@@ -32,12 +29,20 @@ signals:
     void finished(int okCount, int failCount);
 
 private:
-    enum class State { Idle, Info, Erase, Begin, Data, End, AwaitUser, Commit, Rollback };
+    enum class State { Idle, Info, EnterRec, WaitRecovery, Erase, Begin, Data, End, AwaitUser, Commit };
     static constexpr int kMaxRetries = 5;
-    static constexpr int kReplyMs = 200;   // chờ ACK của INFO, BEGIN, DATA, COMMIT, ROLLBACK (ERASE 20 s và END 3 s vì firmware xóa flash / tính CRC32 cả ảnh)
+    static constexpr int kReplyMs = 200;           // chờ ACK của INFO, ENTER_REC, BEGIN, DATA, COMMIT
+    static constexpr int kEraseMs = 40000;         // ERASE xóa 5 sector, một ACK khi xong; yêu cầu PC chờ >= 30 s (chưa đo), lấy dư
+    static constexpr int kEndMs = 3000;            // END: firmware tính CRC32 cả ảnh
+    static constexpr int kInfoPolls = 150;         // INFO đầu tiên khi nạp: hỏi lặp tới ~30 s để kịp cửa sổ 300 ms sau khi cấp nguồn lại
+    static constexpr int kRecoveryPolls = 50;      // sau ENTER_REC: hỏi INFO lặp tới khi slot = 'R' (~10 s)
+    static constexpr int kRecoveryFirstMs = 300;   // thiết bị reset ~50 ms sau ACK; chờ bootloader lên trước khi hỏi INFO
+    static constexpr int kRecoveryRetryMs = 100;
 
     void nextDevice();
     void send(const QByteArray &frame, State state, int timeoutMs);
+    void pollInfo();
+    void beginErase();
     void sendChunk();
     void onFrame(const core::Frame &frame);
     void onTimeout();
@@ -45,11 +50,11 @@ private:
 
     core::Link *m_link;
     QList<int> m_queue;
-    QByteArray m_imageA, m_imageB, m_image;
+    QByteArray m_image;
     quint32 m_version = 0;
-    bool m_autoCommit = false, m_infoOnly = false, m_rollback = false;
+    bool m_autoCommit = false, m_infoOnly = false;
     State m_state = State::Idle;
-    int m_addr = 0, m_seq = 0, m_chunks = 0, m_retries = 0, m_ok = 0, m_fail = 0;
+    int m_addr = 0, m_seq = 0, m_chunks = 0, m_retries = 0, m_polls = 0, m_ok = 0, m_fail = 0;
     QTimer m_timer;
 };
 

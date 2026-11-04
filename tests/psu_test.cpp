@@ -70,6 +70,51 @@ struct FakePsu {
 
 }
 
+// PSU giả: app ('A') không nhận lệnh nạp; ENTER_REC thì ACK rồi sang bootloader recovery ('R'); chỉ recovery mới ERASE / BEGIN / DATA / END / COMMIT.
+struct FakeStmPsu {
+    char slot = 'A';
+    int silentInfos = 0;         // số INFO đầu tiên không trả lời (app treo / chưa cấp nguồn lại)
+    quint8 enterStatus = stmota::Ok, eraseStatus = stmota::Ok;
+    bool erased = false;
+    QList<quint8> cmds;
+
+    static QByteArray ack(quint8 ackCmd, quint8 status, quint32 info, char slot)
+    {
+        QByteArray a(17, 0);
+        a.replace(2, 2, stmota::cmdBytes(stmota::kAck));
+        a[4] = char(3); a[5] = char(ackCmd); a[6] = char(status);
+        for (int i = 0; i < 4; ++i) a[7 + i] = char(info >> (24 - 8 * i));
+        a[11] = slot; a[12] = char(slot == 'A' ? 0x80 : 0);
+        core::seal(a, 4);
+        return a;
+    }
+    void attach(FakeTransport *tp)
+    {
+        tp->onWrite = [this, tp](const QByteArray &d) {
+            const quint8 c = quint8(d[2]);
+            cmds << c;
+            auto reply = [&](quint8 status, quint32 info = 0) { tp->injectLater(ack(c, status, info, slot)); };
+            if (c == stmota::kInfo) {
+                if (silentInfos > 0) { --silentInfos; return; }
+                reply(stmota::Ok, 77);
+            } else if (c == stmota::kEnterRec) {
+                reply(enterStatus);
+                if (enterStatus == stmota::Ok) slot = 'R';                   // reset sang bootloader
+            } else if (slot != 'R') {
+                reply(stmota::NotRecovery);                                   // app nhận lệnh nạp: từ chối
+            } else if (c == stmota::kErase) {
+                erased = eraseStatus == stmota::Ok;
+                reply(eraseStatus, eraseStatus == stmota::Ok ? 1 : 0x55);
+            } else if (c == stmota::kBegin) {
+                reply(erased ? stmota::Ok : stmota::NotErased);
+            } else {
+                reply(stmota::Ok);                                            // DATA, END, COMMIT
+            }
+        };
+    }
+};
+
+
 class PsuTest : public QObject {
     Q_OBJECT
 private slots:
@@ -235,7 +280,8 @@ private slots:
         // Mọi CMD phía PSU (giám sát, điều khiển, cấu hình, nạp STM32) là 2 byte, mã lặp hai lần như TRB.
         const QList<QByteArray> cmds = {psumon::cmd(), psuctl::cmd(), psucfg::readCmd(), psucfg::writeCmd(), psucfg::replyCmd(),
                                         stmota::cmdBytes(stmota::kBegin), stmota::cmdBytes(stmota::kData), stmota::cmdBytes(stmota::kEnd),
-                                        stmota::cmdBytes(stmota::kCommit), stmota::cmdBytes(stmota::kAck), stmota::cmdBytes(stmota::kInfo)};
+                                        stmota::cmdBytes(stmota::kCommit), stmota::cmdBytes(stmota::kAck), stmota::cmdBytes(stmota::kInfo),
+                                        stmota::cmdBytes(stmota::kErase), stmota::cmdBytes(stmota::kEnterRec)};
         QSet<QByteArray> seen;
         for (const QByteArray &c : cmds) {
             QCOMPARE(c.size(), 2);
@@ -264,12 +310,14 @@ private slots:
         QCOMPARE(quint8(d.at(19)), quint8(0xFF));                 // chunk cuối đệm 0xFF
         QVERIFY(crcOk(d, 4));
 
-        for (quint8 code : {stmota::kEnd, stmota::kCommit, stmota::kInfo}) {
+        for (quint8 code : {stmota::kEnd, stmota::kCommit, stmota::kInfo, stmota::kErase, stmota::kEnterRec}) {
             const QByteArray c = stmota::buildCtrl(5, code);
             QCOMPARE(c.size(), 9);
             QCOMPARE(c.left(5), stmota::cmdBytes(code).prepend(QByteArray::fromHex("abcd")).append(char(5)));
             QVERIFY(crcOk(c, 4));
         }
+        QCOMPARE(stmota::buildCtrl(5, stmota::kEnterRec).left(5).toHex(), QByteArray("abcd989805"));   // ENTER_REC = 98 98
+        QCOMPARE(stmota::kMaxImageBytes, 639 * 1024);
     }
 
     void stmOtaAckParses()
@@ -282,7 +330,7 @@ private slots:
         ack[5] = char(stmota::kInfo);           // ack_cmd vẫn là mã 1 byte
         ack[6] = char(stmota::Ok);
         ack.replace(7, 4, QByteArray::fromHex("0000002A"));
-        ack[11] = 'B';
+        ack[11] = 'R';
         core::seal(ack, 4);
 
         core::FrameParser parser(&registry);
@@ -294,7 +342,7 @@ private slots:
         QCOMPARE(a.ackCmd, stmota::kInfo);
         QCOMPARE(a.status, quint8(stmota::Ok));
         QCOMPARE(a.info, quint32(42));
-        QCOMPARE(a.slot, 'B');
+        QCOMPARE(a.slot, 'R');
     }
 
     void fpgaStatusCarriesVersionAndWriteVersionFrame()
@@ -382,85 +430,110 @@ private slots:
         QCOMPARE(cmds.mid(loads), (QList<quint8>{0x88, 0x88}));     // rồi mới hỏi từng TRB
     }
 
-    // Nạp STM32 theo trình tự mới: INFO -> ERASE (một ACK khi xong) -> BEGIN -> DATA... -> END -> COMMIT.
-    void stmOtaFlowUsesEraseBeforeBegin()
+    // Trình tự mới: INFO (app, slot A) -> ENTER_REC -> hỏi INFO tới khi slot R -> ERASE -> BEGIN -> DATA... -> END -> COMMIT.
+    void stmOtaEntersRecoveryThenErasesAndFlashes()
     {
         core::FrameRegistry registry;
         QVERIFY(services::StmOta::registerFrames(registry));
         auto *tp = new FakeTransport;
         core::Link link("service", tp, &registry);
         link.start();
-
-        auto ack = [](quint8 addr, quint8 ackCmd, quint8 status, quint32 info, char slot, quint8 trial) {
-            QByteArray a(17, 0);
-            a.replace(2, 2, stmota::cmdBytes(stmota::kAck));
-            a[4] = char(addr); a[5] = char(ackCmd); a[6] = char(status);
-            for (int i = 0; i < 4; ++i) a[7 + i] = char(info >> (24 - 8 * i));
-            a[11] = slot; a[12] = char(trial);
-            core::seal(a, 4);
-            return a;
-        };
-        QList<quint8> cmds;
-        tp->onWrite = [&](const QByteArray &d) {
-            const quint8 c = quint8(d[2]);
-            cmds << c;
-            switch (c) {
-            case stmota::kInfo:  tp->injectLater(ack(3, c, stmota::Ok, 77, 'A', 0x80)); break;
-            case stmota::kErase: tp->injectLater(ack(3, c, stmota::Ok, 1, 'A', 0)); break;
-            case stmota::kBegin: tp->injectLater(ack(3, c, stmota::Ok, 0, 'A', 0)); break;
-            case stmota::kData:  tp->injectLater(ack(3, c, stmota::Ok, 0, 'A', 0)); break;
-            case stmota::kEnd:   tp->injectLater(ack(3, c, stmota::Ok, 0, 'A', 0)); break;
-            case stmota::kCommit: tp->injectLater(ack(3, c, stmota::Ok, 0, 'A', 0)); break;
-            }
-        };
-
+        FakeStmPsu psu;
+        psu.attach(tp);
         services::StmOta ota(&link);
         QSignalSpy info(&ota, &services::StmOta::deviceInfo), fin(&ota, &services::StmOta::deviceFinished);
-        ota.start({3}, QByteArray(10, 'a'), QByteArray(300, 'b'), 20261013, true);   // đang chạy A: nạp ảnh B (300 byte = 2 gói)
-        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
-        const QList<quint8> expect{stmota::kInfo, stmota::kErase, stmota::kBegin, stmota::kData, stmota::kData, stmota::kEnd, stmota::kCommit};
-        QCOMPARE(cmds, expect);
-        QCOMPARE(info.size(), 1);
-        QCOMPARE(info.first().at(1).toChar().toLatin1(), 'A');
+        ota.start({3}, QByteArray(300, 'b'), 20261013, true);              // 300 byte = 2 gói
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 6000);
+        const QList<quint8> expect{stmota::kInfo, stmota::kEnterRec, stmota::kInfo, stmota::kErase, stmota::kBegin,
+                                   stmota::kData, stmota::kData, stmota::kEnd, stmota::kCommit};
+        QCOMPARE(psu.cmds, expect);
+        QCOMPARE(info.first().at(1).toChar().toLatin1(), 'A');             // INFO đầu: app
         QCOMPARE(info.first().at(3).toUInt(), 0x80u);                       // trial: đã xác nhận
+        QCOMPARE(info.last().at(1).toChar().toLatin1(), 'R');               // INFO sau reset: recovery
         QCOMPARE(fin.size(), 1);
         QVERIFY(fin.first().at(1).toBool());
+        QVERIFY(psu.erased);
     }
 
-    void stmOtaEraseFailureAndRollback()
+    void stmOtaSkipsEnterRecWhenAlreadyInRecovery()
     {
         core::FrameRegistry registry;
         services::StmOta::registerFrames(registry);
         auto *tp = new FakeTransport;
         core::Link link("service", tp, &registry);
         link.start();
-        auto ack = [](quint8 ackCmd, quint8 status, quint32 info, char slot) {
-            QByteArray a(17, 0);
-            a.replace(2, 2, stmota::cmdBytes(stmota::kAck));
-            a[4] = char(1); a[5] = char(ackCmd); a[6] = char(status); a[10] = char(info); a[11] = slot;
-            core::seal(a, 4);
-            return a;
-        };
-        tp->onWrite = [&](const QByteArray &d) {
-            const quint8 c = quint8(d[2]);
-            if (c == stmota::kInfo) tp->injectLater(ack(c, stmota::Ok, 5, 'R'));                  // recovery
-            else if (c == stmota::kErase) tp->injectLater(ack(c, stmota::EraseFail, 0x55, 'R'));
-            else if (c == stmota::kRollback) tp->injectLater(ack(c, stmota::NoTarget, 0, 'A'));
-        };
+        FakeStmPsu psu;
+        psu.slot = 'R';                                                     // board mới / app hỏng: đã ở recovery
+        psu.silentInfos = 2;                                                // vừa cấp nguồn lại: hai INFO đầu chưa được trả lời, phần mềm hỏi lặp lại
+        psu.attach(tp);
         services::StmOta ota(&link);
         QSignalSpy fin(&ota, &services::StmOta::deviceFinished);
-        ota.start({1}, QByteArray(100, 'a'), {}, 1, true);            // recovery: dùng ảnh A
-        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
-        QCOMPARE(fin.size(), 1);
-        QVERIFY(!fin.first().at(1).toBool());
-        QVERIFY(fin.first().at(2).toString().contains("xóa"));
+        ota.start({3}, QByteArray(100, 'a'), 1, true);
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 6000);
+        const QList<quint8> expect{stmota::kInfo, stmota::kInfo, stmota::kInfo, stmota::kErase, stmota::kBegin, stmota::kData, stmota::kEnd, stmota::kCommit};
+        QCOMPARE(psu.cmds, expect);                                         // không có ENTER_REC
+        QVERIFY(fin.first().at(1).toBool());
+    }
 
-        ota.rollback({1});
+    void stmOtaFailuresAreReportedAndNothingIsErasedForBadImage()
+    {
+        core::FrameRegistry registry;
+        services::StmOta::registerFrames(registry);
+        auto *tp = new FakeTransport;
+        core::Link link("service", tp, &registry);
+        link.start();
+        FakeStmPsu psu;
+        psu.attach(tp);
+        services::StmOta ota(&link);
+        QSignalSpy fin(&ota, &services::StmOta::deviceFinished);
+
+        ota.start({3}, {}, 1, true);                                        // chưa chọn file: không ENTER_REC, không xóa app
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
-        QCOMPARE(fin.size(), 2);
         QVERIFY(!fin.last().at(1).toBool());
-        QVERIFY(fin.last().at(2).toString().contains("slot còn lại"));
-        QCOMPARE(stmota::statusText(stmota::NotErased), QStringLiteral("chưa ERASE slot đích"));
+        QCOMPARE(psu.cmds, (QList<quint8>{stmota::kInfo}));
+        psu.cmds.clear();
+        ota.start({3}, QByteArray(stmota::kMaxImageBytes + 1, 'x'), 1, true);   // quá 639 KB
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
+        QVERIFY(!fin.last().at(1).toBool());
+        QVERIFY(fin.last().at(2).toString().contains("639"));
+        QCOMPARE(psu.cmds, (QList<quint8>{stmota::kInfo}));
+        QCOMPARE(psu.slot, 'A');
+
+        psu.cmds.clear();
+        psu.enterStatus = stmota::Refused;                                  // còn cụm chưa OFF: ENTER_REC bị từ chối, app vẫn chạy
+        ota.start({3}, QByteArray(100, 'a'), 1, true);
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
+        QVERIFY(!fin.last().at(1).toBool());
+        QVERIFY(fin.last().at(2).toString().contains("ENTER_REC") && fin.last().at(2).toString().contains("DCM"));
+        QCOMPARE(psu.slot, 'A');
+
+        psu.enterStatus = stmota::Ok;                                       // vào được recovery nhưng xóa lỗi
+        psu.eraseStatus = stmota::EraseFail;
+        ota.start({3}, QByteArray(100, 'a'), 1, true);
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 6000);
+        QVERIFY(!fin.last().at(1).toBool());
+        QVERIFY(fin.last().at(2).toString().contains("xóa"));
+
+        QCOMPARE(stmota::statusText(stmota::NotErased), QStringLiteral("chưa ERASE vùng app"));
+        QVERIFY(stmota::statusText(stmota::NotRecovery).contains("recovery"));
+        QVERIFY(stmota::statusText(stmota::WrongSlot).contains("Reset_Handler"));
+    }
+
+    void stmOtaInfoOnly()
+    {
+        core::FrameRegistry registry;
+        services::StmOta::registerFrames(registry);
+        auto *tp = new FakeTransport;
+        core::Link link("service", tp, &registry);
+        link.start();
+        FakeStmPsu psu;
+        psu.attach(tp);
+        services::StmOta ota(&link);
+        QSignalSpy fin(&ota, &services::StmOta::deviceFinished);
+        ota.queryInfo({3});
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
+        QVERIFY(fin.first().at(1).toBool());
+        QCOMPARE(psu.cmds, (QList<quint8>{stmota::kInfo}));                 // chỉ đọc, không đổi gì
     }
 
     void allFramesCanBeRegistered()

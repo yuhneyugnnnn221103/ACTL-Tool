@@ -21,7 +21,7 @@ Tài liệu này tổng hợp mọi bản tin liên quan tới PSU trong ACTL To
 | Giám sát `81 81` | Ethernet (TCP, app là client, Gateway là server) | Gateway chuyển tiếp lên app |
 | Điều khiển `01 01` | Ethernet (cùng đường giám sát) | Ưu tiên cao hơn mọi lệnh khác trong hàng đợi |
 | Hỏi/ghi cấu hình `03 03`, `04 04`, `82 82` | Ethernet (cùng đường giám sát) | Hỏi đáp: mỗi lúc chỉ một chức năng cấu hình hoặc nạp code chạy |
-| Nạp code STM32 `90`-`95` | Ethernet (cùng đường giám sát) | Lần lượt từng PSU |
+| Nạp code STM32 `90`-`98` | Ethernet (cùng đường giám sát) | Lần lượt từng PSU |
 
 ### Bảng tổng hợp bản tin
 
@@ -37,10 +37,10 @@ Tài liệu này tổng hợp mọi bản tin liên quan tới PSU trong ACTL To
 | STM32 DATA | `91 91` | app → PSU | 269 | Mỗi gói 256 byte |
 | STM32 END | `92 92` | app → PSU | 9 | PSU kiểm CRC32 toàn ảnh |
 | STM32 COMMIT | `93 93` | app → PSU | 9 | Kích hoạt ảnh mới, PSU reset |
-| STM32 ACK | `94 94` | PSU → app | 17 | Trả lời ERASE/BEGIN/DATA/END/COMMIT/INFO/ROLLBACK |
-| STM32 INFO | `95 95` | app → PSU | 9 | Hỏi slot đang chạy, version và trạng thái trial |
-| STM32 ERASE | `96 96` | app → PSU | 9 | Xóa slot đích; một ACK duy nhất khi xóa xong |
-| STM32 ROLLBACK | `97 97` | app → PSU | 9 | Quay về slot kia khi slot đang chạy hỏng; có ACK |
+| STM32 ACK | `94 94` | PSU → app | 17 | Trả lời ERASE/BEGIN/DATA/END/COMMIT/INFO/ENTER_REC |
+| STM32 INFO | `95 95` | app → PSU | 9 | Hỏi slot (`A` app / `R` recovery), version và trạng thái trial |
+| STM32 ERASE | `96 96` | app → PSU | 9 | Xóa vùng app (chỉ ở recovery); một ACK duy nhất khi xóa xong |
+| STM32 ENTER_REC | `98 98` | app → PSU | 9 | Vào recovery: ACK rồi reset ~50 ms sau |
 
 Firmware PSU **không tự phát**: chỉ trả lời, và trả ra đúng cổng đã nhận lệnh. Khung hỏi giám sát `02 02` (13 byte: `AB CD 02 02 Addr 00 00 00 00 CRC E1 E2`) do Gateway gửi; app chỉ nhận khung `81 81` Gateway chuyển lên (có sẵn hàm dựng `02 02` trong `proto/psu_monitor_proto`). Khung gửi sai địa chỉ thì PSU bỏ qua, không phản hồi.
 
@@ -158,7 +158,7 @@ Vùng dự phòng 24 byte được firmware APSU dùng làm vùng mở rộng. O
 | +3..+5 | 242-244 | 3 x 1 | `FW.SAFE_STATE2`, `FW.EN2`, `FW.TRIP_COUNT2` | Cụm 2 (cùng 3 byte) |
 | +6..+8 | 245-247 | 3 x 1 | `FW.SAFE_STATE3`, `FW.EN3`, `FW.TRIP_COUNT3` | Cụm 3 |
 | +9..+11 | 248-250 | 3 x 1 | `FW.SAFE_STATE4`, `FW.EN4`, `FW.TRIP_COUNT4` | Cụm 4 |
-| +12 | 251 | 1 | `FW.SLOT` | Slot đang chạy `A` / `B` |
+| +12 | 251 | 1 | `FW.SLOT` | Slot đang chạy `A` (app) |
 | +13..+16 | 252-255 | 4 | `FW.VERSION` | Version ảnh đang chạy (u32 BE) |
 | +17..+23 | 256-262 | 7 | | 0 (dự phòng) |
 
@@ -376,9 +376,20 @@ Ngưỡng Supply là 3 byte, so với **giá trị thô cùng đơn vị bản t
 
 Ghi chú theo firmware cho nhóm INA: `SHUNT_CAL` = 0 nghĩa là dùng giá trị mặc định của INA đó; bit RST/RSTACC của `CONFIG` bị firmware xóa; ngưỡng dưới `SUVL`, `BUVL` chỉ được nạp vào INA khi PSU ở SAFE_ON (chưa kiểm chứng trên board).
 
-## 5. Nạp code STM32 (`90`-`97`)
+## 5. Nạp code STM32 (`90`-`98`)
 
-Mã lệnh là một byte **lặp hai lần** ở phần CMD (ví dụ BEGIN là `90 90`). CRC phủ từ byte địa chỉ (sau CMD).
+**Kiến trúc:** firmware đang chạy (app) **không nhận firmware**; chỉ bootloader ở chế độ **recovery (`R`)** mới nạp. Không còn slot B và không còn ROLLBACK: muốn về bản cũ thì nạp lại file `.bin` cũ. Mã lệnh là một byte **lặp hai lần** ở phần CMD (ví dụ BEGIN là `90 90`). CRC phủ từ byte địa chỉ (sau CMD). Khi đi qua Gateway mọi khung có thêm DEV `02` + LEN sau `AB CD` (xem README).
+
+| Lệnh | CMD | Chiều | Dài | Ý nghĩa |
+|---|---|---|---|---|
+| BEGIN | `90 90` | PC → PSU | 21 | Size (≤ 639 KB), CRC32, version; ACK ngay; chỉ sau ERASE, nếu không `NotErased` |
+| DATA | `91 91` | PC → PSU | 269 | 256 byte mỗi gói, gói cuối đệm `FF`, khung luôn 269 byte |
+| END | `92 92` | PC → PSU | 9 | PSU kiểm CRC32 toàn ảnh |
+| COMMIT | `93 93` | PC → PSU | 9 | ACK rồi reset, bootloader chạy app mới |
+| ACK | `94 94` | PSU → PC | 17 | Trả lời mọi lệnh trên |
+| INFO | `95 95` | PC → PSU | 9 | Hỏi slot, version, trạng thái trial |
+| ERASE | `96 96` | PC → PSU | 9 | Xóa vùng app (5 sector); **một ACK duy nhất khi xóa xong** (`Info = 1`) |
+| ENTER_REC | `98 98` | PC → PSU | 9 | App ACK rồi reset khoảng 50 ms sau để vào recovery |
 
 ### 5.1 BEGIN `90 90` (21 byte)
 
@@ -387,7 +398,7 @@ Mã lệnh là một byte **lặp hai lần** ở phần CMD (ví dụ BEGIN là
 | Byte | Dài | Trường | Ý nghĩa |
 |---|---|---|---|
 | 5 | 1 | Addr | Địa chỉ PSU |
-| 6-9 | 4 | Size | Kích thước ảnh (byte) |
+| 6-9 | 4 | Size | Kích thước ảnh (byte), tối đa 639 KB (`BadSize` nếu vượt) |
 | 10-13 | 4 | CRC32 | CRC32 (IEEE 802.3) của toàn ảnh |
 | 14-17 | 4 | Version | Version ảnh (mặc định app lấy thời điểm hiện tại) |
 
@@ -397,11 +408,9 @@ Mã lệnh là một byte **lặp hai lần** ở phần CMD (ví dụ BEGIN là
 
 - Byte 6-7: số thứ tự gói (từ 0); byte 8-9: số byte hợp lệ trong gói; byte 10-265: dữ liệu. Gói cuối đệm `0xFF`.
 
-### 5.3 END `92 92`, COMMIT `93 93`, INFO `95 95` (9 byte)
+### 5.3 END `92 92`, COMMIT `93 93`, INFO `95 95`, ERASE `96 96`, ENTER_REC `98 98` (9 byte)
 
 `[AB CD][CMD CMD][Addr][CRC 2 B][E1 E2]`
-
-- END: yêu cầu PSU kiểm CRC32 toàn ảnh. COMMIT: kích hoạt ảnh mới (PSU reset). INFO: hỏi slot đang chạy, version và trạng thái trial. **ERASE `96 96`:** xóa slot đích. **ROLLBACK `97 97`:** đánh dấu slot đang chạy hỏng rồi reset để quay về slot kia (có ACK; chỉ khi SAFE_OFF và slot kia khởi động được).
 
 ### 5.4 ACK `94 94` (17 byte)
 
@@ -410,42 +419,42 @@ Mã lệnh là một byte **lặp hai lần** ở phần CMD (ví dụ BEGIN là
 | Byte | Dài | Trường | Ý nghĩa |
 |---|---|---|---|
 | 5 | 1 | Addr | Địa chỉ PSU |
-| 6 | 1 | AckCmd | Mã 1 byte của lệnh được trả lời (`90`..`93`, `95`, `96`, `97`) |
+| 6 | 1 | AckCmd | Mã 1 byte của lệnh được trả lời (`90`..`93`, `95`, `96`, `98`) |
 | 7 | 1 | Status | Mã trạng thái (bảng dưới) |
-| 8-11 | 4 | Info | Tùy lệnh: ERASE `1` = đã xóa xong; DATA lỗi sai thứ tự = seq cuối đã nhận; END lỗi CRC = CRC thiết bị tính được; INFO = version; lỗi xóa = mã HAL |
-| 12 | 1 | Slot | `A` hoặc `B`; **`R` khi thiết bị ở bootloader recovery** (cả hai slot hỏng). Chỉ có nghĩa với INFO |
-| 13 | 1 | Trial | Chỉ có ở trả lời INFO: bit7 đã confirm, bit6..0 boot_count |
+| 8-11 | 4 | Info | Tùy lệnh: ERASE `1` = đã xóa xong; DATA lỗi sai thứ tự = seq cuối đã nhận; END lỗi CRC = CRC thiết bị tính được; INFO = version; lỗi xóa/ghi = mã HAL / địa chỉ |
+| 12 | 1 | Slot | `A` = app đang chạy; `R` = bootloader recovery. Chỉ có nghĩa với INFO |
+| 13 | 1 | Trial | Chỉ có ở trả lời INFO **của app**: bit7 đã confirm, bit6..0 boot_count |
 
 | Status | Tên | Ý nghĩa |
 |---|---|---|
 | 0 | OK | Thành công |
-| 1 | Refused | Từ chối (thiết bị chưa ở SAFE_OFF) |
-| 2 | BadSize | Ảnh quá lớn so với slot |
+| 1 | Refused | Từ chối (còn cụm DCM chưa OFF) |
+| 2 | BadSize | Kích thước ảnh quá lớn (> 639 KB) |
 | 3 | BadSeq | Sai thứ tự gói |
 | 4 | CrcFail | CRC32 không khớp |
 | 5 | Busy | Thiết bị đang bận |
 | 6 | NoCommitPending | Chưa có END thành công để commit |
 | 7 | EraseFail | Xóa sector thất bại |
-| 8 | WrongSlot | Ảnh được link cho slot khác |
+| 8 | WrongSlot | Reset_Handler của ảnh nằm ngoài vùng app (ảnh link sai địa chỉ) |
 | 9 | ProgFail | Lỗi ghi flash (info = mã HAL / địa chỉ) |
-| 10 | NoTarget | ROLLBACK: slot kia không khởi động được |
+| 10 | (dự phòng) | |
 | 11 | NotErased | BEGIN khi chưa ERASE |
+| 12 | NotRecovery | App đang chạy nhận lệnh nạp (chưa vào recovery) |
 
 ### 5.5 Quy trình nạp (lần lượt từng PSU)
 
 Stop-and-wait: app chờ ACK rồi mới gửi khung kế.
 
-1. **INFO** (chờ 1 s): biết PSU đang chạy slot nào và trạng thái trial. Nạp vào slot **còn lại**: đang chạy A thì nạp ảnh slot B, và ngược lại; cần chọn file cho slot đích. Ở **recovery (`R`)** bootloader xóa cả hai slot; app chọn ảnh slot A nếu có, không thì ảnh slot B (giả định, chưa kiểm chứng).
-2. **ERASE** (chờ tối đa 20 s): PSU trả **một ACK duy nhất khi xóa xong** (`Info = 1`). `EraseFail` hoặc trạng thái khác `OK` thì dừng.
-3. **BEGIN** (chờ 2 s): size, CRC32, version; PSU ACK ngay. Gửi BEGIN mà chưa ERASE thì PSU trả `NotErased`.
-4. **DATA** từng gói 256 byte, khung luôn 269 byte, gói cuối đệm `FF` (chờ ACK 800 ms; hết giờ thì gửi lại, tối đa 5 lần). `BadSeq` thì nhảy theo seq PSU báo (`Info + 1`), tối đa 5 lần. `ProgFail` thì dừng.
-5. **END** (chờ 3 s): PSU kiểm CRC32; sai thì báo kèm CRC thiết bị tính được.
-6. **COMMIT** (chờ 2 s): có tùy chọn tự kích hoạt ngay khi CRC32 đúng, hoặc hỏi người dùng trước. Hết giờ chờ ACK COMMIT được coi là thành công có điều kiện (PSU thường reset trước khi trả lời); nên đọc lại INFO để xác nhận.
-7. Hủy giữa chừng không ảnh hưởng firmware đang chạy; slot đích có thể còn dữ liệu dở.
+1. **INFO** (chờ 200 ms): biết PSU đang ở `A` (app) hay `R` (recovery). Khi nạp, INFO đầu tiên được **hỏi lặp lại** (tới khoảng 30 s) để bắt được cửa sổ 300 ms đầu sau khi cấp nguồn lại: nếu app treo, cấp nguồn lại PSU và bootloader ở lại recovery khi nhận INFO trong 300 ms đầu. Kiểm tra file `.bin` (không rỗng, ≤ 639 KB) **trước** khi chuyển recovery hoặc xóa, để không xóa app khi ảnh không hợp lệ.
+2. **ENTER_REC** (chỉ khi slot `A`; chờ ACK 200 ms): PSU ACK rồi reset ~50 ms sau; `Refused` nghĩa là còn cụm DCM chưa OFF. Sau đó app chờ 300 ms rồi hỏi **INFO lặp lại (mỗi 100-200 ms, tối đa ~50 lần)** tới khi slot = `R`. Thiết bị đã ở recovery sẵn (board mới / app hỏng) thì **bỏ qua bước này**. Mất ACK ENTER_REC (thiết bị reset ngay) không coi là lỗi: app chuyển sang hỏi INFO.
+3. **ERASE** (chờ tối đa 40 s; yêu cầu phía PC ≥ 30 s, chưa đo): PSU trả **một ACK duy nhất khi xóa xong** (`Info = 1`). `EraseFail` hoặc trạng thái khác `OK` thì dừng.
+4. **BEGIN** (chờ 200 ms): size, CRC32, version; PSU ACK ngay. Gửi BEGIN mà chưa ERASE thì PSU trả `NotErased`.
+5. **DATA** từng gói 256 byte, khung luôn 269 byte, gói cuối đệm `FF` (chờ ACK 200 ms; hết giờ thì gửi lại, tối đa 5 lần). `BadSeq` thì nhảy theo seq PSU báo (`Info + 1`), tối đa 5 lần. `ProgFail` thì dừng.
+6. **END** (chờ 3 s): PSU kiểm CRC32; sai thì báo kèm CRC thiết bị tính được.
+7. **COMMIT** (chờ 200 ms): có tùy chọn tự kích hoạt ngay khi CRC32 đúng, hoặc hỏi người dùng trước. PSU ACK rồi reset, bootloader chạy app mới; hết giờ chờ ACK COMMIT được coi là thành công có điều kiện (PSU thường reset trước khi trả lời); nên đọc lại INFO để xác nhận.
+8. Hủy giữa chừng: PSU đã ở recovery với vùng app chưa hoàn chỉnh, cần nạp lại để khởi động app.
 
-**ROLLBACK** (nút "Rollback (về slot kia)"): gửi `97 97`, chờ ACK 3 s; `OK` nghĩa là PSU đã đánh dấu slot đang chạy hỏng và đang reset; `NoTarget` nghĩa là slot kia không khởi động được; `Refused` nghĩa là PSU chưa ở SAFE_OFF.
-
-Cần mật khẩu kỹ sư để nạp và rollback; PSU phải ở SAFE_OFF mới chấp nhận.
+Cần mật khẩu kỹ sư để nạp; mọi cụm DCM phải OFF mới vào được recovery.
 
 ## 6. Khác biệt đã biết với firmware
 
