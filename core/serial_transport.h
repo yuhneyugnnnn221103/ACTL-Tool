@@ -4,6 +4,7 @@
 
 namespace core {
 
+// Cổng COM 8N1, không điều khiển luồng; mở xong thì đặt RTS = true (firmware PSU kiểm tra chân này).
 class SerialTransport : public Transport {
     Q_OBJECT
 public:

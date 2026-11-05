@@ -25,8 +25,11 @@ void SerialTransport::configure(const QString &portName, qint32 baudRate)
 void SerialTransport::open()
 {
     if (m_port.isOpen()) return;
-    if (m_port.open(QIODevice::ReadWrite))
+    if (m_port.open(QIODevice::ReadWrite)) {
+        // Firmware PSU kiểm tra chân RTS của PC: giữ RTS = true (mức tích cực) suốt lúc cổng mở. Không dùng điều khiển luồng RTS/CTS nên đặt tay được.
+        if (!m_port.setRequestToSend(true)) emit errorOccurred(QStringLiteral("Không đặt được RTS = true: %1").arg(m_port.errorString()));
         setState(State::Connected);
+    }
     // mở lỗi: QSerialPort tự phát errorOccurred
 }
 
