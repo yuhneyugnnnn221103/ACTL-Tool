@@ -1,4 +1,5 @@
 #include "reply_error_map.h"
+#include "../proto/psu_address.h"
 #include <QHelpEvent>
 #include <QPainter>
 #include <QToolTip>
@@ -54,7 +55,7 @@ QList<ReplyErrorMap::Cell> ReplyErrorMap::layoutCells() const
     const qreal top = kTop + gridH + kPsuLabel;
     for (int i = 0; i < n; ++i)
         cells.append({QRectF(kLeft + i * pw, top, pw - kGap, psuH - kGap), &m_psus->psu(m_psus->firstAddr() + i).reply,
-                      QStringLiteral("PSU %1").arg(m_psus->firstAddr() + i)});
+                      QStringLiteral("PSU %1").arg(proto::psuaddr::displayNo(m_psus->firstAddr() + i))});
     return cells;
 }
 

@@ -64,7 +64,7 @@ struct Settings {
         s.fpgaPacketGapMs = get("fpgaOta/packetGapMs", 5).toInt();
         s.fpgaBootWaitMs = get("fpgaOta/bootWaitMs", 3000).toInt();
         s.psuCount = get("psu/count", 5).toInt();
-        s.psuFirstAddr = get("psu/firstAddr", 1).toInt();
+        s.psuFirstAddr = get("psu/firstAddrRaw", 0).toInt(); // địa chỉ PSU trong bản tin: 0..4 (hiển thị 1..5). Khóa mới vì khóa cũ psu/firstAddr đã bị ghi 1 vào file ini ở các lần chạy trước
         s.passwordHash = get("auth/passwordHash", "").toString();
         s.lockMinutes = get("auth/lockMinutes", 10).toInt();
         return s;

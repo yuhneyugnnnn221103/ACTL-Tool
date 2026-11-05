@@ -1,4 +1,5 @@
 #include "psu_config.h"
+#include "../proto/psu_address.h"
 #include "../proto/gateway_header_proto.h"
 #include "../proto/psu_config_proto.h"
 
@@ -114,7 +115,7 @@ void PsuConfig::onRequestFinished(quint64 id, bool ok, const core::Frame &reply)
 
     if (!ok) { done(false, QStringLiteral("không trả lời")); return; }
     if (reply.at(psucfg::kOffAddr) != addr) {
-        done(false, QStringLiteral("trả lời sai địa chỉ (PSU %1)").arg(reply.at(psucfg::kOffAddr)));
+        done(false, QStringLiteral("trả lời sai địa chỉ (PSU %1)").arg(psuaddr::displayNo(quint8(reply.at(psucfg::kOffAddr)))));
         return;
     }
 

@@ -5,8 +5,8 @@
 
 namespace ui {
 
-// Lưới tổng quan PSU: hàng = PSU, cột = 4 cụm DCM. Ô tên PSU tô theo trạng thái cả PSU (kể cả Trip),
-// ô cụm tô theo trạng thái cụm.
+// Lưới tổng quan PSU: hàng = PSU, cột = 4 cụm DCM. Ô tên PSU (1..5) chỉ là nhãn trung tính, không hiện trạng thái;
+// trạng thái (OFF, X, ?, Quá ngưỡng, Trip) hiện ở các ô cụm DCM và Supply.
 class PsuGrid : public QWidget {
     Q_OBJECT
 public:

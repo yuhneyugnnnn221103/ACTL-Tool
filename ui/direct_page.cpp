@@ -2,6 +2,7 @@
 #include "log_filter.h"
 #include "theme.h"
 #include "../proto/gateway_header_proto.h"
+#include "../proto/psu_address.h"
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFormLayout>
@@ -138,9 +139,9 @@ DirectPage::DirectPage(const AppContext &ctx, QWidget *parent) : QWidget(parent)
     connect(m_open, &QPushButton::clicked, this, &DirectPage::toggleOpen);
     connect(m_kind, &QComboBox::currentIndexChanged, this, [this](int k) {
         const bool trb = k == KindTrb;
-        m_aLabel->setText(trb ? QStringLiteral("MB (0..%1)").arg(m_ctx.store->mbCount() - 1) : QStringLiteral("Địa chỉ PSU"));
+        m_aLabel->setText(trb ? QStringLiteral("MB (0..%1)").arg(m_ctx.store->mbCount() - 1) : QStringLiteral("PSU (1..%1)").arg(m_ctx.psuStore->count()));
         m_bLabel->setText(QStringLiteral("TRB (0..%1)").arg(m_ctx.store->trbPerMb() - 1));
-        m_a->setRange(trb ? 0 : m_ctx.psuStore->firstAddr(), trb ? m_ctx.store->mbCount() - 1 : m_ctx.psuStore->firstAddr() + m_ctx.psuStore->count() - 1);
+        m_a->setRange(trb ? 0 : proto::psuaddr::displayNo(m_ctx.psuStore->firstAddr()), trb ? m_ctx.store->mbCount() - 1 : proto::psuaddr::displayNo(m_ctx.psuStore->firstAddr() + m_ctx.psuStore->count() - 1));   // PSU hiển thị 1..5, byte địa chỉ 0..4
         m_bLabel->setVisible(trb);
         m_b->setVisible(trb);
         m_b->setRange(0, m_ctx.store->trbPerMb() - 1);
@@ -232,7 +233,7 @@ void DirectPage::toggleOpen()
 void DirectPage::applyTarget()
 {
     if (m_kind->currentIndex() == KindTrb) m_ctx.directPoller->setTarget(DirectPoller::Kind::Trb, m_a->value(), m_b->value());
-    else m_ctx.directPoller->setTarget(DirectPoller::Kind::Psu, m_a->value());
+    else m_ctx.directPoller->setTarget(DirectPoller::Kind::Psu, proto::psuaddr::addrOf(m_a->value()));
     m_query->setText(QString::fromLatin1(m_ctx.directPoller->query().toHex(' ').toUpper()));
 }
 
@@ -245,7 +246,7 @@ void DirectPage::showStats()
 void DirectPage::viewDevice()
 {
     if (m_kind->currentIndex() == KindTrb) emit showTrb(m_a->value(), m_b->value());
-    else emit showPsu(m_a->value());
+    else emit showPsu(proto::psuaddr::addrOf(m_a->value()));
 }
 
 void DirectPage::sendHex()

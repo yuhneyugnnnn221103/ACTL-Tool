@@ -1,4 +1,5 @@
 #include "psu_page.h"
+#include "../proto/psu_address.h"
 #include "bit_cells.h"
 #include "overview_grid.h"
 #include "status_pill.h"
@@ -61,7 +62,7 @@ PsuPage::PsuPage(const AppContext &ctx, QWidget *parent)
     auto *head = new QHBoxLayout;
     for (int i = 0; i < ctx.psuStore->count(); ++i) {
         const int addr = ctx.psuStore->firstAddr() + i;
-        auto *b = new QPushButton(QStringLiteral("PSU %1").arg(addr));
+        auto *b = new QPushButton(QStringLiteral("PSU %1").arg(proto::psuaddr::displayNo(addr)));
         connect(b, &QPushButton::clicked, this, [this, addr] { setDevice(addr); });
         m_selectors << b;
         head->addWidget(b);
@@ -236,7 +237,7 @@ void PsuPage::refresh()
 
     const model::PsuState &s = store->psu(m_addr);
     const bool has = s.frames > 0;
-    m_pill->setPill(QStringLiteral("PSU %1: %2%3").arg(m_addr).arg(theme::statusMark(s.status) + (theme::statusMark(s.status).isEmpty() ? QString() : QStringLiteral(" ")),
+    m_pill->setPill(QStringLiteral("PSU %1: %2%3").arg(proto::psuaddr::displayNo(m_addr)).arg(theme::statusMark(s.status) + (theme::statusMark(s.status).isEmpty() ? QString() : QStringLiteral(" ")),
                                                       statusText(s.status)),
                     OverviewGrid::statusColor(s.status), theme::statusTextColor(s.status));
     QString text;
@@ -318,18 +319,18 @@ void PsuPage::sendControl()
     if (!lockout.isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("Điều khiển PSU"),
                              QStringLiteral("PSU %1 cụm %2 đang ở LOCKOUT (trip liên tiếp từ 3 lần): mọi lệnh bị bỏ qua, chỉ reset phần cứng mới thoát.")
-                                 .arg(m_addr).arg(lockout.join(QStringLiteral(", "))));
+                                 .arg(proto::psuaddr::displayNo(m_addr)).arg(lockout.join(QStringLiteral(", "))));
         return;
     }
     if (!needClear.isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("Điều khiển PSU"),
                              QStringLiteral("PSU %1 cụm %2 đang TRIPPED: lệnh bật bị từ chối cho tới khi Clear trip. Hãy chọn Clear trip rồi gửi lại.")
-                                 .arg(m_addr).arg(needClear.join(QStringLiteral(", "))));
+                                 .arg(proto::psuaddr::displayNo(m_addr)).arg(needClear.join(QStringLiteral(", "))));
         return;
     }
 
     // PSU là nguồn công suất nên luôn cho người vận hành xem lại trước khi gửi.
-    QString text = QStringLiteral("Gửi tới PSU %1:\n  • %2").arg(m_addr).arg(on ? QStringLiteral("BẬT chân EN cụm: %1").arg([&] { QStringList l; for (int c = 0; c < 4; ++c) if (mask >> c & 1) l << QString::number(c + 1); return l.join(QStringLiteral(", ")); }()) : QStringLiteral("TẮT nguồn"));
+    QString text = QStringLiteral("Gửi tới PSU %1:\n  • %2").arg(proto::psuaddr::displayNo(m_addr)).arg(on ? QStringLiteral("BẬT chân EN cụm: %1").arg([&] { QStringList l; for (int c = 0; c < 4; ++c) if (mask >> c & 1) l << QString::number(c + 1); return l.join(QStringLiteral(", ")); }()) : QStringLiteral("TẮT nguồn"));
     if (clear) text += QStringLiteral("\n  • Clear trip");
     if (twoStep) text += QStringLiteral("\n\nPSU có cụm đang TRIPPED: app gửi Clear trip trước, rồi gửi lệnh bật ở khung sau.");
     if (QMessageBox::question(this, QStringLiteral("Điều khiển PSU"), text) != QMessageBox::Yes) return;

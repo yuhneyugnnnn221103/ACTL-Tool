@@ -80,7 +80,7 @@ Các file nằm cạnh file chạy và được tạo ở lần chạy đầu.
 |---|---|
 | `actl_tool.ini` | Cổng, số lượng thiết bị, timeout, log, hash mật khẩu |
 | `thresholds.json` | Ngưỡng min/max theo từng TRB, tự cập nhật mỗi lần đọc cấu hình |
-| `psu_thresholds.json` | Như trên, theo địa chỉ PSU |
+| `psu_thresholds.json` | Như trên, khóa theo địa chỉ PSU trong bản tin (0..4; giao diện hiển thị PSU 1..5) |
 | `psu_default_config.json` | Tùy chọn: cấu hình mặc định PSU, cùng định dạng file "Lưu file…" của trang Cấu hình PSU |
 | `logs/ACTL_20261029-101500_20261029-103000.alog` | Log nhị phân nén, **mỗi lần ghi một file** chứa mọi TRB, PSU và sự kiện; tên thể hiện thời điểm bắt đầu và kết thúc ghi (đang ghi thì phần kết thúc là `dang-ghi`, đổi tên khi dừng). Mặc định mỗi bản tin nhận được ghi một bản ghi (`log/minIntervalMs` = 0). Khi file đạt `log/maxFileMb` MB (mặc định 100, 0 = không chia) thì tự đóng và mở file mới, file mới bắt đầu bằng một sự kiện báo tiếp tục. Xem bằng tab **Xem log**. Định dạng: `services/log_file.h` |
 

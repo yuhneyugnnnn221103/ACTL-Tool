@@ -10,7 +10,7 @@ Tài liệu này tổng hợp mọi bản tin liên quan tới PSU trong ACTL To
 | CRC | CRC16-CCITT-FALSE (đa thức 0x1021, khởi tạo 0xFFFF), **tính từ byte địa chỉ (ngay sau CMD, bỏ CMD ra như TRB) đến hết dữ liệu**, ghi **byte cao trước** |
 | Thứ tự byte | Mọi số nhiều byte đều **big-endian** (byte cao trước), **không dấu**, trừ dòng Supply (`I_*`) và ngưỡng dòng Supply có dấu bù 2 |
 | Vị trí byte | Trong tài liệu này byte đếm **từ 1**: `AB` = 1, `CD` = 2, CMD = 3-4, địa chỉ = 5 |
-| Địa chỉ PSU | 1 byte, mặc định 5 PSU địa chỉ 1 đến 5 (cài đặt `psu/count`, `psu/firstAddr`) |
+| Địa chỉ PSU | 1 byte, **trong bản tin là 0 đến 4**; giao diện, nhật ký và thông báo hiển thị **PSU 1 đến 5** (hiển thị = địa chỉ + 1, như MB/TRB). Cài đặt `psu/count`, `psu/firstAddrRaw` (mặc định 0) |
 | Giá trị | Giá trị giám sát là **số thô** (chưa có công thức quy đổi); riêng Supply là thanh ghi INA228 và được dịch phải 4 bit khi hiển thị (mục 2.2) |
 | ACK | Điều khiển và ghi cấu hình **không có ACK**; ACK chỉ có trong nạp code STM32 |
 
@@ -188,7 +188,7 @@ Mỗi cụm DCM (và ô Supply) có trạng thái riêng, dựa vào 3 byte theo
 - **Trip:** có bất kỳ trip code nào khác 0 thì PSU ở trạng thái Trip (ưu tiên hơn Quá ngưỡng). Trip chưa gán được cho từng cụm.
 - **Quá ngưỡng:** giá trị nào có ngưỡng trong cấu hình (xem mục 4.4) được so với ngưỡng đã lưu phía app; vượt thì PSU ở trạng thái Quá ngưỡng. Các giá trị PEAK, VALLEY, RMS, nhiệt độ FET/XDP, RTC, trip và vùng firmware chỉ hiển thị, không so sánh. Giá trị `0` ở một cận ngưỡng nghĩa là **tắt cận đó** (không so phía đó).
 - **Mất kết nối:** quá `system/staleMs` (mặc định 3000 ms) không có khung mới thì PSU bị đánh dấu mất kết nối (hiện `?`), số liệu cuối vẫn được giữ.
-- **Địa chỉ ngoài dải:** khung có địa chỉ không thuộc `psu/firstAddr` đến `psu/firstAddr + psu/count - 1` bị bỏ và đếm là "địa chỉ sai".
+- **Địa chỉ ngoài dải:** khung có địa chỉ không thuộc `psu/firstAddrRaw` đến `psu/firstAddrRaw + psu/count - 1` bị bỏ và đếm là "địa chỉ sai".
 - **CRC:** kiểm CRC mỗi khung, bật tắt bằng `psu/checkCrc` (mặc định bật). Khung sai CRC bị bỏ và đếm vào "Lỗi CRC".
 
 ## 3. Điều khiển `01 01` (13 byte)

@@ -1,4 +1,5 @@
 #include "app/context.h"
+#include "proto/psu_address.h"
 #include "core/replay_transport.h"
 #include "proto/psu_monitor_proto.h"
 #include "proto/trb_monitor_proto.h"
@@ -120,7 +121,7 @@ int main(int argc, char *argv[])
                         ui::LogTrbMonitor, mb, trb);
     });
     QObject::connect(&psuAlarms, &services::AlarmEngine::alarmEvent, &window, [&](int addr, int, const QString &t, bool raised) {
-        window.logEvent(ui::tagged(raised ? ui::EventKind::Warn : ui::EventKind::Ok, QStringLiteral("PSU %1: %2").arg(addr).arg(t)),
+        window.logEvent(ui::tagged(raised ? ui::EventKind::Warn : ui::EventKind::Ok, QStringLiteral("PSU %1: %2").arg(proto::psuaddr::displayNo(addr)).arg(t)),
                         ui::LogPsuMonitor);
     });
     QObject::connect(&logger, &services::LogRecorder::errorOccurred, &window, [&](const QString &m) { window.logEvent(ui::tagged(ui::EventKind::Err, m)); });

@@ -1,6 +1,7 @@
 #include "psu_grid.h"
 #include "overview_grid.h"
 #include "theme.h"
+#include "../proto/psu_address.h"
 #include "../proto/psu_monitor_proto.h"
 #include <QHelpEvent>
 #include <QMouseEvent>
@@ -74,7 +75,12 @@ void PsuGrid::paintEvent(QPaintEvent *)
         const int addr = m_store->firstAddr() + row;
         const bool lost = m_store->isLost(addr);
         const bool noReply = m_store->psu(addr).noReply;   // X: Gateway vừa báo PSU không phản hồi; ?: quá hạn không có bản tin mới
-        fill(nameRect(row), m_store->displayStatus(addr), noReply ? QStringLiteral("PSU %1 X").arg(addr) : lost ? QStringLiteral("PSU %1 ?").arg(addr) : QStringLiteral("PSU %1").arg(addr), false);
+        // Ô tên PSU chỉ là nhãn trung tính: trạng thái (OFF, X, ?, Quá ngưỡng, Trip) hiện ở các ô cụm DCM / Supply.
+        p.setPen(QPen(theme::palette().border, 1));
+        p.setBrush(theme::palette().surfaceAlt);
+        p.drawRoundedRect(nameRect(row), 6, 6);
+        p.setPen(theme::palette().text);
+        p.drawText(nameRect(row), Qt::AlignCenter, QStringLiteral("PSU %1").arg(proto::psuaddr::displayNo(addr)));
         for (int c = 0; c < kClusters; ++c) fill(cellRect(row, c), m_store->clusterDisplayStatus(addr, c), {}, lost, m_store->clusterOff(addr, c), noReply);
     }
 }

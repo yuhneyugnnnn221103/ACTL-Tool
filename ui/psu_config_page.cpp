@@ -1,4 +1,5 @@
 #include "psu_config_page.h"
+#include "../proto/psu_address.h"
 #include "auth.h"
 #include "theme.h"
 #include "../proto/psu_config_proto.h"
@@ -62,7 +63,7 @@ QWidget *PsuConfigPage::buildContent()
     m_list->setFixedWidth(170);
     for (int i = 0; i < m_ctx.psuStore->count(); ++i) {
         const int addr = m_ctx.psuStore->firstAddr() + i;
-        auto *it = new QListWidgetItem(QStringLiteral("PSU %1").arg(addr), m_list);
+        auto *it = new QListWidgetItem(QStringLiteral("PSU %1").arg(proto::psuaddr::displayNo(addr)), m_list);
         it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
         it->setCheckState(Qt::Unchecked);
         it->setData(Qt::UserRole, addr);
@@ -138,7 +139,7 @@ QWidget *PsuConfigPage::buildContent()
             return;
         }
         if (QMessageBox::question(this, QStringLiteral("Ghi cấu hình"),
-                                  QStringLiteral("Ghi toàn bộ cột \"Giá trị mới\" xuống PSU %1?").arg(m_addr) + notOffNote({m_addr}))
+                                  QStringLiteral("Ghi toàn bộ cột \"Giá trị mới\" xuống PSU %1?").arg(proto::psuaddr::displayNo(m_addr)) + notOffNote({m_addr}))
             != QMessageBox::Yes) return;
         if (!m_ctx.auth->unlock(this)) return; // chỉ hỏi mật khẩu khi thật sự gửi cấu hình xuống thiết bị
         setBusy(true);
@@ -261,7 +262,7 @@ double PsuConfigPage::parseCell(int row) const
 void PsuConfigPage::selectDevice(int addr)
 {
     m_addr = addr;
-    m_title->setText(QStringLiteral("<b>PSU %1</b>").arg(addr));
+    m_title->setText(QStringLiteral("<b>PSU %1</b>").arg(proto::psuaddr::displayNo(addr)));
     showDeviceColumn();
     refreshDiff();
 }
@@ -340,7 +341,7 @@ QString PsuConfigPage::notOffNote(const QList<int> &addrs) const
             allOff = allOff && safe == proto::psumon::SafeOff;
             states << proto::psumon::safeStateText(safe);
         }
-        if (!allOff) bad << QStringLiteral("PSU %1 (cụm 1..4: %2)").arg(a).arg(states.join(QStringLiteral("/")));
+        if (!allOff) bad << QStringLiteral("PSU %1 (cụm 1..4: %2)").arg(proto::psuaddr::displayNo(a)).arg(states.join(QStringLiteral("/")));
     }
     if (bad.isEmpty()) return {};
     return QStringLiteral("\n\nCẢNH BÁO: %1 không ở SAFE_OFF. Firmware chỉ nhận cấu hình khi SAFE_OFF và bỏ qua im lặng ở trạng thái khác, "

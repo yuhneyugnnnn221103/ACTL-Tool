@@ -1,4 +1,5 @@
 #include "main_window.h"
+#include "../proto/psu_address.h"
 #include "overview_grid.h"
 #include "reply_error_map.h"
 #include "auth.h"
@@ -201,20 +202,20 @@ MainWindow::MainWindow(const AppContext &ctx, QWidget *parent)
     });
     connect(ctx.psuConfig, &services::PsuConfig::deviceFinished, this, [this](int addr, bool ok, const QString &m) {
         logEvent(tagged(ok ? EventKind::Cfg : EventKind::Err,
-                         QStringLiteral("Cấu hình PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m)), LogPsuConfig);
+                         QStringLiteral("Cấu hình PSU %1: %2%3").arg(proto::psuaddr::displayNo(addr)).arg(ok ? QString() : QStringLiteral("LỖI, "), m)), LogPsuConfig);
     });
     connect(ctx.psuStore, &model::PsuStore::psuStatusChanged, this, [this](int addr, Status from, Status to) {
         m_listDirty = true;
         if (from == Status::NoData && to == Status::Ok) return; // lần đầu thấy PSU: không cần báo
         if (to == Status::Lost || (from == Status::Lost && to == Status::Ok)) return;   // bỏ qua sự kiện mất / có lại kết nối
-        logEvent(tagged(kindOf(to), from == Status::Lost ? QStringLiteral("PSU %1: %2").arg(addr).arg(statusText(to))
-                                                         : QStringLiteral("PSU %1: %2 → %3").arg(addr).arg(statusText(from), statusText(to))),
+        logEvent(tagged(kindOf(to), from == Status::Lost ? QStringLiteral("PSU %1: %2").arg(proto::psuaddr::displayNo(addr)).arg(statusText(to))
+                                                         : QStringLiteral("PSU %1: %2 → %3").arg(proto::psuaddr::displayNo(addr)).arg(statusText(from), statusText(to))),
                  LogPsuMonitor);
     });
     connect(ctx.fpgaOta, &services::FpgaOta::finished, this, [this](const QString &s) { logEvent(tagged(EventKind::Ota, QStringLiteral("Nạp FPGA: ") + s), LogFirmware); });
     connect(ctx.stmOta, &services::StmOta::deviceFinished, this, [this](int addr, bool ok, const QString &m) {
         logEvent(tagged(ok ? EventKind::Ota : EventKind::Err,
-                         QStringLiteral("Nạp STM32 PSU %1: %2%3").arg(addr).arg(ok ? QString() : QStringLiteral("LỖI, "), m)), LogFirmware);
+                         QStringLiteral("Nạp STM32 PSU %1: %2%3").arg(proto::psuaddr::displayNo(addr)).arg(ok ? QString() : QStringLiteral("LỖI, "), m)), LogFirmware);
     });
     connect(ctx.auth, &Auth::lockedChanged, this, [this](bool locked) {
         logEvent(tagged(EventKind::Auth, locked ? QStringLiteral("Đã khóa chế độ kỹ sư") : QStringLiteral("Đã mở khóa chế độ kỹ sư")));
@@ -734,7 +735,7 @@ void MainWindow::rebuildAbnormalList()
                 why = proto::psumon::table().fields().at(s.alarms.first()).name;
                 if (s.alarms.size() > 1) why += QStringLiteral(" (+%1)").arg(s.alarms.size() - 1);
             }
-            auto *it = new QListWidgetItem(QStringLiteral("PSU %1 · %2").arg(addr).arg(why));
+            auto *it = new QListWidgetItem(QStringLiteral("PSU %1 · %2").arg(proto::psuaddr::displayNo(addr)).arg(why));
             it->setData(Qt::UserRole + 2, addr);
             it->setForeground(OverviewGrid::statusColor(want).darker(130));
             m_abnormal->addItem(it);
@@ -746,7 +747,7 @@ QString MainWindow::psuTooltip(int addr, int cluster) const
 {
     using namespace proto::psumon;
     const model::PsuState &s = m_ctx.psuStore->psu(addr);
-    QString t = QStringLiteral("PSU %1").arg(addr);
+    QString t = QStringLiteral("PSU %1").arg(proto::psuaddr::displayNo(addr));
     if (cluster >= 0) t += cluster < kNumCluster ? QStringLiteral(" · Cụm %1").arg(cluster + 1) : QStringLiteral(" · Supply");
     const bool isCluster = cluster >= 0 && cluster < kNumCluster;
     if (isCluster && m_ctx.psuStore->clusterOff(addr, cluster))

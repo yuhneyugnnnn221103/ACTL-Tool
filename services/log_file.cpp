@@ -1,4 +1,5 @@
 #include "log_file.h"
+#include "../proto/psu_address.h"
 #include "../proto/psu_monitor_proto.h"
 #include "../proto/trb_monitor_proto.h"
 #include <QDateTime>
@@ -42,7 +43,7 @@ bool getVarint(const char *&p, const char *end, quint64 &v)
 
 QString deviceName(int key)
 {
-    return keyKind(key) == KindTrb ? QStringLiteral("MB%1 / TRB%2").arg(keyA(key) + 1).arg(keyB(key) + 1) : QStringLiteral("PSU %1").arg(keyA(key));
+    return keyKind(key) == KindTrb ? QStringLiteral("MB%1 / TRB%2").arg(keyA(key) + 1).arg(keyB(key) + 1) : QStringLiteral("PSU %1").arg(proto::psuaddr::displayNo(keyA(key)));
 }
 
 // ---------------------------------------------------------------- ghi

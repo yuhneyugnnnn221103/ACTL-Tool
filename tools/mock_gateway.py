@@ -709,7 +709,7 @@ def main():
         p.add_argument("--scenario", default="normal", choices=list(SCENARIOS) + ["all"])
         p.add_argument("--mb", type=int, default=20, help="số mother board (system/mbCount)")
         p.add_argument("--trb", type=int, default=8, help="số TRB mỗi MB (system/trbPerMb)")
-        p.add_argument("--psu-first", type=int, default=1, help="địa chỉ PSU đầu (psu/firstAddr)")
+        p.add_argument("--psu-first", type=int, default=0, help="địa chỉ PSU đầu trong bản tin (psu/firstAddrRaw), 0..4 hiển thị là PSU 1..5")
         p.add_argument("--psu-count", type=int, default=5, help="số PSU (psu/count)")
         p.add_argument("--seed", type=int, default=1)
 

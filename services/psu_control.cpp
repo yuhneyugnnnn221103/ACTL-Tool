@@ -1,4 +1,5 @@
 #include "psu_control.h"
+#include "../proto/psu_address.h"
 
 namespace services {
 
@@ -16,7 +17,7 @@ void PsuControl::sendControl(int addr, const proto::psuctl::ControlCmd &c)
 {
     QStringList on, off;
     for (int i = 0; i < 4; ++i) (c.clusterMask >> i & 1 ? on : off) << QString::number(i + 1);
-    QString text = QStringLiteral("Điều khiển PSU %1 [bật cụm: %2; tắt cụm: %3]").arg(addr)
+    QString text = QStringLiteral("Điều khiển PSU %1 [bật cụm: %2; tắt cụm: %3]").arg(proto::psuaddr::displayNo(addr))
                        .arg(on.isEmpty() ? QStringLiteral("-") : on.join(','), off.isEmpty() ? QStringLiteral("-") : off.join(','));
     if (c.clearTrip) text += QStringLiteral(" [Clear trip]");
 
@@ -35,14 +36,14 @@ void PsuControl::sendClearTripThenOn(int addr, quint8 onMask, int gapMs)
     clear.data = proto::gwhdr::add(proto::gwhdr::kDevPsuControl, proto::psuctl::buildControl(addr, c));
     clear.priority = 10;
     clear.gapMs = gapMs;   // chờ PSU xử lý xong Clear trip rồi mới tới lệnh bật
-    m_pending.insert(m_link->send(clear), QStringLiteral("Điều khiển PSU %1 [Clear trip, tắt]").arg(addr));
+    m_pending.insert(m_link->send(clear), QStringLiteral("Điều khiển PSU %1 [Clear trip, tắt]").arg(proto::psuaddr::displayNo(addr)));
 
     core::Request on;
     c.clusterMask = onMask;
     c.clearTrip = false;
     on.data = proto::gwhdr::add(proto::gwhdr::kDevPsuControl, proto::psuctl::buildControl(addr, c));
     on.priority = 10;
-    m_pending.insert(m_link->send(on), QStringLiteral("Điều khiển PSU %1 [bật nguồn, sau Clear trip]").arg(addr));
+    m_pending.insert(m_link->send(on), QStringLiteral("Điều khiển PSU %1 [bật nguồn, sau Clear trip]").arg(proto::psuaddr::displayNo(addr)));
 }
 
 } // namespace services

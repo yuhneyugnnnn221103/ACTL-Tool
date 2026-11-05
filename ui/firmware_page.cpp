@@ -1,4 +1,5 @@
 #include "firmware_page.h"
+#include "../proto/psu_address.h"
 #include "auth.h"
 #include "theme.h"
 #include <QCheckBox>
@@ -328,7 +329,7 @@ QWidget *FirmwarePage::buildStmTab()
                             QStringLiteral("Tiến độ"), QStringLiteral("Kết quả")}, count);
     for (int r = 0; r < count; ++r) {
         QTableWidgetItem *it = m_stmTable->item(r, 0);
-        it->setText(QStringLiteral("PSU địa chỉ %1").arg(first + r));
+        it->setText(QStringLiteral("PSU %1").arg(proto::psuaddr::displayNo(first + r)));
         it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
         it->setCheckState(Qt::Checked);
     }
@@ -416,7 +417,7 @@ QWidget *FirmwarePage::buildStmTab()
     });
     connect(ota, &services::StmOta::commitRequested, this, [=](int addr) {
         m_ctx.stmOta->confirmCommit(yes(this, QStringLiteral("Kích hoạt firmware"),
-            QStringLiteral("PSU địa chỉ %1 đã nhận đủ ảnh và CRC32 đúng.\n\nKích hoạt ngay? Thiết bị sẽ reset và bootloader chạy app mới.").arg(addr)));
+            QStringLiteral("PSU %1 đã nhận đủ ảnh và CRC32 đúng.\n\nKích hoạt ngay? Thiết bị sẽ reset và bootloader chạy app mới.").arg(proto::psuaddr::displayNo(addr))));
     });
     connect(ota, &services::StmOta::finished, this, [=] { setBusy(false); });
 
