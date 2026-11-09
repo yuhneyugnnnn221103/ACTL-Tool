@@ -350,7 +350,12 @@ QWidget *FirmwarePage::buildStmTab()
         theme::setRole(browse, "secondary");
         connect(browse, &QPushButton::clicked, this, [=] {
             const QByteArray d = pickFile(this, edit, info);
-            if (!d.isEmpty()) m_stmImage = d;
+            if (d.isEmpty()) return;
+            m_stmImage = d;
+            m_stmVersionName = proto::stmota::versionFromFileName(edit->text());   // version = tên file bỏ đuôi (ASCII, tối đa 32 ký tự)
+            const proto::stmota::VersionName &v = m_stmVersionName;
+            info->setText(info->text() + (!v.error.isEmpty() ? QStringLiteral(", KHÔNG dùng được làm version: %1").arg(v.error)
+                                          : QStringLiteral(", version \"%1\"").arg(v.text) + (v.replaced ? QStringLiteral(" (có ký tự lạ đã đổi thành _)") : QString())));
         });
         auto *h = new QHBoxLayout;
         h->addWidget(edit, 1);
@@ -358,11 +363,6 @@ QWidget *FirmwarePage::buildStmTab()
         h->addWidget(browse);
         form->addRow(QStringLiteral("File firmware (.bin, tối đa 639 KB)"), h);
     }
-    m_stmVersion = new QSpinBox;
-    m_stmVersion->setRange(1, 2147483647);
-    m_stmVersion->setValue(int(QDateTime::currentSecsSinceEpoch()));
-    m_stmVersion->setToolTip(QStringLiteral("Version ghi vào BEGIN (u32). Mặc định là thời điểm hiện tại."));
-    form->addRow(QStringLiteral("Version"), m_stmVersion);
     m_stmAutoCommit = new QCheckBox(QStringLiteral("Tự kích hoạt (COMMIT, thiết bị reset, bootloader chạy app mới) ngay khi CRC32 đúng"));
     form->addRow(QString(), m_stmAutoCommit);
 
@@ -387,14 +387,16 @@ QWidget *FirmwarePage::buildStmTab()
     buttons->addWidget(button(QStringLiteral("Nạp các PSU đã đánh dấu"), [=] {
         if (!ready() || selected().isEmpty()) return;
         if (m_stmImage.isEmpty()) { QMessageBox::information(this, QStringLiteral("Nạp STM32"), QStringLiteral("Chưa chọn file .bin.")); return; }
+        if (!m_stmVersionName.error.isEmpty()) { QMessageBox::warning(this, QStringLiteral("Nạp STM32"), QStringLiteral("Tên file không dùng được làm version: %1").arg(m_stmVersionName.error)); return; }
         if (m_stmImage.size() > proto::stmota::kMaxImageBytes) { QMessageBox::warning(this, QStringLiteral("Nạp STM32"), QStringLiteral("File .bin %1 byte vượt giới hạn 639 KB.").arg(m_stmImage.size())); return; }
         if (!yes(this, QStringLiteral("Nạp STM32"),
-                 QStringLiteral("Nạp firmware version %1 cho %2 PSU, lần lượt từng thiết bị?\n\nMỗi PSU sẽ RESET vào recovery, xóa vùng app rồi nạp lại; trong lúc này PSU không chạy app. Chỉ thực hiện được khi mọi cụm DCM đã OFF.\nApp treo: cấp nguồn lại PSU, phần mềm sẽ hỏi INFO lặp lại để bắt cửa sổ 300 ms đầu.")
-                     .arg(m_stmVersion->value()).arg(selected().size()))) return;
+                 QStringLiteral("Nạp firmware version \"%1\" cho %2 PSU, lần lượt từng thiết bị?\n\nMỗi PSU sẽ RESET vào recovery, xóa vùng app rồi nạp lại; trong lúc này PSU không chạy app. Chỉ thực hiện được khi mọi cụm DCM đã OFF.\nApp treo: cấp nguồn lại PSU, phần mềm sẽ hỏi INFO lặp lại để bắt cửa sổ 300 ms đầu.")
+                     .arg(m_stmVersionName.text).arg(selected().size()))) return;
+        if (m_stmVersionName.replaced && !yes(this, QStringLiteral("Nạp STM32"), QStringLiteral("Tên file có ký tự ngoài ASCII in được, đã đổi thành \"_\" trong version \"%1\". Tiếp tục?").arg(m_stmVersionName.text))) return;
         if (!m_ctx.auth->unlock(this)) return;
         for (int r = 0; r < count; ++r) { m_stmTable->item(r, 3)->setText({}); m_stmTable->item(r, 4)->setText({}); m_stmTable->item(r, 4)->setBackground({}); }
         setBusy(true);
-        m_ctx.stmOta->start(selected(), m_stmImage, quint32(m_stmVersion->value()), m_stmAutoCommit->isChecked());
+        m_ctx.stmOta->start(selected(), m_stmImage, m_stmVersionName.text, m_stmAutoCommit->isChecked());
     }));
     buttons->addWidget(m_stmCancel);
     for (QPushButton *b : m_stmActions) theme::setRole(b, b->text().startsWith(QStringLiteral("Nạp")) ? "danger" : "secondary");
@@ -402,11 +404,13 @@ QWidget *FirmwarePage::buildStmTab()
     buttons->addStretch(1);
 
     services::StmOta *ota = m_ctx.stmOta;
-    connect(ota, &services::StmOta::deviceInfo, this, [=](int addr, char slot, quint32 version, quint8 trial) {
+    connect(ota, &services::StmOta::deviceInfo, this, [=](int addr, char slot, quint8 trial) {
         const QString state = slot == 'R' ? QStringLiteral("Recovery (bootloader)")
                             : QStringLiteral("App") + (trial & 0x80 ? QStringLiteral(" (đã xác nhận)") : QStringLiteral(" (đang thử, lần boot %1)").arg(trial & 0x7F));
         m_stmTable->item(row(addr), 1)->setText(state);
-        m_stmTable->item(row(addr), 2)->setText(QString::number(version));
+    });
+    connect(ota, &services::StmOta::deviceVersion, this, [=](int addr, const QString &version) {
+        m_stmTable->item(row(addr), 2)->setText(version.isEmpty() ? QStringLiteral("(chưa đặt)") : version);
     });
     connect(ota, &services::StmOta::deviceProgress, this, [=](int addr, int percent, const QString &text) {
         m_stmTable->item(row(addr), 3)->setText(QStringLiteral("%1% · %2").arg(percent).arg(text));

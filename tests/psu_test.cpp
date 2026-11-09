@@ -70,13 +70,18 @@ struct FakePsu {
 
 }
 
-// PSU giả: app ('A') không nhận lệnh nạp; ENTER_REC thì ACK rồi sang bootloader recovery ('R'); chỉ recovery mới ERASE / BEGIN / DATA / END / COMMIT.
+// PSU giả: app ('A') không nhận lệnh nạp; ENTER_REC thì ACK rồi sang bootloader recovery ('R'); chỉ recovery mới ERASE / BEGIN / SET_VERSION / DATA / END / COMMIT.
+// SET_VERSION chỉ nhận sau ERASE và trước END (sai thời điểm: Busy); sau COMMIT sang app 'A' và GET_VERSION trả chuỗi đã đặt.
 struct FakeStmPsu {
     char slot = 'A';
     int silentInfos = 0;         // số INFO đầu tiên không trả lời (app treo / chưa cấp nguồn lại)
     quint8 enterStatus = stmota::Ok, eraseStatus = stmota::Ok;
-    bool erased = false;
+    bool erased = false, ended = false;
+    bool ignoreSetVersion = false;     // firmware cũ: không biết SET_VERSION
+    QString pendingVersion, runningVersion;   // chuỗi đã SET (đang nạp) và chuỗi của ảnh đang chạy
+    QString mangleVersion;             // khác rỗng: GET_VERSION trả chuỗi này thay vì chuỗi thật (thử lệch)
     QList<quint8> cmds;
+    QByteArray lastBegin;
 
     static QByteArray ack(quint8 ackCmd, quint8 status, quint32 info, char slot)
     {
@@ -88,6 +93,15 @@ struct FakeStmPsu {
         core::seal(a, 4);
         return a;
     }
+    static QByteArray versionReply(const QString &v)
+    {
+        QByteArray f(stmota::kVersionLength, 0);
+        f.replace(2, 2, stmota::cmdBytes(stmota::kVersionReply));
+        f[4] = char(3);
+        f.replace(5, v.size(), v.toLatin1());
+        core::seal(f, 4);
+        return f;
+    }
     void attach(FakeTransport *tp)
     {
         tp->onWrite = [this, tp](const QByteArray &d) {
@@ -96,7 +110,9 @@ struct FakeStmPsu {
             auto reply = [&](quint8 status, quint32 info = 0) { tp->injectLater(ack(c, status, info, slot)); };
             if (c == stmota::kInfo) {
                 if (silentInfos > 0) { --silentInfos; return; }
-                reply(stmota::Ok, 77);
+                reply(stmota::Ok, 0);                                         // Info = 0: version không còn nằm trong INFO
+            } else if (c == stmota::kGetVersion) {
+                tp->injectLater(versionReply(!mangleVersion.isEmpty() ? mangleVersion : slot == 'A' ? runningVersion : QString()));
             } else if (c == stmota::kEnterRec) {
                 reply(enterStatus);
                 if (enterStatus == stmota::Ok) slot = 'R';                   // reset sang bootloader
@@ -104,16 +120,30 @@ struct FakeStmPsu {
                 reply(stmota::NotRecovery);                                   // app nhận lệnh nạp: từ chối
             } else if (c == stmota::kErase) {
                 erased = eraseStatus == stmota::Ok;
+                ended = false;
+                pendingVersion.clear();
                 reply(eraseStatus, eraseStatus == stmota::Ok ? 1 : 0x55);
             } else if (c == stmota::kBegin) {
+                lastBegin = d;
                 reply(erased ? stmota::Ok : stmota::NotErased);
+            } else if (c == stmota::kSetVersion) {
+                if (ignoreSetVersion) return;
+                if (!erased || ended) { reply(stmota::Busy); return; }       // chưa ERASE hoặc đã END
+                pendingVersion = stmota::parseVersionReply(d);               // cùng bố cục: chuỗi ở byte 6..37
+                reply(stmota::Ok);
+            } else if (c == stmota::kEnd) {
+                ended = true;
+                reply(stmota::Ok);
+            } else if (c == stmota::kCommit) {
+                reply(stmota::Ok);
+                slot = 'A';                                                   // bootloader chạy app mới
+                runningVersion = pendingVersion;
             } else {
-                reply(stmota::Ok);                                            // DATA, END, COMMIT
+                reply(stmota::Ok);                                            // DATA
             }
         };
     }
 };
-
 
 class PsuTest : public QObject {
     Q_OBJECT
@@ -142,20 +172,17 @@ private slots:
         QCOMPARE(first(psumon::kIdxSafeState(3)), 248);                         // cụm 4: +9
         QCOMPARE(first(psumon::kIdxTripCount(3)), 250);
         QCOMPARE(first(psumon::kIdxSlot), 251);                                 // +12
-        QCOMPARE(first(psumon::kIdxVersion), 252);                              // +13..+16
-        QCOMPARE(t.fields().at(psumon::kIdxVersion).size, 4);
+        QCOMPARE(psumon::kNumFields, psumon::kIdxSlot + 1);                    // không còn FW.VERSION (byte 252..255 là dự phòng 00)
 
         QList<double> v(psumon::kNumFields, 0.0);
         v[psumon::kIdxSafeState(2)] = psumon::SafeOn;
-        v[psumon::kIdxSlot] = 'B';
-        v[psumon::kIdxVersion] = 20261013;
+        v[psumon::kIdxSlot] = 'A';
         const QByteArray f = psumon::buildFrame(2, v);
         QCOMPARE(f.size(), 310);
         QVERIFY(crcOk(f, 4));
         const QList<double> back = t.decode(f);
         QCOMPARE(back.at(psumon::kIdxSafeState(2)), double(psumon::SafeOn));
-        QCOMPARE(back.at(psumon::kIdxSlot), double('B'));
-        QCOMPARE(back.at(psumon::kIdxVersion), 20261013.0);
+        QCOMPARE(back.at(psumon::kIdxSlot), double('A'));
         QCOMPARE(psumon::safeStateText(psumon::SafeTripped), QStringLiteral("TRIPPED"));
     }
 
@@ -281,7 +308,8 @@ private slots:
         const QList<QByteArray> cmds = {psumon::cmd(), psuctl::cmd(), psucfg::readCmd(), psucfg::writeCmd(), psucfg::replyCmd(),
                                         stmota::cmdBytes(stmota::kBegin), stmota::cmdBytes(stmota::kData), stmota::cmdBytes(stmota::kEnd),
                                         stmota::cmdBytes(stmota::kCommit), stmota::cmdBytes(stmota::kAck), stmota::cmdBytes(stmota::kInfo),
-                                        stmota::cmdBytes(stmota::kErase), stmota::cmdBytes(stmota::kEnterRec)};
+                                        stmota::cmdBytes(stmota::kErase), stmota::cmdBytes(stmota::kEnterRec),
+                                        stmota::cmdBytes(stmota::kSetVersion), stmota::cmdBytes(stmota::kGetVersion), stmota::cmdBytes(stmota::kVersionReply)};
         QSet<QByteArray> seen;
         for (const QByteArray &c : cmds) {
             QCOMPARE(c.size(), 2);
@@ -298,10 +326,39 @@ private slots:
 
     void stmOtaFramesLayout()
     {
-        const QByteArray b = stmota::buildBegin(3, 0x01020304, 0xAABBCCDD, 7);
-        QCOMPARE(b.size(), 21);
-        QCOMPARE(b.left(17).toHex(), QByteArray("abcd9090" "03" "01020304" "aabbccdd" "00000007"));
+        const QByteArray b = stmota::buildBegin(3, 0x01020304, 0xAABBCCDD);
+        QCOMPARE(b.size(), 17);                                   // không còn version u32
+        QCOMPARE(b.left(13).toHex(), QByteArray("abcd9090" "03" "01020304" "aabbccdd"));
         QVERIFY(crcOk(b, 4));
+        // Vector của firmware (Addr = 1, Size 0x1000, CRC32 DEADBEEF).
+        QCOMPARE(stmota::buildBegin(1, 0x1000, 0xDEADBEEF).toHex(' ').toUpper(), QByteArray("AB CD 90 90 01 00 00 10 00 DE AD BE EF 2D 82 E1 E2"));
+        QCOMPARE(stmota::buildCtrl(1, stmota::kGetVersion).toHex(' ').toUpper(), QByteArray("AB CD 99 99 01 F1 D1 E1 E2"));
+
+        const QByteArray sv = stmota::buildSetVersion(2, QStringLiteral("PSU_v1.2.3_abc123"));
+        QCOMPARE(sv.size(), 41);
+        QCOMPARE(sv.left(5).toHex(), QByteArray("abcd9a9a02"));
+        QCOMPARE(sv.mid(5, 17), QByteArray("PSU_v1.2.3_abc123"));
+        QCOMPARE(sv.mid(22, 15), QByteArray(15, '\0'));           // đệm 00 tới 32 ký tự
+        QCOMPARE(sv.right(2).toHex(), QByteArray("e1e2"));
+        QVERIFY(crcOk(sv, 4));                                    // CRC từ byte địa chỉ tới hết chuỗi
+        QCOMPARE(stmota::parseVersionReply(sv), QStringLiteral("PSU_v1.2.3_abc123"));
+        QByteArray cut = sv;
+        cut[10] = char(0xFF);                                     // byte ngoài 0x20..0x7E cắt chuỗi tại đó
+        QCOMPARE(stmota::parseVersionReply(cut), QStringLiteral("PSU_v"));
+        QCOMPARE(stmota::parseVersionReply(FakeStmPsu::versionReply({})), QString());   // chuỗi rỗng = chưa đặt
+
+        // Chuỗi version từ tên file: bỏ thư mục và đuôi; ký tự lạ thành "_" kèm cờ cảnh báo; quá 32 ký tự thì từ chối.
+        auto v = stmota::versionFromFileName(QStringLiteral("C:/fw/PSU_v1.2.3_abc1234.bin"));
+        QCOMPARE(v.text, QStringLiteral("PSU_v1.2.3_abc1234"));
+        QVERIFY(v.error.isEmpty() && !v.replaced);
+        v = stmota::versionFromFileName(QStringLiteral("PSU_bản_1.bin"));
+        QVERIFY(v.replaced && v.error.isEmpty());
+        QCOMPARE(v.text, QStringLiteral("PSU_b_n_1"));
+        v = stmota::versionFromFileName(QStringLiteral("0123456789012345678901234567890123.bin"));   // 34 ký tự
+        QVERIFY(!v.error.isEmpty());
+        QCOMPARE(stmota::versionFromFileName(QStringLiteral("01234567890123456789012345678901.bin")).text.size(), 32);   // đúng 32 thì được
+        QVERIFY(stmota::versionFromFileName(QStringLiteral("01234567890123456789012345678901.bin")).error.isEmpty());
+        QVERIFY(stmota::versionReplySpec().cmd == QByteArray::fromHex("A9A9") && stmota::versionReplySpec().length == 41);
 
         const QByteArray d = stmota::buildData(2, 0x0102, QByteArray(10, 'x'));
         QCOMPARE(d.size(), 269);
@@ -310,7 +367,7 @@ private slots:
         QCOMPARE(quint8(d.at(19)), quint8(0xFF));                 // chunk cuối đệm 0xFF
         QVERIFY(crcOk(d, 4));
 
-        for (quint8 code : {stmota::kEnd, stmota::kCommit, stmota::kInfo, stmota::kErase, stmota::kEnterRec}) {
+        for (quint8 code : {stmota::kEnd, stmota::kCommit, stmota::kInfo, stmota::kErase, stmota::kEnterRec, stmota::kGetVersion}) {
             const QByteArray c = stmota::buildCtrl(5, code);
             QCOMPARE(c.size(), 9);
             QCOMPARE(c.left(5), stmota::cmdBytes(code).prepend(QByteArray::fromHex("abcd")).append(char(5)));
@@ -442,16 +499,24 @@ private slots:
         psu.attach(tp);
         services::StmOta ota(&link);
         QSignalSpy info(&ota, &services::StmOta::deviceInfo), fin(&ota, &services::StmOta::deviceFinished);
-        ota.start({3}, QByteArray(300, 'b'), 20261013, true);              // 300 byte = 2 gói
-        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 6000);
-        const QList<quint8> expect{stmota::kInfo, stmota::kEnterRec, stmota::kInfo, stmota::kErase, stmota::kBegin,
-                                   stmota::kData, stmota::kData, stmota::kEnd, stmota::kCommit};
+        QSignalSpy ver(&ota, &services::StmOta::deviceVersion);
+        ota.start({3}, QByteArray(300, 'b'), QStringLiteral("PSU_v1.2.3_abc123"), true);   // 300 byte = 2 gói
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 8000);
+        // SET_VERSION ngay sau BEGIN; sau COMMIT hỏi INFO (slot A) rồi GET_VERSION.
+        const QList<quint8> expect{stmota::kInfo, stmota::kEnterRec, stmota::kInfo, stmota::kErase, stmota::kBegin, stmota::kSetVersion,
+                                   stmota::kData, stmota::kData, stmota::kEnd, stmota::kCommit, stmota::kInfo, stmota::kGetVersion};
         QCOMPARE(psu.cmds, expect);
+        QCOMPARE(psu.lastBegin.size(), 17);                                 // BEGIN không còn version
+        QCOMPARE(psu.pendingVersion, QStringLiteral("PSU_v1.2.3_abc123"));
         QCOMPARE(info.first().at(1).toChar().toLatin1(), 'A');             // INFO đầu: app
-        QCOMPARE(info.first().at(3).toUInt(), 0x80u);                       // trial: đã xác nhận
-        QCOMPARE(info.last().at(1).toChar().toLatin1(), 'R');               // INFO sau reset: recovery
+        QCOMPARE(info.first().at(2).toUInt(), 0x80u);                       // trial: đã xác nhận
+        QCOMPARE(info.at(1).at(1).toChar().toLatin1(), 'R');                // INFO sau reset: recovery
+        QCOMPARE(info.last().at(1).toChar().toLatin1(), 'A');               // INFO sau COMMIT: app mới
+        QCOMPARE(ver.size(), 1);
+        QCOMPARE(ver.first().at(1).toString(), QStringLiteral("PSU_v1.2.3_abc123"));   // GET_VERSION đọc lại đúng chuỗi đã gửi
         QCOMPARE(fin.size(), 1);
         QVERIFY(fin.first().at(1).toBool());
+        QVERIFY(fin.first().at(2).toString().contains("khớp"));
         QVERIFY(psu.erased);
     }
 
@@ -468,9 +533,10 @@ private slots:
         psu.attach(tp);
         services::StmOta ota(&link);
         QSignalSpy fin(&ota, &services::StmOta::deviceFinished);
-        ota.start({3}, QByteArray(100, 'a'), 1, true);
-        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 6000);
-        const QList<quint8> expect{stmota::kInfo, stmota::kInfo, stmota::kInfo, stmota::kErase, stmota::kBegin, stmota::kData, stmota::kEnd, stmota::kCommit};
+        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"), true);
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 8000);
+        const QList<quint8> expect{stmota::kInfo, stmota::kInfo, stmota::kInfo, stmota::kErase, stmota::kBegin, stmota::kSetVersion, stmota::kData,
+                                   stmota::kEnd, stmota::kCommit, stmota::kInfo, stmota::kGetVersion};
         QCOMPARE(psu.cmds, expect);                                         // không có ENTER_REC
         QVERIFY(fin.first().at(1).toBool());
     }
@@ -487,12 +553,12 @@ private slots:
         services::StmOta ota(&link);
         QSignalSpy fin(&ota, &services::StmOta::deviceFinished);
 
-        ota.start({3}, {}, 1, true);                                        // chưa chọn file: không ENTER_REC, không xóa app
+        ota.start({3}, {}, QStringLiteral("v1"), true);                                        // chưa chọn file: không ENTER_REC, không xóa app
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
         QVERIFY(!fin.last().at(1).toBool());
         QCOMPARE(psu.cmds, (QList<quint8>{stmota::kInfo}));
         psu.cmds.clear();
-        ota.start({3}, QByteArray(stmota::kMaxImageBytes + 1, 'x'), 1, true);   // quá 639 KB
+        ota.start({3}, QByteArray(stmota::kMaxImageBytes + 1, 'x'), QStringLiteral("v1"), true);   // quá 639 KB
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
         QVERIFY(!fin.last().at(1).toBool());
         QVERIFY(fin.last().at(2).toString().contains("639"));
@@ -501,7 +567,7 @@ private slots:
 
         psu.cmds.clear();
         psu.enterStatus = stmota::Refused;                                  // còn cụm chưa OFF: ENTER_REC bị từ chối, app vẫn chạy
-        ota.start({3}, QByteArray(100, 'a'), 1, true);
+        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"), true);
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
         QVERIFY(!fin.last().at(1).toBool());
         QVERIFY(fin.last().at(2).toString().contains("ENTER_REC") && fin.last().at(2).toString().contains("DCM"));
@@ -509,10 +575,39 @@ private slots:
 
         psu.enterStatus = stmota::Ok;                                       // vào được recovery nhưng xóa lỗi
         psu.eraseStatus = stmota::EraseFail;
-        ota.start({3}, QByteArray(100, 'a'), 1, true);
+        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"), true);
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 6000);
         QVERIFY(!fin.last().at(1).toBool());
         QVERIFY(fin.last().at(2).toString().contains("xóa"));
+
+        // Firmware cũ không biết SET_VERSION: không ACK, thử 3 lần rồi dừng và báo (không nạp tiếp ảnh không version).
+        psu.eraseStatus = stmota::Ok;
+        psu.ignoreSetVersion = true;
+        psu.cmds.clear();
+        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"), true);
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 8000);
+        QVERIFY(!fin.last().at(1).toBool());
+        QVERIFY(fin.last().at(2).toString().contains("SET_VERSION"));
+        QCOMPARE(psu.cmds.count(stmota::kSetVersion), 3);
+        QCOMPARE(psu.cmds.count(stmota::kData), 0);
+        psu.ignoreSetVersion = false;
+
+        // Version đọc lại không khớp chuỗi đã gửi: báo lỗi (ảnh đã kích hoạt).
+        psu.slot = 'R';
+        psu.mangleVersion = QStringLiteral("khac");
+        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"), true);
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 8000);
+        QVERIFY(!fin.last().at(1).toBool());
+        QVERIFY(fin.last().at(2).toString().contains("không khớp"));
+        psu.mangleVersion.clear();
+
+        // Không có version (chuỗi rỗng): bỏ qua SET_VERSION, vẫn nạp được.
+        psu.slot = 'R';
+        psu.cmds.clear();
+        ota.start({3}, QByteArray(100, 'a'), QString(), true);
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 8000);
+        QVERIFY(fin.last().at(1).toBool());
+        QCOMPARE(psu.cmds.count(stmota::kSetVersion), 0);
 
         QCOMPARE(stmota::statusText(stmota::NotErased), QStringLiteral("chưa ERASE vùng app"));
         QVERIFY(stmota::statusText(stmota::NotRecovery).contains("recovery"));
@@ -529,11 +624,14 @@ private slots:
         FakeStmPsu psu;
         psu.attach(tp);
         services::StmOta ota(&link);
-        QSignalSpy fin(&ota, &services::StmOta::deviceFinished);
+        QSignalSpy fin(&ota, &services::StmOta::deviceFinished), ver(&ota, &services::StmOta::deviceVersion);
+        psu.runningVersion = QStringLiteral("PSU_v1.0.0_aaaaaaa");
         ota.queryInfo({3});
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
         QVERIFY(fin.first().at(1).toBool());
-        QCOMPARE(psu.cmds, (QList<quint8>{stmota::kInfo}));                 // chỉ đọc, không đổi gì
+        QCOMPARE(psu.cmds, (QList<quint8>{stmota::kInfo, stmota::kGetVersion}));   // chỉ đọc: INFO rồi GET_VERSION, không đổi gì
+        QCOMPARE(ver.first().at(1).toString(), QStringLiteral("PSU_v1.0.0_aaaaaaa"));
+        QVERIFY(fin.first().at(2).toString().contains("PSU_v1.0.0_aaaaaaa"));
     }
 
     void allFramesCanBeRegistered()

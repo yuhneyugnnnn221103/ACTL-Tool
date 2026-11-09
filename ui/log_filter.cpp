@@ -52,7 +52,7 @@ FrameClass classifyFrame(const QByteArray &raw)
         c.group = LogPsuConfig;
         break;
     case 0x5555: case 0x6666: case 0x8888: case 0xAAAA: case 0x9999:   // nạp FPGA
-    case 0x9090: case 0x9191: case 0x9292: case 0x9393: case 0x9494: case 0x9595: case 0x9696: case 0x9898:   // nạp STM32
+    case 0x9090: case 0x9191: case 0x9292: case 0x9393: case 0x9494: case 0x9595: case 0x9696: case 0x9898: case 0x9A9A: case 0xA9A9:   // nạp STM32
         c.group = LogFirmware;
         break;
     default:

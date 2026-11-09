@@ -5,7 +5,7 @@
 // Giá trị là số thô (chưa có công thức quy đổi). Supply là thanh ghi CURRENT / VBUS của INA228 (3 byte, dữ liệu ở bit 23..4):
 // dòng có dấu (bù 2, 24 bit), áp không dấu. Giá trị lưu trong app là thô đủ 24 bit (so ngưỡng cùng đơn vị với firmware);
 // khi hiển thị thì dịch phải 4 bit (supplyShown).
-// Vùng dự phòng 24 byte (byte 239..262) là mở rộng của firmware APSU; byte 263..306 là dự phòng: chỉ dùng 4 trạng thái an toàn, 4 cờ EN, 4 bộ đếm trip (theo cụm), slot và version; còn lại dự phòng.
+// Vùng dự phòng 24 byte (byte 239..262) là mở rộng của firmware APSU; byte 263..306 là dự phòng: chỉ dùng 4 trạng thái an toàn, 4 cờ EN, 4 bộ đếm trip (theo cụm) và slot; còn lại dự phòng (kể cả 4 byte version cũ).
 #include "../core/frame.h"
 #include "field_table.h"
 #include <QSet>
@@ -35,9 +35,8 @@ constexpr int kFwPerCluster = 3;
 constexpr int kIdxSafeState(int c) { return kIdxExt0 + c * kFwPerCluster; }
 constexpr int kIdxEn(int c) { return kIdxExt0 + c * kFwPerCluster + 1; }
 constexpr int kIdxTripCount(int c) { return kIdxExt0 + c * kFwPerCluster + 2; }
-constexpr int kIdxSlot = kIdxExt0 + kNumCluster * kFwPerCluster;   // byte +12: slot đang chạy: 'A' / 'B' (/ 'R' recovery)
-constexpr int kIdxVersion = kIdxSlot + 1;                   // +13..+16 version ảnh đang chạy (u32 BE)
-constexpr int kNumFields = kIdxVersion + 1;
+constexpr int kIdxSlot = kIdxExt0 + kNumCluster * kFwPerCluster;   // byte +12: slot đang chạy: 'A' (app)
+constexpr int kNumFields = kIdxSlot + 1;   // +13..+16 (byte 252..255) trước đây là version u32, nay là dự phòng 00: version là chuỗi, hỏi bằng GET_VERSION
 
 enum SafeState { SafeBoot = 0, SafeOff = 1, SafeArming = 2, SafeOn = 3, SafeTripped = 4, SafeLockout = 5 };
 QString safeStateText(int state);

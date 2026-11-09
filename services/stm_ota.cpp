@@ -5,7 +5,7 @@ namespace services {
 
 using namespace proto;
 
-bool StmOta::registerFrames(core::FrameRegistry &registry) { return registry.add(stmota::ackSpec()); }
+bool StmOta::registerFrames(core::FrameRegistry &registry) { return registry.add(stmota::ackSpec()) && registry.add(stmota::versionReplySpec()); }
 
 StmOta::StmOta(core::Link *link, QObject *parent) : QObject(parent), m_link(link)
 {
@@ -23,7 +23,7 @@ void StmOta::queryInfo(const QList<int> &addrs)
     nextDevice();
 }
 
-void StmOta::start(const QList<int> &addrs, const QByteArray &image, quint32 version, bool autoCommit)
+void StmOta::start(const QList<int> &addrs, const QByteArray &image, const QString &version, bool autoCommit)
 {
     if (busy() || addrs.isEmpty()) return;
     m_queue = addrs;
@@ -68,7 +68,29 @@ void StmOta::send(const QByteArray &frame, State state, int timeoutMs)
 void StmOta::pollInfo()
 {
     ++m_polls;
-    send(stmota::buildCtrl(quint8(m_addr), stmota::kInfo), m_state == State::WaitRecovery ? State::WaitRecovery : State::Info, kReplyMs);
+    const bool keep = m_state == State::WaitRecovery || m_state == State::PostInfo;
+    send(stmota::buildCtrl(quint8(m_addr), stmota::kInfo), keep ? m_state : State::Info, kReplyMs);
+}
+
+void StmOta::sendGetVersion()
+{
+    send(stmota::buildCtrl(quint8(m_addr), stmota::kGetVersion), State::GetVersion, kReplyMs);
+}
+
+void StmOta::sendSetVersion()
+{
+    send(stmota::buildSetVersion(quint8(m_addr), m_version), State::SetVersion, kReplyMs);
+}
+
+// Kết thúc sau khi đã đọc version về: so với chuỗi đã gửi (khi nạp) hoặc chỉ báo (khi chỉ đọc).
+void StmOta::verifyDone(const QString &got)
+{
+    emit deviceVersion(m_addr, got);
+    const QString shown = got.isEmpty() ? QStringLiteral("(chưa đặt)") : got;
+    if (m_infoOnly) { done(true, QStringLiteral("%1, version %2").arg(m_slot == 'R' ? QStringLiteral("recovery") : QStringLiteral("app"), shown)); return; }
+    if (m_version.isEmpty()) { done(true, QStringLiteral("đã kích hoạt, app mới đang chạy (nạp không có version, đọc lại: %1)").arg(shown)); return; }
+    if (got == m_version) done(true, QStringLiteral("đã kích hoạt, version %1 (đọc lại khớp)").arg(got));
+    else done(false, QStringLiteral("đã kích hoạt nhưng version đọc lại không khớp: gửi \"%1\", đọc được \"%2\"").arg(m_version, got));
 }
 
 void StmOta::beginErase()
@@ -102,6 +124,11 @@ void StmOta::confirmCommit(bool commit)
 
 void StmOta::onFrame(const core::Frame &frame)
 {
+    if (busy() && frame.cmd == stmota::cmdBytes(stmota::kVersionReply)) {
+        if (m_state != State::GetVersion || quint8(frame.raw.at(stmota::kOffAddr)) != m_addr) return;
+        verifyDone(stmota::parseVersionReply(frame.raw));
+        return;
+    }
     if (!busy() || frame.cmd != stmota::cmdBytes(stmota::kAck)) return;
     const stmota::Ack a = stmota::parseAck(frame.raw);
     if (a.addr != m_addr) return;
@@ -111,13 +138,11 @@ void StmOta::onFrame(const core::Frame &frame)
     case State::Info:
     case State::WaitRecovery: {
         if (a.ackCmd != stmota::kInfo) return;
-        emit deviceInfo(m_addr, a.slot, a.info, a.trial);
+        emit deviceInfo(m_addr, a.slot, a.trial);
+        m_slot = a.slot;
         const bool recovery = a.slot == 'R';
         const QString trial = a.trial & 0x80 ? QStringLiteral("đã xác nhận") : QStringLiteral("đang thử, lần boot %1").arg(a.trial & 0x7F);
-        if (m_infoOnly) {
-            done(true, QStringLiteral("slot %1, version %2 (%3)").arg(a.slot).arg(a.info).arg(recovery ? QStringLiteral("bootloader recovery, chưa có app hợp lệ hoặc đang chờ nạp") : trial));
-            return;
-        }
+        if (m_infoOnly) { m_retries = 0; sendGetVersion(); return; }   // chỉ đọc: hỏi tiếp GET_VERSION rồi báo
         if (m_state == State::WaitRecovery && !recovery) {          // chưa reset xong: hỏi lại sau một lúc
             m_timer.start(kRecoveryRetryMs);
             return;
@@ -153,12 +178,21 @@ void StmOta::onFrame(const core::Frame &frame)
         if (a.status == stmota::EraseFail) { done(false, QStringLiteral("xóa sector thất bại (mã HAL 0x%1)").arg(a.info, 8, 16, QLatin1Char('0'))); return; }
         if (a.status != stmota::Ok) { done(false, QStringLiteral("ERASE bị từ chối: ") + why); return; }
         emit deviceProgress(m_addr, 0, QStringLiteral("Gửi BEGIN"));
-        send(stmota::buildBegin(quint8(m_addr), quint32(m_image.size()), stmota::crc32(m_image), m_version), State::Begin, kReplyMs);
+        send(stmota::buildBegin(quint8(m_addr), quint32(m_image.size()), stmota::crc32(m_image)), State::Begin, kReplyMs);
         break;
 
     case State::Begin:
         if (a.ackCmd != stmota::kBegin) return;
         if (a.status != stmota::Ok) { done(false, QStringLiteral("BEGIN bị từ chối: ") + why); return; }
+        if (m_version.isEmpty()) { sendChunk(); break; }
+        m_retries = 0;
+        emit deviceProgress(m_addr, 0, QStringLiteral("Gửi SET_VERSION \"%1\"").arg(m_version));
+        sendSetVersion();
+        break;
+
+    case State::SetVersion:
+        if (a.ackCmd != stmota::kSetVersion) return;
+        if (a.status != stmota::Ok) { done(false, QStringLiteral("SET_VERSION bị từ chối: ") + why); return; }
         sendChunk();
         break;
 
@@ -194,8 +228,18 @@ void StmOta::onFrame(const core::Frame &frame)
 
     case State::Commit:
         if (a.ackCmd != stmota::kCommit) return;
-        if (a.status == stmota::Ok) done(true, QStringLiteral("đã kích hoạt, bootloader đang chạy app mới"));
-        else done(false, QStringLiteral("COMMIT bị từ chối: ") + why);
+        if (a.status != stmota::Ok) { done(false, QStringLiteral("COMMIT bị từ chối: ") + why); return; }
+        emit deviceProgress(m_addr, 100, QStringLiteral("Đã COMMIT, chờ app mới chạy rồi đọc lại version"));
+        m_state = State::PostCommit;
+        m_timer.start(kPostCommitMs);
+        break;
+
+    case State::PostInfo:
+        if (a.ackCmd != stmota::kInfo) return;
+        emit deviceInfo(m_addr, a.slot, a.trial);
+        m_slot = a.slot;
+        if (a.slot == 'A') { m_retries = 0; sendGetVersion(); }
+        else m_timer.start(kRecoveryRetryMs * 2);   // chưa chạy app: hỏi lại sau một lúc
         break;
 
     default:
@@ -225,14 +269,35 @@ void StmOta::onTimeout()
         break;
     case State::Erase:       done(false, QStringLiteral("quá thời gian chờ xóa vùng app (%1 s)").arg(kEraseMs / 1000)); break;
     case State::Begin:       done(false, QStringLiteral("không trả lời BEGIN")); break;
+    case State::SetVersion:
+        if (++m_retries >= kVersionTries) done(false, QStringLiteral("SET_VERSION không được ACK sau %1 lần (firmware PSU cũ chưa hỗ trợ version chuỗi?)").arg(kVersionTries));
+        else sendSetVersion();
+        break;
+    case State::PostCommit:                       // hết giờ chờ app mới chạy: hỏi INFO
+        m_polls = 0;
+        m_state = State::PostInfo;
+        pollInfo();
+        break;
+    case State::PostInfo:
+        if (m_polls >= kRecoveryPolls) { done(true, QStringLiteral("đã kích hoạt nhưng chưa xác nhận được app mới (PSU chưa trả lời INFO ở slot A); hãy bấm \"Đọc slot và version\"")); break; }
+        pollInfo();
+        break;
+    case State::GetVersion:
+        if (++m_retries >= kVersionTries) {
+            if (m_infoOnly) done(true, QStringLiteral("slot %1, không đọc được version (không có trả lời GET_VERSION)").arg(m_slot));
+            else done(false, QStringLiteral("đã kích hoạt nhưng không đọc lại được version (không có trả lời GET_VERSION)"));
+        } else sendGetVersion();
+        break;
     case State::Data:
         if (++m_retries > kMaxRetries) done(false, QStringLiteral("chunk %1 không được ACK sau %2 lần gửi lại").arg(m_seq).arg(kMaxRetries));
         else sendChunk();
         break;
     case State::End:         done(false, QStringLiteral("quá thời gian chờ xác nhận END")); break;
     case State::Commit:
-        // Thiết bị thường reset trước khi kịp gửi ACK: coi là thành công có điều kiện.
-        done(true, QStringLiteral("không nhận được ACK COMMIT (thường do thiết bị đã reset); hãy đọc lại thông tin để xác nhận"));
+        // Thiết bị thường reset trước khi kịp gửi ACK: không kết luận, chờ rồi hỏi INFO + GET_VERSION để xác nhận.
+        emit deviceProgress(m_addr, 100, QStringLiteral("Không nhận ACK COMMIT (thiết bị thường reset ngay), kiểm tra lại bằng INFO"));
+        m_state = State::PostCommit;
+        m_timer.start(kPostCommitMs);
         break;
     default: break;
     }

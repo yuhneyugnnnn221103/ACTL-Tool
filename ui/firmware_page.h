@@ -41,7 +41,7 @@ private:
     QByteArray m_fpgaImage, m_fpgaVersion; // version: 4 byte lấy từ tên file .bin
 
     QTableWidget *m_stmTable;
-    QSpinBox *m_stmVersion;
+    proto::stmota::VersionName m_stmVersionName;   // chuỗi version lấy từ tên file .bin đã chọn
     QCheckBox *m_stmAutoCommit;
     QList<QPushButton *> m_stmActions;
     QPushButton *m_stmCancel;

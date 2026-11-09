@@ -33,12 +33,15 @@ Tài liệu này tổng hợp mọi bản tin liên quan tới PSU trong ACTL To
 | Hỏi cấu hình PSU | `03 03` | app → PSU | 13 | Trả lời bằng `82 82` |
 | Trả lời cấu hình PSU | `82 82` | PSU → app | 915 | Cùng bố cục khung ghi |
 | Ghi cấu hình PSU | `04 04` | app → PSU | 915 | Không ACK; app đọc lại để kiểm tra |
-| STM32 BEGIN | `90 90` | app → PSU | 21 | Kích thước, CRC32, version ảnh |
+| STM32 BEGIN | `90 90` | app → PSU | 17 | Kích thước, CRC32 (không còn version u32) |
 | STM32 DATA | `91 91` | app → PSU | 269 | Mỗi gói 256 byte |
 | STM32 END | `92 92` | app → PSU | 9 | PSU kiểm CRC32 toàn ảnh |
 | STM32 COMMIT | `93 93` | app → PSU | 9 | Kích hoạt ảnh mới, PSU reset |
 | STM32 ACK | `94 94` | PSU → app | 17 | Trả lời ERASE/BEGIN/DATA/END/COMMIT/INFO/ENTER_REC |
-| STM32 INFO | `95 95` | app → PSU | 9 | Hỏi slot (`A` app / `R` recovery), version và trạng thái trial |
+| STM32 INFO | `95 95` | app → PSU | 9 | Hỏi slot (`A` app / `R` recovery) và trạng thái trial (Info = 0) |
+| STM32 GET_VERSION | `99 99` | app → PSU | 9 | Hỏi chuỗi version (app và recovery đều trả lời) |
+| STM32 SET_VERSION | `9A 9A` | app → PSU | 41 | Đặt chuỗi version ASCII 32 byte; chỉ ở recovery, sau ERASE và trước END |
+| STM32 trả lời version | `A9 A9` | PSU → app | 41 | Chuỗi version (rỗng = chưa đặt) |
 | STM32 ERASE | `96 96` | app → PSU | 9 | Xóa vùng app (chỉ ở recovery); một ACK duy nhất khi xóa xong |
 | STM32 ENTER_REC | `98 98` | app → PSU | 9 | Vào recovery: ACK rồi reset ~50 ms sau |
 
@@ -60,7 +63,7 @@ Bố cục: `[AB CD][81 81][Addr][CỤM 1..4: 4 x 48 B][SUPPLY 24 B][RTC 7 B][TR
 | 198-221 | Supply | 8 giá trị x 3 byte |
 | 222-228 | RTC | 7 byte, mỗi trường 1 byte |
 | 229-238 | Trip | 10 trip code, mỗi cái 1 byte |
-| 239-262 | Mở rộng firmware | 24 byte (xem 2.5): ACTL chỉ dùng 4 trạng thái an toàn, 4 cờ EN, 4 bộ đếm trip (theo cụm), slot, version; còn lại dự phòng |
+| 239-262 | Mở rộng firmware | 24 byte (xem 2.5): ACTL chỉ dùng 4 trạng thái an toàn, 4 cờ EN, 4 bộ đếm trip (theo cụm) và slot; còn lại dự phòng (kể cả byte 252-255, trước đây là version u32, nay `00`) |
 | 263-306 | Dự phòng | 44 byte |
 | 307-308 | CRC | CRC16 từ byte 5 (địa chỉ) đến byte 306 |
 | 309-310 | Đuôi | `E1 E2` |
@@ -159,7 +162,6 @@ Vùng dự phòng 24 byte được firmware APSU dùng làm vùng mở rộng. O
 | +6..+8 | 245-247 | 3 x 1 | `FW.SAFE_STATE3`, `FW.EN3`, `FW.TRIP_COUNT3` | Cụm 3 |
 | +9..+11 | 248-250 | 3 x 1 | `FW.SAFE_STATE4`, `FW.EN4`, `FW.TRIP_COUNT4` | Cụm 4 |
 | +12 | 251 | 1 | `FW.SLOT` | Slot đang chạy `A` (app) |
-| +13..+16 | 252-255 | 4 | `FW.VERSION` | Version ảnh đang chạy (u32 BE) |
 | +17..+23 | 256-262 | 7 | | 0 (dự phòng) |
 
 Giao diện hiện các giá trị này ở khung "Trạng thái PSU" (cột phải) trên trang PSU. Hai trạng thái **TRIPPED** và **LOCKOUT** ảnh hưởng tới điều khiển (mục 3).
@@ -382,25 +384,29 @@ Ghi chú theo firmware cho nhóm INA: `SHUNT_CAL` = 0 nghĩa là dùng giá tr�
 
 | Lệnh | CMD | Chiều | Dài | Ý nghĩa |
 |---|---|---|---|---|
-| BEGIN | `90 90` | PC → PSU | 21 | Size (≤ 639 KB), CRC32, version; ACK ngay; chỉ sau ERASE, nếu không `NotErased` |
+| BEGIN | `90 90` | PC → PSU | 17 | Size (1..0x9FC00 = 639 KB), CRC32; ACK ngay; chỉ sau ERASE, nếu không `NotErased` |
 | DATA | `91 91` | PC → PSU | 269 | 256 byte mỗi gói, gói cuối đệm `FF`, khung luôn 269 byte |
 | END | `92 92` | PC → PSU | 9 | PSU kiểm CRC32 toàn ảnh |
 | COMMIT | `93 93` | PC → PSU | 9 | ACK rồi reset, bootloader chạy app mới |
 | ACK | `94 94` | PSU → PC | 17 | Trả lời mọi lệnh trên |
-| INFO | `95 95` | PC → PSU | 9 | Hỏi slot, version, trạng thái trial |
+| INFO | `95 95` | PC → PSU | 9 | Hỏi slot, trạng thái trial (Info = 0) |
+| SET_VERSION | `9A 9A` | PC → PSU | 41 | Chuỗi version ASCII 32 byte; ACK (AckCmd `9A`) |
+| GET_VERSION | `99 99` | PC → PSU | 9 | Hỏi chuỗi version; trả lời `A9 A9` |
+| Trả lời version | `A9 A9` | PSU → PC | 41 | Chuỗi version |
 | ERASE | `96 96` | PC → PSU | 9 | Xóa vùng app (5 sector); **một ACK duy nhất khi xóa xong** (`Info = 1`) |
 | ENTER_REC | `98 98` | PC → PSU | 9 | App ACK rồi reset khoảng 50 ms sau để vào recovery |
 
-### 5.1 BEGIN `90 90` (21 byte)
+### 5.1 BEGIN `90 90` (17 byte)
 
-`[AB CD][90 90][Addr][Size 4 B][CRC32 4 B][Version 4 B][CRC 2 B][E1 E2]`
+`[AB CD][90 90][Addr][Size 4 B][CRC32 4 B][CRC 2 B][E1 E2]`
+
+Ví dụ (Addr = 1, Size 0x1000, CRC32 DEADBEEF): `AB CD 90 90 01 00 00 10 00 DE AD BE EF 2D 82 E1 E2`. Firmware mới không còn nhận BEGIN 21 byte cũ: phải nạp lại cả bootloader và app.
 
 | Byte | Dài | Trường | Ý nghĩa |
 |---|---|---|---|
 | 5 | 1 | Addr | Địa chỉ PSU |
 | 6-9 | 4 | Size | Kích thước ảnh (byte), tối đa 639 KB (`BadSize` nếu vượt) |
 | 10-13 | 4 | CRC32 | CRC32 (IEEE 802.3) của toàn ảnh |
-| 14-17 | 4 | Version | Version ảnh (mặc định app lấy thời điểm hiện tại) |
 
 ### 5.2 DATA `91 91` (269 byte)
 
@@ -419,9 +425,9 @@ Ghi chú theo firmware cho nhóm INA: `SHUNT_CAL` = 0 nghĩa là dùng giá tr�
 | Byte | Dài | Trường | Ý nghĩa |
 |---|---|---|---|
 | 5 | 1 | Addr | Địa chỉ PSU |
-| 6 | 1 | AckCmd | Mã 1 byte của lệnh được trả lời (`90`..`93`, `95`, `96`, `98`) |
+| 6 | 1 | AckCmd | Mã 1 byte của lệnh được trả lời (`90`..`93`, `95`, `96`, `98`, `9A`) |
 | 7 | 1 | Status | Mã trạng thái (bảng dưới) |
-| 8-11 | 4 | Info | Tùy lệnh: ERASE `1` = đã xóa xong; DATA lỗi sai thứ tự = seq cuối đã nhận; END lỗi CRC = CRC thiết bị tính được; INFO = version; lỗi xóa/ghi = mã HAL / địa chỉ |
+| 8-11 | 4 | Info | Tùy lệnh: ERASE `1` = đã xóa xong; DATA lỗi sai thứ tự = seq cuối đã nhận; END lỗi CRC = CRC thiết bị tính được; INFO = `0` (version là chuỗi, lấy bằng GET_VERSION); lỗi xóa/ghi = mã HAL / địa chỉ |
 | 12 | 1 | Slot | `A` = app đang chạy; `R` = bootloader recovery. Chỉ có nghĩa với INFO |
 | 13 | 1 | Trial | Chỉ có ở trả lời INFO **của app**: bit7 đã confirm, bit6..0 boot_count |
 
@@ -432,7 +438,7 @@ Ghi chú theo firmware cho nhóm INA: `SHUNT_CAL` = 0 nghĩa là dùng giá tr�
 | 2 | BadSize | Kích thước ảnh quá lớn (> 639 KB) |
 | 3 | BadSeq | Sai thứ tự gói |
 | 4 | CrcFail | CRC32 không khớp |
-| 5 | Busy | Thiết bị đang bận |
+| 5 | Busy | Thiết bị đang bận; với SET_VERSION: sai thời điểm (chưa ERASE hoặc đã END) |
 | 6 | NoCommitPending | Chưa có END thành công để commit |
 | 7 | EraseFail | Xóa sector thất bại |
 | 8 | WrongSlot | Reset_Handler của ảnh nằm ngoài vùng app (ảnh link sai địa chỉ) |
@@ -448,11 +454,17 @@ Stop-and-wait: app chờ ACK rồi mới gửi khung kế.
 1. **INFO** (chờ 200 ms): biết PSU đang ở `A` (app) hay `R` (recovery). Khi nạp, INFO đầu tiên được **hỏi lặp lại** (tới khoảng 30 s) để bắt được cửa sổ 300 ms đầu sau khi cấp nguồn lại: nếu app treo, cấp nguồn lại PSU và bootloader ở lại recovery khi nhận INFO trong 300 ms đầu. Kiểm tra file `.bin` (không rỗng, ≤ 639 KB) **trước** khi chuyển recovery hoặc xóa, để không xóa app khi ảnh không hợp lệ.
 2. **ENTER_REC** (chỉ khi slot `A`; chờ ACK 200 ms): PSU ACK rồi reset ~50 ms sau; `Refused` nghĩa là còn cụm DCM chưa OFF. Sau đó app chờ 300 ms rồi hỏi **INFO lặp lại (mỗi 100-200 ms, tối đa ~50 lần)** tới khi slot = `R`. Thiết bị đã ở recovery sẵn (board mới / app hỏng) thì **bỏ qua bước này**. Mất ACK ENTER_REC (thiết bị reset ngay) không coi là lỗi: app chuyển sang hỏi INFO.
 3. **ERASE** (chờ tối đa 40 s; yêu cầu phía PC ≥ 30 s, chưa đo): PSU trả **một ACK duy nhất khi xóa xong** (`Info = 1`). `EraseFail` hoặc trạng thái khác `OK` thì dừng.
-4. **BEGIN** (chờ 200 ms): size, CRC32, version; PSU ACK ngay. Gửi BEGIN mà chưa ERASE thì PSU trả `NotErased`.
-5. **DATA** từng gói 256 byte, khung luôn 269 byte, gói cuối đệm `FF` (chờ ACK 200 ms; hết giờ thì gửi lại, tối đa 5 lần). `BadSeq` thì nhảy theo seq PSU báo (`Info + 1`), tối đa 5 lần. `ProgFail` thì dừng.
-6. **END** (chờ 3 s): PSU kiểm CRC32; sai thì báo kèm CRC thiết bị tính được.
-7. **COMMIT** (chờ 200 ms): có tùy chọn tự kích hoạt ngay khi CRC32 đúng, hoặc hỏi người dùng trước. PSU ACK rồi reset, bootloader chạy app mới; hết giờ chờ ACK COMMIT được coi là thành công có điều kiện (PSU thường reset trước khi trả lời); nên đọc lại INFO để xác nhận.
-8. Hủy giữa chừng: PSU đã ở recovery với vùng app chưa hoàn chỉnh, cần nạp lại để khởi động app.
+4. **BEGIN** (chờ 200 ms): size, CRC32 (17 byte); PSU ACK ngay. Gửi BEGIN mà chưa ERASE thì PSU trả `NotErased`.
+5. **SET_VERSION** (ngay sau ACK của BEGIN; chờ ACK 200 ms, thử tối đa 3 lần): đặt chuỗi version ASCII = tên file `.bin` bỏ đuôi. PSU giữ chuỗi trong RAM rồi ghi vào header ảnh khi nhận END. Không có ACK hoặc status khác `0` thì **dừng** và báo lỗi (firmware cũ không biết lệnh này).
+6. **DATA** từng gói 256 byte, khung luôn 269 byte, gói cuối đệm `FF` (chờ ACK 200 ms; hết giờ thì gửi lại, tối đa 5 lần). `BadSeq` thì nhảy theo seq PSU báo (`Info + 1`), tối đa 5 lần. `ProgFail` thì dừng.
+7. **END** (chờ 3 s): PSU kiểm CRC32; sai thì báo kèm CRC thiết bị tính được.
+8. **COMMIT** (chờ 200 ms): có tùy chọn tự kích hoạt ngay khi CRC32 đúng, hoặc hỏi người dùng trước. PSU ACK rồi reset, bootloader chạy app mới. Mất ACK COMMIT (PSU thường reset trước khi trả lời) không coi là lỗi.
+9. **Xác nhận:** chờ ~1 s, hỏi **INFO** lặp lại tới khi slot `A`, rồi **GET_VERSION** (chờ 200 ms, thử tối đa 3 lần): chuỗi đọc về phải **bằng** chuỗi đã gửi, khác thì báo "version đọc lại không khớp".
+10. Hủy giữa chừng: PSU đã ở recovery với vùng app chưa hoàn chỉnh, cần nạp lại để khởi động app.
+
+**Chuỗi version từ tên file:** bỏ thư mục và đuôi (`PSU_v1.2.3_abc1234.bin` → `PSU_v1.2.3_abc1234`); chỉ ký tự `0x20..0x7E`, ký tự khác thay bằng `_` kèm cảnh báo; dài tối đa **32** ký tự, dài hơn thì từ chối và yêu cầu đổi tên (không tự cắt). Gợi ý quy ước: `PSU_v<major>.<minor>.<patch>_<7 ký tự git>.bin`. Nút "Đọc slot và version" hỏi INFO rồi GET_VERSION; chuỗi rỗng hiện "(chưa đặt)".
+
+**GET_VERSION `99 99`** (9 byte, `AB CD 99 99 Addr CRC16 E1 E2`; mẫu Addr = 1: `AB CD 99 99 01 F1 D1 E1 E2`) trả lời **`A9 A9`** 41 byte cùng bố cục SET_VERSION (byte 6-37 là chuỗi; rỗng nghĩa là chưa đặt, đang nạp dở, không có ảnh hợp lệ hoặc ảnh nạp bằng SWD). Lưu ý `99 99` cũng là CMD trả lời trạng thái FPGA của TRB (chiều TRB → PC, 40 byte); hai chiều khác nhau nên không xung đột vì app chỉ đăng ký `A9 A9` cho PSU.
 
 Cần mật khẩu kỹ sư để nạp; mọi cụm DCM phải OFF mới vào được recovery.
 

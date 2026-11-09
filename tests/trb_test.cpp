@@ -592,7 +592,7 @@ private slots:
         // Nạp code: FPGA (5555 6666 8888 AAAA 9999) và STM32 (9090 ... 9595)
         for (const char *hex : {"abcd5555", "abcd6666", "abcd8888", "abcdaaaa", "abcd9999"})
             QCOMPARE(cls(QByteArray::fromHex(hex) + QByteArray(10, 0)).group, int(LogFirmware));
-        QCOMPARE(cls(stmota::buildBegin(1, 100, 0, 1)).group, int(LogFirmware));
+        QCOMPARE(cls(stmota::buildBegin(1, 100, 0)).group, int(LogFirmware));
         QCOMPARE(cls(stmota::buildData(1, 0, QByteArray(4, 'x'))).group, int(LogFirmware));
         QCOMPARE(cls(stmota::buildCtrl(1, stmota::kInfo)).group, int(LogFirmware));
 
@@ -1515,7 +1515,7 @@ private slots:
                 if (i % 500 == 0) w.addEvent(t0 + i * 20, QStringLiteral("[TRIP] sự kiện %1").arg(i));
             }
             QList<double> pv(proto::psumon::kNumFields, 0.0);
-            pv[proto::psumon::kIdxVersion] = 20261013;
+            pv[proto::psumon::kIdxSlot] = 65;
             w.addPsu(t0 + 5, 3, int(model::Status::Ok), proto::psumon::buildFrame(3, pv));
             w.close();
         }
@@ -1543,8 +1543,8 @@ private slots:
         QVERIFY(d.events.first().text.contains("sự kiện 0"));
         QCOMPARE(logfile::deviceName(key), QStringLiteral("MB2 / TRB4"));
         QCOMPARE(d.series.value(logfile::deviceKey(logfile::KindPsu, 3)).count(), 1);
-        const proto::Field &ver = proto::psumon::table().fields().at(proto::psumon::kIdxVersion);
-        QCOMPARE(logfile::fieldValue(d.series.value(logfile::deviceKey(logfile::KindPsu, 3)), 0, ver), 20261013.0);
+        const proto::Field &slot = proto::psumon::table().fields().at(proto::psumon::kIdxSlot);
+        QCOMPARE(logfile::fieldValue(d.series.value(logfile::deviceKey(logfile::KindPsu, 3)), 0, slot), 65.0);
 
         // File bị cắt giữa chừng vẫn đọc được các khối đầy đủ trước đó, kèm cảnh báo.
         QFile f(path);

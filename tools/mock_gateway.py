@@ -168,13 +168,12 @@ def psu_frame(addr, rng, *, over=None, supply_over=None, trips=None, now=None):
     f[PSU_RTC_OFF:PSU_RTC_OFF + 7] = bytes([t.tm_year % 100, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, 0])
     for k, tr in enumerate(trips or []):
         f[PSU_TRIP_OFF + k] = tr & 0xFF
-    # Vùng mở rộng của firmware (offset 238): chỉ dùng trạng thái an toàn, PWR_EN, số lần trip, slot, version
+    # Vùng mở rộng của firmware (offset 238): chỉ dùng trạng thái an toàn, PWR_EN, số lần trip, slot (version u32 cũ nay là 00)
     ext = PSU_TRIP_OFF + PSU_TRIP_COUNT
     tripped = any(trips or [])
     for c in range(4):                            # mỗi cụm 3 byte: safe_state (TRIPPED/ON), PWR_EN (1/0), trip count
         f[ext + 3 * c:ext + 3 * c + 3] = bytes([4, 0, 1] if tripped else [3, 1, 0])
     f[ext + 12] = ord("A")                        # slot đang chạy
-    f[ext + 13:ext + 17] = (20261013).to_bytes(4, "big")
     return seal(f, PSU_CRC_START)
 
 

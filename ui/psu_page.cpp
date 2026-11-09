@@ -163,7 +163,7 @@ QWidget *PsuPage::buildControl()
     form->addRow(send);
     connect(send, &QPushButton::clicked, this, &PsuPage::sendControl);
 
-    // Trạng thái firmware theo từng cụm (an toàn, chân EN, số lần trip) + slot và version; đặt ở cột phải để bảng DCM giữ đủ chiều cao.
+    // Trạng thái firmware theo từng cụm (an toàn, chân EN, số lần trip) + và slot; đặt ở cột phải để bảng DCM giữ đủ chiều cao.
     auto *st = new QGroupBox(QStringLiteral("Trạng thái PSU"));
     auto *fl = new QGridLayout(st);
     fl->setVerticalSpacing(4);
@@ -192,11 +192,10 @@ QWidget *PsuPage::buildControl()
         fl->addWidget(card(m_en, 56), c + 1, 2);
         fl->addWidget(card(m_tripCount, 40), c + 1, 3);
     }
-    auto *slotName = new QLabel(QStringLiteral("Slot / Version"));
+    auto *slotName = new QLabel(QStringLiteral("Slot"));
     theme::setRole(slotName, "muted");
     fl->addWidget(slotName, psumon::kNumCluster + 1, 0, 1, 2);
     fl->addWidget(card(m_fw, 30), psumon::kNumCluster + 1, 2);
-    fl->addWidget(card(m_fw, 70), psumon::kNumCluster + 1, 3);
     theme::addShadow(st);
 
     theme::addShadow(ctl);   // thẻ tĩnh
@@ -289,8 +288,7 @@ void PsuPage::refresh()
             m_tripCount[c]->setText(num(s.values.at(psumon::kIdxTripCount(c))));
         }
         const int slot = int(s.values.at(psumon::kIdxSlot));
-        m_fw[0]->setText(slot == 'A' || slot == 'B' || slot == 'R' ? QString(QChar(slot)) : QStringLiteral("?"));
-        m_fw[1]->setText(num(s.values.at(psumon::kIdxVersion)));
+        m_fw[0]->setText(slot == 'A' || slot == 'R' ? QString(QChar(slot)) : QStringLiteral("?"));
     } else {
         for (QList<QLabel *> *g : {&m_safe, &m_en, &m_tripCount, &m_fw})
             for (QLabel *l : *g) { l->setText(kDash); l->setToolTip({}); l->setStyleSheet({}); }

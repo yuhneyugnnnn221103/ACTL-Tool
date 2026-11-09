@@ -53,7 +53,7 @@ static FieldTable build()
     }
     for (const char *n : kRtc) add(QStringLiteral("RTC.") + n, 1, QStringLiteral("RTC"));
     for (int i = 1; i <= kNumTrip; ++i) add(QStringLiteral("TRIP%1").arg(i), 1, QStringLiteral("Trip"));
-    // Mở rộng firmware (24 byte, byte 239..262): app chỉ dùng 14 trường (từng cụm 3 byte, slot, version), các byte còn lại là dự phòng và bỏ qua.
+    // Mở rộng firmware (24 byte, byte 239..262): app chỉ dùng 13 trường (từng cụm 3 byte, slot), các byte còn lại là dự phòng và bỏ qua.
     const QString fw = QStringLiteral("Firmware");
     const int ext = off;
     auto at = [&](const QString &name, int rel, int size) { t.add(name, ext + rel, size, 1.0, {}, fw); };
@@ -64,7 +64,6 @@ static FieldTable build()
         at(QStringLiteral("FW.TRIP_COUNT%1").arg(c), rel + 2, 1);
     }
     at(QStringLiteral("FW.SLOT"), 12, 1);
-    at(QStringLiteral("FW.VERSION"), 13, 4);
     off = ext + 22;
     Q_ASSERT(t.size() == kNumFields && off == 260);   // trường cuối kết thúc ở byte 260; byte 263..306 dự phòng rồi CRC, E1 E2
     return t;

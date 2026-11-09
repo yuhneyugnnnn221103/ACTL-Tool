@@ -1,4 +1,5 @@
 #include "stm_ota_proto.h"
+#include <QFileInfo>
 
 namespace proto::stmota {
 
@@ -29,13 +30,49 @@ static QByteArray sealed(QByteArray f, quint8 cmd, quint8 addr)
     return f;
 }
 
-QByteArray buildBegin(quint8 addr, quint32 size, quint32 crc, quint32 version)
+QByteArray buildBegin(quint8 addr, quint32 size, quint32 crc)
 {
-    QByteArray f(21, 0);
+    QByteArray f(17, 0);
     put(f, 5, size, 4);
     put(f, 9, crc, 4);
-    put(f, 13, version, 4);
     return sealed(f, kBegin, addr);
+}
+
+static bool printable(unsigned char c) { return c >= 0x20 && c <= 0x7E; }
+
+QByteArray buildSetVersion(quint8 addr, const QString &version)
+{
+    QByteArray f(kVersionLength, 0);
+    const QByteArray ascii = version.toLatin1().left(kVersionChars);
+    for (int i = 0; i < ascii.size(); ++i) f[5 + i] = printable(quint8(ascii.at(i))) ? ascii.at(i) : '\0';   // ký tự lạ thành 00: firmware cắt chuỗi tại đó
+    return sealed(f, kSetVersion, addr);
+}
+
+core::FrameSpec versionReplySpec() { return {cmdBytes(kVersionReply), kVersionLength, 4, true, QStringLiteral("STM32 trả lời version")}; }
+
+QString parseVersionReply(const QByteArray &f)
+{
+    QString s;
+    for (int i = 5; i < 5 + kVersionChars && i < f.size(); ++i) {
+        if (!printable(quint8(f.at(i)))) break;
+        s += QChar(quint8(f.at(i)));
+    }
+    return s;
+}
+
+VersionName versionFromFileName(const QString &path)
+{
+    VersionName v;
+    const QString base = QFileInfo(path).completeBaseName();
+    for (const QChar &c : base) {
+        const bool ok = c.unicode() >= 0x20 && c.unicode() <= 0x7E;
+        v.text += ok ? c : QLatin1Char('_');
+        v.replaced = v.replaced || !ok;
+    }
+    if (v.text.isEmpty()) v.error = QStringLiteral("tên file rỗng");
+    else if (v.text.size() > kVersionChars)
+        v.error = QStringLiteral("tên file (không kể đuôi) dài %1 ký tự, tối đa %2: hãy đổi tên file (không tự cắt vì dễ mất mã commit ở cuối)").arg(v.text.size()).arg(kVersionChars);
+    return v;
 }
 
 QByteArray buildData(quint8 addr, quint16 seq, const QByteArray &chunk)
@@ -69,7 +106,7 @@ QString statusText(quint8 s)
     case BadSize:         return QStringLiteral("kích thước ảnh quá lớn (tối đa 639 KB)");
     case BadSeq:          return QStringLiteral("sai thứ tự chunk");
     case CrcFail:         return QStringLiteral("CRC32 không khớp");
-    case Busy:            return QStringLiteral("thiết bị đang bận");
+    case Busy:            return QStringLiteral("thiết bị đang bận / sai thời điểm (SET_VERSION chỉ sau ERASE và trước END)");
     case NoCommitPending: return QStringLiteral("chưa có END thành công để commit");
     case EraseFail:       return QStringLiteral("xóa sector thất bại");
     case WrongSlot:       return QStringLiteral("SAI VÙNG: Reset_Handler của ảnh nằm ngoài vùng app (ảnh link sai địa chỉ)");
