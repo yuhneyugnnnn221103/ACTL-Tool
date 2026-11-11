@@ -98,7 +98,11 @@ void TrbConfig::sendWrite()
     m_stage = Stage::Write;
     core::Request r;
     r.data = gwhdr::add(gwhdr::Trb, trbcfg::buildWrite(m_task.dev.first, m_task.dev.second, m_task.values));
-    r.gapMs = m_writeGapMs; // TRB ghi flash xong mới trả lời lệnh hỏi (mặc định chờ 3 s sau lệnh ghi): không có ACK, nên chờ rồi mới gửi A3 đọc lại
+    // TRB ghi flash xong thì phản hồi A4 (bản cấu hình đang lưu). m_writeGapMs (mặc định 3 s) là THỜI GIAN CHỜ phản hồi đó: nhận được sớm thì
+    // thoát ngay; không nhận được (hết giờ) thì mới hỏi lại bằng A3.
+    r.replyCmd = trbcfg::readReplyCmd();
+    r.timeoutMs = m_writeGapMs;
+    r.retries = 0;
     m_waitId = m_link->send(r);
 }
 
@@ -108,8 +112,13 @@ void TrbConfig::onRequestFinished(quint64 id, bool ok, const core::Frame &reply)
     const int mb = m_task.dev.first, trb = m_task.dev.second;
 
     if (m_stage == Stage::Write) {
-        if (ok) sendRead(Stage::Verify);
-        else done(false, QStringLiteral("không gửi được (chưa kết nối Gateway)"));
+        // Có phản hồi A4 đúng địa chỉ và khớp giá trị vừa ghi: xong, không cần A3. Phản hồi lệch / sai địa chỉ / hết giờ: hỏi lại bằng A3 để chốt.
+        if (ok && reply.at(trbcfg::kOffMb) == mb && reply.at(trbcfg::kOffTrb) == trb) {
+            const QList<double> got = trbcfg::table().decode(reply.raw);
+            absorb(got);
+            if (diffNames(got).isEmpty()) { done(true, QStringLiteral("đã ghi, TRB phản hồi A4 khớp")); return; }
+        }
+        sendRead(Stage::Verify);
         return;
     }
 
@@ -121,11 +130,7 @@ void TrbConfig::onRequestFinished(quint64 id, bool ok, const core::Frame &reply)
     }
 
     const QList<double> got = trbcfg::table().decode(reply.raw);
-    m_cache.insert(key(mb, trb), got);
-    if (m_thresholds)
-        for (const trbcfg::ThresholdMap &m : trbcfg::thresholdMap())
-            m_thresholds->set(mb, trb, m.monitorField, {got.at(m.cfgMin), got.at(m.cfgMax)});
-    emit configRead(mb, trb);
+    absorb(got);
 
     if (m_stage == Stage::Read) {
         if (!m_task.write) { done(true, QStringLiteral("đã đọc cấu hình")); return; }
@@ -136,12 +141,30 @@ void TrbConfig::onRequestFinished(quint64 id, bool ok, const core::Frame &reply)
     }
 
     // Verify
-    QStringList diff;
-    for (int i = 0; i < got.size(); ++i)
-        if (got.at(i) != m_task.values.at(i)) diff << trbcfg::table().fields().at(i).group + '.' + trbcfg::table().fields().at(i).name;
+    const QStringList diff = diffNames(got);
     if (diff.isEmpty()) done(true, QStringLiteral("đã ghi và đọc lại khớp"));
     else done(false, QStringLiteral("đọc lại KHÔNG khớp %1 trường: %2%3").arg(diff.size())
                          .arg(diff.mid(0, 5).join(", "), diff.size() > 5 ? QStringLiteral(", …") : QString()));
+}
+
+// Lưu bản cấu hình đọc được: cập nhật bộ nhớ đệm, ngưỡng cảnh báo và báo cho giao diện.
+void TrbConfig::absorb(const QList<double> &got)
+{
+    const int mb = m_task.dev.first, trb = m_task.dev.second;
+    m_cache.insert(key(mb, trb), got);
+    if (m_thresholds)
+        for (const trbcfg::ThresholdMap &m : trbcfg::thresholdMap())
+            m_thresholds->set(mb, trb, m.monitorField, {got.at(m.cfgMin), got.at(m.cfgMax)});
+    emit configRead(mb, trb);
+}
+
+// Tên các trường khác với giá trị vừa ghi (rỗng = khớp hoàn toàn).
+QStringList TrbConfig::diffNames(const QList<double> &got) const
+{
+    QStringList diff;
+    for (int i = 0; i < got.size() && i < m_task.values.size(); ++i)
+        if (got.at(i) != m_task.values.at(i)) diff << trbcfg::table().fields().at(i).group + '.' + trbcfg::table().fields().at(i).name;
+    return diff;
 }
 
 void TrbConfig::done(bool ok, const QString &message)

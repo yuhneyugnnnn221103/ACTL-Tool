@@ -17,7 +17,7 @@ struct Settings {
     int logMaxFileMb;      // tự chia file log khi đạt chừng này MB; 0 = không chia
     QString directPort;    // Debug COM: cổng COM nối thẳng xuống thiết bị
     int directBaud, directPeriodMs;
-    int fpgaEraseWaitSec, fpgaPacketGapMs, fpgaBootWaitMs;
+    int fpgaEraseWaitSec, fpgaPacketGapMs, fpgaBootWaitSec;
     int psuCount, psuFirstAddr;
     QString passwordHash;      // rỗng = mật khẩu mặc định
     int lockMinutes;
@@ -47,7 +47,7 @@ struct Settings {
         s.trbCheckCrc = get("trb/checkCrc", true).toBool();
         s.psuCheckCrc = get("psu/checkCrc", true).toBool();
         s.cfgReadTimeoutMs = get("config/replyWaitMs", 2000).toInt(); // chờ trả lời lệnh đọc cấu hình TRB/PSU (thử tối đa 2 lần). Khóa mới vì các khóa cũ config/readTimeoutMs, config/replyTimeoutMs đã bị ghi 3000 / 200 vào file ini ở các lần chạy trước
-        s.cfgWriteGapMs = get("config/flashWaitMs", 3000).toInt();   // sau lệnh ghi cấu hình: chờ TRB/PSU ghi xong flash rồi mới gửi lệnh đọc lại (khóa mới, khóa cũ config/writeGapMs đã bị ghi 300)
+        s.cfgWriteGapMs = get("config/flashWaitMs", 3000).toInt();   // sau lệnh ghi cấu hình: TRB phản hồi A4 trong khoảng này (thoát sớm khi nhận được; hết giờ thì hỏi A3); PSU không phản hồi nên chờ hết khoảng này rồi hỏi 03 03 (khóa mới, khóa cũ config/writeGapMs đã bị ghi 300)
         s.logEnabled = get("log/enabled", true).toBool();
         s.logAutoStart = get("log/autoStart", true).toBool(); // false: mở app ở trạng thái chưa ghi, bấm "Bắt đầu ghi" hoặc hẹn giờ
         s.logDir = get("log/dir", appDir + "/logs").toString();
@@ -61,7 +61,7 @@ struct Settings {
         s.psuDefaultConfigFile = get("psu/defaultConfigFile", appDir + "/psu_default_config.json").toString();
         s.fpgaEraseWaitSec = get("fpgaOta/eraseWaitSec", 420).toInt();
         s.fpgaPacketGapMs = get("fpgaOta/packetGapMs", 5).toInt();
-        s.fpgaBootWaitMs = get("fpgaOta/bootDelayMs", 10000).toInt();   // sau lệnh boot chờ chừng này rồi mới hỏi 88 (đổi được ở ô trên tab Nạp code FPGA; khóa mới vì khóa cũ fpgaOta/bootWaitMs đã bị ghi 3000)
+        s.fpgaBootWaitSec = get("fpgaOta/bootWaitSec", 10).toInt();   // "Thời gian chờ boot" (giây): sau lệnh boot chờ chừng này rồi mới hỏi 88 (đổi được ở ô trên tab Nạp code FPGA; khóa mới vì các khóa cũ bootWaitMs / bootDelayMs tính bằng ms)
         s.psuCount = get("psu/count", 5).toInt();
         s.psuFirstAddr = get("psu/firstAddrRaw", 0).toInt(); // địa chỉ PSU trong bản tin: 0..4 (hiển thị 1..5). Khóa mới vì khóa cũ psu/firstAddr đã bị ghi 1 vào file ini ở các lần chạy trước
         s.passwordHash = get("auth/passwordHash", "").toString();

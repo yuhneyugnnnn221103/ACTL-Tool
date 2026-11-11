@@ -575,6 +575,11 @@ class ConfigResponder:
                 self.log(f"  {kind} {name}: lưu SAI một byte (offset {pos}) để thử đọc lại không khớp")
             store[key] = bytes(body)
             self.log(f"  {kind} {name}: đã lưu {len(f)} byte")
+            if is_trb and f[4] != 0xFF and f[5] != 0xFF:       # TRB ghi flash xong thì phản hồi A4 (bản đang lưu); PSU không phản hồi lệnh ghi
+                reply = bytearray(store[key])
+                reply[2] = reply[3] = 0xA4
+                self.log(f"  {kind} {name}: phản hồi A4 sau khi ghi")
+                return [seal(reply, 4)]
             return []
         if self.rng.random() < self.drop:
             self.log(f"  {kind} {name}: bỏ không trả lời")
@@ -663,7 +668,8 @@ def cmd_selftest(_args):
     print("cấu hình, Calib qua cùng kết nối TCP (có DEV + LEN sau AB CD):")
     r = ConfigResponder(rng=random.Random(2), log=lambda *_: None)
     w = bytearray(TRB_CFG_LEN); w[2] = w[3] = 0xA1; w[4], w[5] = 6, 2; w[10:14] = b"\x01\x02\x03\x04"
-    check(r.feed(env(1, seal(w, 4))) == [], "ghi TRB không có trả lời")
+    out = r.feed(env(1, seal(w, 4)))
+    check(len(out) == 1 and out[0][2:4] == b"\xA4\xA4" and out[0][10:14] == b"\x01\x02\x03\x04", "ghi TRB: TRB phản hồi A4 sau khi ghi")
     rd = bytearray(TRB_CFG_READ_LEN); rd[2] = rd[3] = 0xA3; rd[4], rd[5] = 6, 2
     out = r.feed(env(1, seal(rd, 4)))
     check(len(out) == 1 and len(out[0]) == TRB_CFG_LEN and out[0][2:4] == b"\xA4\xA4" and out[0][10:14] == b"\x01\x02\x03\x04"

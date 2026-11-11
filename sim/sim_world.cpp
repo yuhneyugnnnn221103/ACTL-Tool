@@ -98,10 +98,11 @@ QByteArray SimWorld::handle(const core::Frame &frame)
     case 0x18:                                       // Calib: không có ACK (chỉ đếm, mô hình chưa lưu giá trị)
         ++m_stats.calibs;
         return {};
-    case 0xA1:                                       // ghi cấu hình: không có ACK
+    case 0xA1:                                       // ghi cấu hình: TRB ghi xong flash thì phản hồi A4 (bản cấu hình đang lưu); broadcast thì không ai phản hồi
         ++m_stats.configWrites;
         for (TrbModel *m : list) if (m->online()) m->writeConfig(frame);
-        return {};
+        if (list.size() != 1 || !list.first()->online()) return {};
+        return list.first()->configReply();
     case 0xA3:                                       // hỏi cấu hình
         ++m_stats.configReads;
         if (list.size() != 1 || !list.first()->online()) return {};

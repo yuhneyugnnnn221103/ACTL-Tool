@@ -54,7 +54,7 @@ Giao thức đổi trong `proto/` thì app và giả lập đổi theo, không c
 
 **Luật Debug.** TRB đang debug tự gửi khung giám sát không cần Gateway hỏi. `actl_sim` bắt chước điều này (chu kỳ cấu hình được) và **đếm xung đột** nếu có từ hai TRB trở lên cùng debug, để test rằng app (`TrbControl::check`) không bao giờ để chuyện đó xảy ra.
 
-**Cấu hình.** `A3 A3`/`03 03` trả `A4 A4`/`82 82` từ cấu hình đang giữ; `A1 A1`/`04 04` ghi vào model, không có ACK (đúng giao thức). Có tùy chọn "ghi sai" để test luồng đọc lại và so sánh, và "bỏ trả lời" để test thử lại (tối đa 2 lần).
+**Cấu hình.** `A3 A3`/`03 03` trả `A4 A4`/`82 82` từ cấu hình đang giữ; `A1 A1` ghi vào model rồi phản hồi `A4 A4` (bản đang lưu, như TRB thật; broadcast thì không ai phản hồi), `04 04` ghi vào model, PSU không phản hồi lệnh ghi. Có tùy chọn "ghi sai" để test luồng đọc lại và so sánh, và "bỏ trả lời" để test thử lại (tối đa 2 lần).
 
 **Nạp FPGA.** Máy trạng thái theo `99 99`: erase → bận `T` giây (có hệ số tăng tốc) → nhận gói theo thứ tự, cập nhật `CODE/STAT/BOOTSTS/WBSTAR`; có thể bơm lỗi ghi flash ở gói N, mất gói, UART frame error; boot đổi `BOOTSTS`. Hỗ trợ cả broadcast (`FF/FF`: nhận mà không trả lời) và gửi riêng.
 

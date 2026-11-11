@@ -6,7 +6,8 @@
 namespace services {
 
 // Đọc/ghi cấu hình TRB qua link Ethernet, lần lượt từng thiết bị.
-// Ghi không có ACK nên luôn đọc lại để kiểm tra. Mỗi lần đọc được cấu hình thì cập nhật ngưỡng cảnh báo.
+// Sau lệnh ghi A1, TRB ghi flash xong thì phản hồi A4: nhận được (trong thời gian chờ ghi, mặc định 3 s) và khớp thì xong, không cần A3;
+// hết giờ hoặc phản hồi lệch thì hỏi lại bằng A3 để chốt. Mỗi lần đọc được cấu hình thì cập nhật ngưỡng cảnh báo.
 class TrbConfig : public QObject {
     Q_OBJECT
 public:
@@ -41,6 +42,8 @@ private:
     void sendRead(Stage stage);
     void sendWrite();
     void onRequestFinished(quint64 id, bool ok, const core::Frame &reply);
+    void absorb(const QList<double> &got);
+    QStringList diffNames(const QList<double> &got) const;
     void done(bool ok, const QString &message);
 
     core::Link *m_link;

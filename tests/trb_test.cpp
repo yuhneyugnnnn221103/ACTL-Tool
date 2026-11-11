@@ -63,6 +63,7 @@ struct FakeTrb {
     QHash<int, QList<double>> config;     // khóa mb << 8 | trb
     int corruptField = -1;                // >= 0: lưu sai trường này để thử đọc lại không khớp
     int writes = 0;
+    bool replyToWrite = false;            // true: ghi xong phản hồi A4 như TRB thật (bản đang lưu)
 
     static int key(int mb, int trb) { return mb << 8 | trb; }
 
@@ -75,6 +76,7 @@ struct FakeTrb {
                 ++writes;
                 config[key(mb, trb)] = trbcfg::table().decode(d);
                 if (corruptField >= 0) config[key(mb, trb)][corruptField] += 1;
+                if (replyToWrite) t->injectLater(configReply(mb, trb, config.value(key(mb, trb))));
             } else if (quint8(d.at(2)) == 0xA3 && config.contains(key(mb, trb))) {
                 t->injectLater(configReply(mb, trb, config.value(key(mb, trb))));
             }
@@ -1307,7 +1309,41 @@ private slots:
         QVERIFY(!thr.get(4, 7, trbmon::kIdxTrbV).isSet());
     }
 
-    // TRB ghi flash xong mới trả lời: sau lệnh ghi chờ writeGap (mặc định 3 s) rồi mới gửi A3 hỏi lại.
+    // TRB ghi flash xong thì phản hồi A4: nhận được sớm và khớp thì thoát ngay (không chờ hết 3 s, không gửi A3).
+    void configWriteFinishesEarlyOnA4Reply()
+    {
+        Rig rig("monitor");
+        services::TrbConfig::registerFrames(rig.registry, true);
+        rig.link.start();
+        FakeTrb trb;
+        trb.replyToWrite = true;
+        trb.attach(rig.transport);
+        model::Thresholds thr(&trbmon::table());
+        services::TrbConfig cfg(&rig.link, &thr, QString(), 500, 3000);   // thời gian chờ phản hồi sau ghi: 3 s
+        QSignalSpy finished(&cfg, &services::TrbConfig::finished), device(&cfg, &services::TrbConfig::deviceFinished);
+        QElapsedTimer clock;
+        clock.start();
+        cfg.writeFull({1, 2}, zeros(trbcfg::table().size()));
+        QVERIFY(finished.wait(2500));
+        QVERIFY(clock.elapsed() < 1500);                                  // thoát sớm, xa mức 3000 ms
+        QVERIFY(device.last().at(2).toBool());
+        QVERIFY(device.last().at(3).toString().contains("A4"));
+        int reads = 0;
+        for (const QByteArray &d : rig.transport->written) reads += quint8(FakeTransport::unwrapped(d)[2]) == 0xA3;
+        QCOMPARE(reads, 0);                                                // không cần A3 hỏi lại
+
+        // Phản hồi A4 lệch giá trị đã ghi: chưa kết luận, hỏi lại bằng A3 để chốt (ở đây vẫn lệch nên báo không khớp).
+        trb.corruptField = 5;
+        cfg.writeFull({1, 2}, zeros(trbcfg::table().size()));
+        QVERIFY(finished.wait(3000));
+        reads = 0;
+        for (const QByteArray &d : rig.transport->written) reads += quint8(FakeTransport::unwrapped(d)[2]) == 0xA3;
+        QCOMPARE(reads, 1);
+        QVERIFY(!device.last().at(2).toBool());
+        QVERIFY(device.last().at(3).toString().contains("KHÔNG khớp"));
+    }
+
+    // Không có phản hồi A4 (hết thời gian chờ ghi): sau writeGap mới gửi A3 hỏi lại.
     void configWaitsAfterWriteBeforeAskingBack()
     {
         Rig rig("monitor");

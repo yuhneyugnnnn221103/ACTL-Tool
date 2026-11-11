@@ -120,11 +120,10 @@ QWidget *FirmwarePage::buildFpgaTab()
     m_fpgaGap->setValue(m_ctx.settings.fpgaPacketGapMs);
     m_fpgaGap->setSuffix(QStringLiteral(" ms"));
     m_fpgaBootDelay = new QSpinBox;
-    m_fpgaBootDelay->setRange(0, 600000);
-    m_fpgaBootDelay->setSingleStep(1000);
-    m_fpgaBootDelay->setValue(m_ctx.settings.fpgaBootWaitMs);
-    m_fpgaBootDelay->setSuffix(QStringLiteral(" ms"));
-    m_fpgaBootDelay->setToolTip(QStringLiteral("Sau khi gửi lệnh boot, chờ chừng này (FPGA nạp lại bitstream) rồi mới dùng lệnh 88 hỏi lại. Mặc định 10000 ms."));
+    m_fpgaBootDelay->setRange(0, 600);
+    m_fpgaBootDelay->setValue(m_ctx.settings.fpgaBootWaitSec);
+    m_fpgaBootDelay->setSuffix(QStringLiteral(" s"));
+    m_fpgaBootDelay->setToolTip(QStringLiteral("Sau khi gửi lệnh boot, chờ chừng này (FPGA nạp lại bitstream) rồi mới dùng lệnh 88 hỏi lại. Mặc định 10 s."));
 
     auto button = [this](const QString &text, auto slot) {
         auto *b = new QPushButton(text);
@@ -205,7 +204,7 @@ QWidget *FirmwarePage::buildFpgaTab()
     form->addRow(QString(), unicast);
     form->addRow(QStringLiteral("Chờ sau khi xóa flash"), m_fpgaEraseMin);
     form->addRow(QStringLiteral("Nghỉ giữa các gói"), m_fpgaGap);
-    form->addRow(QStringLiteral("Chờ sau lệnh boot trước khi hỏi 88"), m_fpgaBootDelay);
+    form->addRow(QStringLiteral("Thời gian chờ boot"), m_fpgaBootDelay);
     auto *buttons = new QHBoxLayout;
     for (QPushButton *b : {check, erase, load, boot, m_fpgaSkip, m_fpgaCancel}) buttons->addWidget(b);
     theme::setRole(erase, "danger");
@@ -301,7 +300,7 @@ FpgaOta::Options FirmwarePage::fpgaOptions() const
     o.broadcast = m_fpgaBroadcast->isChecked();
     o.eraseWaitSec = m_fpgaEraseMin->value() * 60;
     o.packetGapMs = m_fpgaGap->value();
-    o.bootWaitMs = m_fpgaBootDelay->value();
+    o.bootWaitMs = m_fpgaBootDelay->value() * 1000;
     o.version = m_fpgaVersion;
     return o;
 }
