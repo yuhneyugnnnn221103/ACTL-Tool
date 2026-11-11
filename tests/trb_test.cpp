@@ -990,19 +990,18 @@ private slots:
         QVERIFY(!store.trb(1, 4).noReply);
         QCOMPARE(store.trb(1, 4).reply.okTotal, quint64(1));
 
-        answer = false;                                             // thiết bị im lặng: hết thời gian chờ = X ngay, rồi mất kết nối
-        poller.pollOnce();
-        QTRY_COMPARE_WITH_TIMEOUT(poller.timeouts(), quint64(1), 1000);
-        QVERIFY(store.trb(1, 4).noReply);
-        QCOMPARE(store.trb(1, 4).status, model::Status::Ok);
-        for (int i = 2; i <= 3; ++i) {
+        answer = false;                                             // thiết bị im lặng: không có khung nào, nên KHÔNG có X (X chỉ khi nhận khung rỗng)
+        for (int i = 1; i <= 3; ++i) {
             poller.pollOnce();
             QTRY_COMPARE_WITH_TIMEOUT(poller.timeouts(), quint64(i), 1000);
         }
-        QCOMPARE(store.trb(1, 4).status, model::Status::Lost);      // đủ 3 lần liên tiếp như khung rỗng của Gateway
-        QCOMPARE(store.trb(1, 4).reply.emptyTotal, quint64(3));
+        QVERIFY(!store.trb(1, 4).noReply);
+        QCOMPARE(store.trb(1, 4).status, model::Status::Ok);        // không có cơ chế "3 lần thì mất kết nối"
+        QCOMPARE(store.trb(1, 4).reply.emptyTotal, quint64(3));      // nhưng vẫn tính vào thống kê lỗi
+        store.markStale(store.trb(1, 4).lastSeenMs + 5000, 3000);   // quá hạn không có khung nào: "?" (Lost)
+        QCOMPARE(store.trb(1, 4).status, model::Status::Lost);
 
-        poller.setTarget(services::DirectPoller::Kind::Psu, 2);     // PSU: lệnh 02 02, im lặng thì cũng X
+        poller.setTarget(services::DirectPoller::Kind::Psu, 2);     // PSU: lệnh 02 02, im lặng thì cũng không đặt X
         poller.pollOnce();
         QTRY_COMPARE_WITH_TIMEOUT(poller.timeouts(), quint64(4), 1000);
         QCOMPARE(rig.transport->written.last(), proto::directq::buildPsu(2));
@@ -1021,14 +1020,14 @@ private slots:
         QCOMPARE(rig.transport->written.size(), before + 1);
     }
 
-    void gatewayEmptyFrameMarksTheSilentTrbAsLost()
+    // X chỉ khi nhận khung rỗng; ? chỉ khi không nhận được khung nào trong staleMs; không có cơ chế "đủ N khung rỗng thì ?".
+    void gatewayEmptyFrameMarksTrbWithXOnly()
     {
         Rig rig("monitor");
         services::TrbMonitor::registerFrames(rig.registry, true);
         rig.link.start();
         model::DeviceStore store(1, 8);
         services::TrbMonitor mon(&rig.link, &store, nullptr);
-        mon.setEmptyLimit(3);
         QSignalSpy updated(&mon, &services::TrbMonitor::trbUpdated);
         QList<double> v = zeros(trbmon::kNumFields);
         v[trbmon::kIdxPg] = 0x0F;
@@ -1057,24 +1056,30 @@ private slots:
         rig.transport->inject(burst({}));                    // cả 8 TRB có số liệu
         QCOMPARE(store.count(model::Status::Ok), 8);
         QVERIFY(!store.trb(0, 3).noReply);                   // có bản tin thật: hết X
-        rig.transport->inject(burst({3}));                   // 1 và 2 lần liên tiếp: chưa đủ ngưỡng nhưng X hiện ngay
+        for (int i = 0; i < 5; ++i) rig.transport->inject(burst({3}));   // nhiều khung rỗng liên tiếp: vẫn X, KHÔNG thành mất kết nối
         QVERIFY(store.trb(0, 3).noReply);
-        rig.transport->inject(burst({3}));
         QCOMPARE(store.trb(0, 3).status, model::Status::Ok);
-        rig.transport->inject(burst({3}));                   // lần thứ 3 liên tiếp: mất kết nối, số liệu cuối còn nguyên
-        QCOMPARE(store.trb(0, 3).status, model::Status::Lost);
-        QCOMPARE(store.trb(0, 3).lastLive, model::Status::Ok);
         QCOMPARE(store.trb(0, 4).status, model::Status::Ok);
         QVERIFY(store.trb(0, 3).frames > 0);
+        // Còn nhận được khung rỗng thì không phải "?", dù số liệu thật đã cũ; không nhận được khung nào quá hạn thì "?" và hết X, giữ số liệu cuối.
+        const qint64 now = store.trb(0, 3).lastRxMs + 10000;
+        store.markEmpty(0, 3, now - 100);
+        store.markStale(now, 3000);
+        QCOMPARE(store.trb(0, 3).status, model::Status::Ok);
+        QVERIFY(store.trb(0, 3).noReply);
+        store.markStale(now + 5000, 3000);
+        QCOMPARE(store.trb(0, 3).status, model::Status::Lost);
+        QVERIFY(!store.trb(0, 3).noReply);
+        QCOMPARE(store.trb(0, 3).lastLive, model::Status::Ok);
         rig.transport->inject(burst({}));                    // có tin lại: hồi phục
         QCOMPARE(store.trb(0, 3).status, model::Status::Ok);
-        {   // thống kê trả lời: TRB 3 đã nhận 6 lần = rỗng, có, rỗng, rỗng, rỗng, có
+        {   // thống kê trả lời: TRB 3 đã nhận 8 lần = rỗng, có, 5 lần rỗng, có
             const model::ReplyStats &r = store.trb(0, 3).reply;
             QCOMPARE(r.okTotal, quint64(2));
-            QCOMPARE(r.emptyTotal, quint64(4));
-            QCOMPARE(r.count(), 6);
-            QCOMPARE(r.windowEmpty, 4);
-            QVERIFY(qAbs(r.rate() - 4.0 / 6) < 1e-9);
+            QCOMPARE(r.emptyTotal, quint64(6));
+            QCOMPARE(r.count(), 8);
+            QCOMPARE(r.windowEmpty, 6);
+            QVERIFY(qAbs(r.rate() - 6.0 / 8) < 1e-9);
             QCOMPARE(store.trb(0, 4).reply.emptyTotal, quint64(0));
             model::ReplyStats w;   // cửa sổ trượt: 150 lần rỗng rồi 100 lần có dữ liệu -> cửa sổ chỉ còn lần có dữ liệu, tổng cộng dồn vẫn giữ
             for (int i = 0; i < 150; ++i) w.add(true);
@@ -1083,9 +1088,10 @@ private slots:
             QCOMPARE(w.rate(), 0.0);
             QCOMPARE(w.emptyTotal, quint64(150));
         }
-        rig.transport->inject(burst({3}));                   // chuỗi liên tiếp phải tính lại từ đầu sau khi có tin
+        rig.transport->inject(burst({3}));                   // khung rỗng sau khi hồi phục: X, trạng thái giữ nguyên
         rig.transport->inject(burst({3}));
         QCOMPARE(store.trb(0, 3).status, model::Status::Ok);
+        QVERIFY(store.trb(0, 3).noReply);
 
         // Khung rỗng hợp lệ về địa chỉ nên không bị tính là byte lỗi hay lỗi CRC.
         core::FrameParser parser(&rig.registry);

@@ -67,9 +67,11 @@ void DeviceStore::updateTrb(int mb, int trb, const QList<double> &values, const 
 void DeviceStore::markStale(qint64 nowMs, int staleMs)
 {
     for (int i = 0; i < m_trbs.size(); ++i) {
-        const TrbState &s = m_trbs.at(i);
+        TrbState &s = m_trbs[i];
+        // "?" = không nhận được khung nào (kể cả khung rỗng) trong staleMs; khung rỗng vẫn tính là còn nhận được, lúc đó hiện X.
+        if (s.noReply && nowMs - s.lastRxMs > staleMs) s.noReply = false;
         const bool live = s.status == Status::Ok || s.status == Status::Warning || s.status == Status::Trip;
-        if (live && nowMs - s.lastSeenMs > staleMs)
+        if (live && nowMs - qMax(s.lastSeenMs, s.lastRxMs) > staleMs)
             setStatus(i / m_trbPerMb, i % m_trbPerMb, Status::Lost);
     }
 }
@@ -98,11 +100,12 @@ void DeviceStore::setNoReply(int mb, int trb, bool on)
     if (contains(mb, trb)) m_trbs[mb * m_trbPerMb + trb].noReply = on;
 }
 
-void DeviceStore::markSilent(int mb, int trb)
+void DeviceStore::markEmpty(int mb, int trb, qint64 timestampMs)
 {
     if (!contains(mb, trb)) return;
-    const Status s = m_trbs.at(mb * m_trbPerMb + trb).status;
-    if (s == Status::Ok || s == Status::Warning || s == Status::Trip) setStatus(mb, trb, Status::Lost);   // chưa có số liệu thì giữ "chưa có dữ liệu"
+    TrbState &s = m_trbs[mb * m_trbPerMb + trb];
+    s.noReply = true;
+    s.lastRxMs = timestampMs;
 }
 
 void DeviceStore::setStatus(int mb, int trb, Status to)

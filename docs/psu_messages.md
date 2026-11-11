@@ -168,7 +168,7 @@ Giao diện hiện các giá trị này ở khung "Trạng thái PSU" (cột ph�
 
 ### 2.5a Khung rỗng (X) và quá hạn (?)
 
-Như TRB: PSU không phản hồi thì Gateway thay bằng **khung rỗng** 310 byte `AB CD 81 81 ADDR`, dữ liệu và CRC toàn `00`, `E1 E2` (giả định cùng quy ước với TRB). **X chỉ khi nhận khung rỗng**: ô PSU hiện X ngay từ khung đầu, kể cả khi chưa có dữ liệu; có bản tin thật thì X mất. **? chỉ khi không nhận được khung nào** (kể cả khung rỗng) quá `system/staleMs`: PSU chuyển Mất kết nối, giữ số liệu cuối. **Không còn cơ chế "đủ N khung rỗng liên tiếp thì thành ?"** (cài đặt `system/emptyFramesToLost` chỉ còn áp dụng cho TRB); còn nhận khung rỗng thì vẫn là X, không bao giờ thành ?. Ở chế độ Debug COM, hỏi hết thời gian chờ không đặt X (không có khung nào), chỉ tính vào thống kê lỗi; sau `staleMs` mà vẫn không có khung thì thành **?**.
+Như TRB: PSU không phản hồi thì Gateway thay bằng **khung rỗng** 310 byte `AB CD 81 81 ADDR`, dữ liệu và CRC toàn `00`, `E1 E2` (giả định cùng quy ước với TRB). **X chỉ khi nhận khung rỗng**: ô PSU hiện X ngay từ khung đầu, kể cả khi chưa có dữ liệu; có bản tin thật thì X mất. **? chỉ khi không nhận được khung nào** (kể cả khung rỗng) quá `system/staleMs`: PSU chuyển Mất kết nối, giữ số liệu cuối. **Không còn cơ chế "đủ N khung rỗng liên tiếp thì thành ?"** (cài đặt `system/emptyFramesToLost` đã bỏ, TRB cũng làm như PSU); còn nhận khung rỗng thì vẫn là X, không bao giờ thành ?. Ở chế độ Debug COM, hỏi hết thời gian chờ không đặt X (không có khung nào), chỉ tính vào thống kê lỗi; sau `staleMs` mà vẫn không có khung thì thành **?**.
 
 ### 2.5b Trạng thái từng cụm trên trang tổng quan
 

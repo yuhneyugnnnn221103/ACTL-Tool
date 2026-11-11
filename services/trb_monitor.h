@@ -15,11 +15,11 @@ public:
     TrbMonitor(core::Link *link, model::DeviceStore *store, AlarmEngine *alarms = nullptr,
                QObject *parent = nullptr);
     quint64 badAddressFrames() const { return m_badAddress; }
-    void setEmptyLimit(int n) { m_emptyLimit = qMax(1, n); }   // số khung rỗng liên tiếp của Gateway để coi TRB mất kết nối
 
 public slots:
     void onFrame(const core::Frame &frame);
-    // TRB không trả lời: như một khung rỗng của Gateway (X ngay, đủ số lần liên tiếp thì mất kết nối). Chế độ Debug COM gọi khi hỏi mà hết thời gian chờ.
+    // TRB không trả lời lần hỏi (Debug COM hết thời gian chờ): chỉ tính vào thống kê lỗi. KHÔNG đặt X (X chỉ khi nhận khung rỗng);
+    // không nhận được khung nào trong staleMs thì thành "?" nhờ DeviceStore::markStale.
     void onSilent(int mb, int trb);
 
 signals:
@@ -30,8 +30,6 @@ private:
     model::DeviceStore *m_store;
     AlarmEngine *m_alarms;
     quint64 m_badAddress = 0;
-    int m_emptyLimit = 3;
-    QHash<int, int> m_emptyRun;   // khóa mb << 8 | trb: số khung rỗng liên tiếp
     QHash<int, int> m_pgFault;   // khóa mb << 8 | trb: mặt nạ PG lỗi của bản tin trước
 };
 
