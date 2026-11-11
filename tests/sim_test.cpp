@@ -220,7 +220,7 @@ private slots:
         QCOMPARE(wire.world.stats().configWrites, quint64(1));
     }
 
-    void offlineTrbConfigReadTimesOutAfterThreeAsks()
+    void offlineTrbConfigReadTimesOutAfterTwoAsks()
     {
         Wire wire;
         wire.world.trb(0, 4)->setOnline(false);
@@ -231,7 +231,7 @@ private slots:
         QVERIFY(finished.wait(3000));
         QCOMPARE(device.last().at(2).toBool(), false);
         QVERIFY(device.last().at(3).toString().contains("không trả lời"));
-        QCOMPARE(wire.world.stats().configReads, quint64(3));      // lần đầu + hỏi lại 2 lần
+        QCOMPARE(wire.world.stats().configReads, quint64(2));   // lần đầu + hỏi lại 1 lần (tổng 2)
     }
 
     void appControlReachesSimAndDebugRuleHolds()

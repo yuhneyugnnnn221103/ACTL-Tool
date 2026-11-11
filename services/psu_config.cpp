@@ -89,7 +89,7 @@ void PsuConfig::sendRead(Stage stage)
     r.data = gwhdr::add(gwhdr::Psu, psucfg::buildReadRequest(m_task.addr));
     r.replyCmd = psucfg::replyCmd();
     r.timeoutMs = m_readTimeoutMs;
-    r.retries = 2; // hết thời gian chờ thì hỏi lại tối đa 2 lần nữa (tổng 3 lần)
+    r.retries = 1; // hết thời gian chờ (mặc định 2 s) thì hỏi lại 1 lần nữa (tổng 2 lần)
     m_waitId = m_link->send(r);
 }
 
@@ -98,7 +98,7 @@ void PsuConfig::sendWrite()
     m_stage = Stage::Write;
     core::Request r;
     r.data = gwhdr::add(gwhdr::Psu, psucfg::buildWrite(m_task.addr, m_task.values));
-    r.gapMs = m_writeGapMs; // chờ PSU lưu xong trước khi đọc lại
+    r.gapMs = m_writeGapMs; // PSU không phản hồi lệnh ghi: chờ lưu xong (mặc định 3 s) rồi chủ động gửi 03 03 hỏi lại để kiểm tra
     m_waitId = m_link->send(r);
 }
 

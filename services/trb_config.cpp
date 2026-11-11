@@ -89,7 +89,7 @@ void TrbConfig::sendRead(Stage stage)
     r.data = gwhdr::add(gwhdr::Trb, trbcfg::buildReadRequest(m_task.dev.first, m_task.dev.second));   // thêm DEV + LEN cho Gateway
     r.replyCmd = trbcfg::readReplyCmd();
     r.timeoutMs = m_readTimeoutMs;
-    r.retries = 2; // hết thời gian chờ thì hỏi lại tối đa 2 lần nữa (tổng 3 lần)
+    r.retries = 1; // hết thời gian chờ (mặc định 2 s) thì hỏi lại 1 lần nữa (tổng 2 lần)
     m_waitId = m_link->send(r);
 }
 
@@ -98,7 +98,7 @@ void TrbConfig::sendWrite()
     m_stage = Stage::Write;
     core::Request r;
     r.data = gwhdr::add(gwhdr::Trb, trbcfg::buildWrite(m_task.dev.first, m_task.dev.second, m_task.values));
-    r.gapMs = m_writeGapMs; // chờ thiết bị lưu xong trước khi đọc lại
+    r.gapMs = m_writeGapMs; // TRB ghi flash xong mới trả lời lệnh hỏi (mặc định chờ 3 s sau lệnh ghi): không có ACK, nên chờ rồi mới gửi A3 đọc lại
     m_waitId = m_link->send(r);
 }
 

@@ -1307,6 +1307,33 @@ private slots:
         QVERIFY(!thr.get(4, 7, trbmon::kIdxTrbV).isSet());
     }
 
+    // TRB ghi flash xong mới trả lời: sau lệnh ghi chờ writeGap (mặc định 3 s) rồi mới gửi A3 hỏi lại.
+    void configWaitsAfterWriteBeforeAskingBack()
+    {
+        Rig rig("monitor");
+        services::TrbConfig::registerFrames(rig.registry, true);
+        rig.link.start();
+        FakeTrb trb;
+        trb.attach(rig.transport);
+        QList<QPair<quint8, qint64>> seen;
+        QElapsedTimer clock;
+        clock.start();
+        auto inner = rig.transport->onWrite;
+        rig.transport->onWrite = [&](const QByteArray &d) { seen << qMakePair(quint8(d[2]), clock.elapsed()); inner(d); };
+        model::Thresholds thr(&trbmon::table());
+        services::TrbConfig cfg(&rig.link, &thr, QString(), 500, 400);
+        QSignalSpy finished(&cfg, &services::TrbConfig::finished);
+        cfg.writeFull({1, 2}, zeros(trbcfg::table().size()));
+        QVERIFY(finished.wait(5000));
+        qint64 writeAt = -1, readAfter = -1;
+        for (const auto &e : seen) {
+            if (e.first == 0xA1) writeAt = e.second;
+            else if (e.first == 0xA3 && writeAt >= 0 && readAfter < 0) readAfter = e.second;
+        }
+        QVERIFY(writeAt >= 0 && readAfter >= 0);
+        QVERIFY2(readAfter - writeAt >= 380, qPrintable(QString::number(readAfter - writeAt)));
+    }
+
     void configVerifyDetectsMismatch()
     {
         Rig rig("service");

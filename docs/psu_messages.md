@@ -360,8 +360,8 @@ Kênh CH0 (CH1..CH7 cùng bố cục, tên `CHk_...`):
 
 ### 4.3 Quy trình đọc và ghi (phía app)
 
-1. **Đọc:** gửi `03 03`, chờ `82 82` (thời gian chờ `config/replyTimeoutMs`, mặc định 200 ms). Hết thời gian thì hỏi lại tối đa **2 lần nữa** (tổng 3 lần). Trả lời sai địa chỉ thì báo lỗi.
-2. **Ghi:** (nếu chỉ sửa một số ô thì app đọc cấu hình hiện tại trước, áp thay đổi lên bản đọc được) gửi `04 04` với Mask `FF FF`, chờ `config/writeGapMs` (mặc định 300 ms) cho PSU lưu, rồi **đọc lại** bằng `03 03` (cũng thử tối đa 3 lần).
+1. **Đọc:** gửi `03 03`, chờ `82 82` (thời gian chờ `config/replyWaitMs`, mặc định **2000 ms**). Hết thời gian thì hỏi lại **1 lần nữa** (tổng 2 lần). Trả lời sai địa chỉ thì báo lỗi.
+2. **Ghi:** (nếu chỉ sửa một số ô thì app đọc cấu hình hiện tại trước, áp thay đổi lên bản đọc được) gửi `04 04` với Mask `FF FF`, **PSU không phản hồi lệnh ghi**, nên app chờ `config/flashWaitMs` (mặc định **3000 ms**) cho PSU ghi xong flash rồi mới **chủ động gửi `03 03` hỏi lại** để kiểm tra (cũng chờ 2 s, tối đa 2 lần).
 3. **Kiểm tra:** so từng trường của bản đọc lại với bản vừa ghi; khác thì báo "đọc lại KHÔNG khớp" kèm tối đa 5 tên trường đầu.
 4. Làm lần lượt từng PSU. Mật khẩu kỹ sư chỉ được hỏi khi ghi.
 6. Nút "Mặc định" điền giá trị hãng gợi ý: `OPERATION` = `0x80`, `ENABLE_FAULTS` = `0x3EFF`, `MASK_FAULTS` = `0x3EFF`, `RETRY` = `0x3FBF`, các trường khác = 0. Nếu có `psu_default_config.json` cạnh file chạy thì giá trị trong file thay cho mặc định cài sẵn.

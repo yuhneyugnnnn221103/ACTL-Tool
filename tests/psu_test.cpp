@@ -908,6 +908,74 @@ private slots:
         QVERIFY(!thr.get(3, 0, mon).isSet());                 // PSU khác không bị ảnh hưởng
     }
 
+    // PSU không phản hồi lệnh ghi: chờ writeGap (mặc định 3 s) rồi mới chủ động gửi 03 03 hỏi lại.
+    void configWaitsAfterWriteBeforeAskingBack()
+    {
+        core::FrameRegistry registry;
+        services::PsuConfig::registerFrames(registry, true);
+        auto *tp = new FakeTransport;
+        core::Link link("service", tp, &registry);
+        link.start();
+        FakePsu psu;
+        psu.attach(tp);
+        QList<QPair<QByteArray, qint64>> seen;
+        QElapsedTimer clock;
+        clock.start();
+        auto inner = tp->onWrite;
+        tp->onWrite = [&](const QByteArray &d) { seen << qMakePair(d.mid(2, 2), clock.elapsed()); inner(d); };
+        model::Thresholds thr(&psumon::table());
+        services::PsuConfig cfg(&link, &thr, QString(), 500, 400);
+        QSignalSpy finished(&cfg, &services::PsuConfig::finished);
+        cfg.writeFull(2, psucfg::defaultValues());
+        QVERIFY(finished.wait(5000));
+        qint64 writeAt = -1, readAfter = -1;
+        for (const auto &e : seen) {
+            if (e.first == psucfg::writeCmd()) writeAt = e.second;
+            else if (e.first == psucfg::readCmd() && writeAt >= 0 && readAfter < 0) readAfter = e.second;
+        }
+        QVERIFY(writeAt >= 0 && readAfter >= 0);
+        QVERIFY2(readAfter - writeAt >= 380, qPrintable(QString::number(readAfter - writeAt)));   // chờ ~400 ms giữa lệnh ghi và lệnh hỏi
+    }
+
+    // Boot FPGA: sau lệnh boot chờ bootWaitMs (người dùng đặt, mặc định 10 s) rồi mới hỏi 0x88.
+    void fpgaWaitsConfiguredTimeAfterBootBeforeQuery()
+    {
+        QCOMPARE(services::FpgaOta::Options().bootWaitMs, 10000);
+        core::FrameRegistry registry;
+        services::FpgaOta::registerFrames(registry);
+        auto *tp = new FakeTransport;
+        core::Link link("service", tp, &registry);
+        link.start();
+        QByteArray status(40, '\0');
+        status[2] = status[3] = char(0x99);
+        status[38] = char(0xE1); status[39] = char(0xE2);
+        core::seal(status, 4);
+        QList<QPair<quint8, qint64>> seen;
+        QElapsedTimer clock;
+        clock.start();
+        tp->onWrite = [&](const QByteArray &d) {
+            seen << qMakePair(quint8(d[2]), clock.elapsed());
+            if (d.size() == 269 && quint8(d[2]) == 0x88) tp->injectLater(status);
+        };
+        services::FpgaOta ota(&link);
+        ota.setNodes({{0, 0}});
+        ota.checkOnline();
+        QTRY_VERIFY(!ota.busy());
+        seen.clear();
+        services::FpgaOta::Options o;
+        o.broadcast = false;
+        o.bootWaitMs = 400;
+        ota.bootAndVerify(o);
+        QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 5000);
+        qint64 bootAt = -1, queryAt = -1;
+        for (const auto &e : seen) {
+            if (e.first == 0xAA && bootAt < 0) bootAt = e.second;
+            else if (e.first == 0x88 && bootAt >= 0 && queryAt < 0) queryAt = e.second;
+        }
+        QVERIFY(bootAt >= 0 && queryAt >= 0);
+        QVERIFY2(queryAt - bootAt >= 380, qPrintable(QString::number(queryAt - bootAt)));
+    }
+
     void configVerifyDetectsMismatch()
     {
         core::FrameRegistry registry;

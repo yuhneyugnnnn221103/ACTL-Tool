@@ -26,7 +26,7 @@ public:
         bool broadcast = true;        // true: gửi FF/FF tới MỌI TRB; false: gửi riêng cho từng TRB trong danh sách
         int eraseWaitSec = 420;
         int packetGapMs = 5;          // nghỉ sau mỗi gói để FPGA kịp ghi flash
-        int bootWaitMs = 3000;
+        int bootWaitMs = 10000;       // sau lệnh boot chờ chừng này (FPGA nạp lại bitstream) rồi mới hỏi 88
         QByteArray version;           // 4 byte ghi xuống TRB sau khi nạp xong không lỗi; 0 hoặc rỗng = không ghi
     };
 
