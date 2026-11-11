@@ -72,9 +72,11 @@ void PsuStore::updatePsu(int addr, const QList<double> &values, const QByteArray
 void PsuStore::markStale(qint64 nowMs, int staleMs)
 {
     for (int i = 0; i < m_psus.size(); ++i) {
-        const PsuState &s = m_psus.at(i);
+        PsuState &s = m_psus[i];
+        // "?" = không nhận được khung nào (kể cả khung rỗng) trong staleMs; khung rỗng vẫn tính là còn nhận được, lúc đó hiện X.
+        if (s.noReply && nowMs - s.lastRxMs > staleMs) s.noReply = false;
         const bool live = s.status == Status::Ok || s.status == Status::Warning || s.status == Status::Trip;
-        if (live && nowMs - s.lastSeenMs > staleMs) setStatus(m_firstAddr + i, Status::Lost);
+        if (live && nowMs - qMax(s.lastSeenMs, s.lastRxMs) > staleMs) setStatus(m_firstAddr + i, Status::Lost);
     }
 }
 
@@ -93,11 +95,12 @@ void PsuStore::setNoReply(int addr, bool on)
     if (contains(addr)) m_psus[addr - m_firstAddr].noReply = on;
 }
 
-void PsuStore::markSilent(int addr)
+void PsuStore::markEmpty(int addr, qint64 timestampMs)
 {
     if (!contains(addr)) return;
-    const Status s = m_psus.at(addr - m_firstAddr).status;
-    if (s == Status::Ok || s == Status::Warning || s == Status::Trip) setStatus(addr, Status::Lost);   // chưa có số liệu thì giữ "chưa có dữ liệu"
+    PsuState &s = m_psus[addr - m_firstAddr];
+    s.noReply = true;
+    s.lastRxMs = timestampMs;
 }
 
 void PsuStore::setStatus(int addr, Status to)

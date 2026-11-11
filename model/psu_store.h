@@ -13,7 +13,8 @@ struct PsuState {
     QList<double> values;   // theo thứ tự bảng trường proto::psumon::table()
     QList<int> alarms;      // chỉ số các trường đang vượt ngưỡng
     QByteArray raw;
-    bool noReply = false;   // Gateway vừa báo PSU không phản hồi (khung rỗng) và chưa có bản tin thật nào sau đó: tổng quan hiện "X" ngay, kể cả khi chưa có dữ liệu
+    bool noReply = false;   // X: vừa nhận khung RỖNG (toàn 00) của Gateway cho PSU này và chưa có bản tin thật nào sau đó; tự hết khi quá hạn không nhận thêm khung nào
+    qint64 lastRxMs = 0;    // lần nhận khung rỗng gần nhất (khung thật thì lastSeenMs): còn nhận được khung thì chưa phải "?"
 };
 
 class PsuStore : public QObject {
@@ -28,7 +29,7 @@ public:
 
     // Trạng thái một cụm DCM (0..3; chỉ số 4 = nhóm Supply): mất kết nối/chưa có dữ liệu theo PSU, Quá ngưỡng nếu có giá trị của cụm
     // vượt ngưỡng, còn lại Tốt. Trip chưa gán được cho cụm vì chưa có bảng trip code, nên không hiện ở đây.
-    // Cụm (0..3) đang TRIPPED/LOCKOUT theo safe_state của cụm; cụm đang OFF (chân EN tắt, không trip) không so ngưỡng. Ô Supply (4) không có hai trạng thái này.
+    // Cụm (0..3) đang TRIPPED theo safe_state của cụm; cụm đang OFF (chân EN tắt, không TRIPPED) không so ngưỡng. Cụm OFF vẫn có thể TRIPPED: lúc đó hiện Trip, không hiện OFF. Ô Supply (4) không có hai trạng thái này.
     bool clusterTripped(int addr, int cluster) const;
     bool clusterOff(int addr, int cluster) const;
     Status clusterStatus(int addr, int cluster) const;
@@ -44,7 +45,7 @@ public:
     void recordReply(int addr, bool empty);
     void resetReplyStats();
     void setNoReply(int addr, bool on);
-    void markSilent(int addr);                 // Gateway báo PSU không phản hồi đủ số khung rỗng liên tiếp: Ok/Warning/Trip -> Lost (giữ số liệu cuối)
+    void markEmpty(int addr, qint64 timestampMs);   // nhận khung rỗng: đặt X và ghi nhận còn nhận được khung (không chuyển Lost)
 
 signals:
     void psuStatusChanged(int addr, model::Status from, model::Status to);

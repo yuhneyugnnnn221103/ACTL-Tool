@@ -701,7 +701,7 @@ private slots:
         QCOMPARE(store.psu(3).status, model::Status::Lost);
     }
 
-    // Cụm tắt (EN = 0, không trip): không so ngưỡng, ô hiện OFF; cụm TRIPPED/LOCKOUT là Trip và kéo PSU thành Trip dù EN đã về 0.
+    // Cụm tắt (EN = 0, không trip): không so ngưỡng, ô hiện OFF; cụm TRIPPED là Trip và kéo PSU thành Trip dù EN đã về 0.
     void offClusterIsNotCheckedAndTrippedClusterTripsPsu()
     {
         core::FrameRegistry registry;
@@ -741,14 +741,19 @@ private slots:
         QCOMPARE(store.clusterStatus(2, 0), model::Status::Ok);               // cụm khác không bị kéo theo
         QCOMPARE(store.psu(2).status, model::Status::Trip);                   // PSU Trip khi một cụm trip
 
-        v[psumon::kIdxSafeState(1)] = psumon::SafeLockout;
+        // Cụm OFF vẫn có thể trip: về OFF (EN = 0) rồi trip lại thì vẫn Trip, không bị che bởi OFF. Cụm khác đang OFF thật thì vẫn OFF.
+        QVERIFY(store.clusterOff(2, 2));                                      // cụm 3: EN = 0, safe_state 0 (BOOT), không trip: OFF
+        QVERIFY(!store.clusterOff(2, 1));
+        v[psumon::kIdxSafeState(1)] = 5;                                      // mã 5 (LOCKOUT cũ) firmware đã bỏ: không còn là trip
         tp->inject(monitorFrame(2, v));
-        QCOMPARE(store.clusterStatus(2, 1), model::Status::Trip);
-        QCOMPARE(store.psu(2).status, model::Status::Trip);
+        QVERIFY(!store.clusterTripped(2, 1));
+        QVERIFY(store.clusterOff(2, 1));
+        QCOMPARE(psumon::safeStateText(5), QStringLiteral("? (5)"));
     }
 
-    // PSU cũng có X (khung rỗng của Gateway: AB CD 81 81 ADDR, dữ liệu và CRC toàn 0, E1 E2) và ? (quá hạn) như TRB.
-    void silentPsuIsMarkedWithXAndLostLikeTrb()
+    // PSU: X chỉ khi nhận khung RỖNG của Gateway (AB CD 81 81 ADDR, dữ liệu và CRC toàn 0, E1 E2); "?" (mất kết nối) chỉ khi không nhận được khung nào
+    // trong một khoảng thời gian. Không còn cơ chế "đủ 3 khung rỗng thì thành ?".
+    void psuXOnlyForEmptyFrameAndQuestionMarkOnlyWhenNoFrames()
     {
         core::FrameRegistry registry;
         services::PsuMonitor::registerFrames(registry, true);
@@ -757,7 +762,6 @@ private slots:
         link.start();
         model::PsuStore store(1, 5);
         services::PsuMonitor mon(&link, &store);
-        mon.setEmptyLimit(3);
         auto empty = [](int addr) {
             QByteArray f(psumon::kLength, '\0');
             f[0] = char(0xAB); f[1] = char(0xCD);
@@ -776,16 +780,48 @@ private slots:
         tp->inject(monitorFrame(2, v));                                  // có bản tin thật: hết X
         QVERIFY(!store.psu(2).noReply);
         QCOMPARE(store.psu(2).status, model::Status::Ok);
-        tp->inject(empty(2));                                           // đã có dữ liệu: X hiện ngay dù chưa đủ 3 khung
+        for (int i = 0; i < 10; ++i) tp->inject(empty(2));              // nhiều khung rỗng liên tiếp: vẫn X, KHÔNG thành mất kết nối
         QVERIFY(store.psu(2).noReply);
         QCOMPARE(store.psu(2).status, model::Status::Ok);
-        tp->inject(empty(2));
-        tp->inject(empty(2));                                           // đủ 3 khung rỗng liên tiếp: mất kết nối, giữ số liệu cuối
-        QCOMPARE(store.psu(2).status, model::Status::Lost);
         QVERIFY(store.psu(2).frames > 0);
-        tp->inject(monitorFrame(2, v));
-        QVERIFY(!store.psu(2).noReply);
+
+        // Vẫn nhận được khung rỗng thì không bao giờ là "?", dù số liệu thật đã cũ.
+        const qint64 now = store.psu(2).lastRxMs + 10000;
+        store.markEmpty(2, now - 100);                                  // khung rỗng mới nhận 100 ms trước
+        store.markStale(now, 3000);
         QCOMPARE(store.psu(2).status, model::Status::Ok);
+        QVERIFY(store.psu(2).noReply);
+
+        // Không nhận được khung nào nữa quá hạn: hết X và thành "?" (Lost), giữ số liệu cuối.
+        store.markStale(now + 5000, 3000);
+        QCOMPARE(store.psu(2).status, model::Status::Lost);
+        QVERIFY(!store.psu(2).noReply);
+        QVERIFY(store.psu(2).frames > 0);
+
+        tp->inject(monitorFrame(2, v));
+        QCOMPARE(store.psu(2).status, model::Status::Ok);
+
+        // Chưa từng có dữ liệu mà Gateway ngừng gửi khung rỗng: X tự hết, vẫn "chưa có dữ liệu".
+        tp->inject(empty(4));
+        QVERIFY(store.psu(4).noReply);
+        store.markStale(store.psu(4).lastRxMs + 5000, 3000);
+        QVERIFY(!store.psu(4).noReply);
+        QCOMPARE(store.psu(4).status, model::Status::NoData);
+    }
+
+    // Không hỏi thì không có khung nào: hỏi hết thời gian chờ (Debug COM) chỉ tính vào thống kê lỗi, không đặt X.
+    void psuPollTimeoutDoesNotSetX()
+    {
+        core::FrameRegistry registry;
+        services::PsuMonitor::registerFrames(registry, true);
+        auto *tp = new FakeTransport;
+        core::Link link("monitor", tp, &registry);
+        link.start();
+        model::PsuStore store(1, 5);
+        services::PsuMonitor mon(&link, &store);
+        mon.onSilent(2);
+        QVERIFY(!store.psu(2).noReply);
+        QCOMPARE(store.psu(2).reply.emptyTotal, quint64(1));
     }
 
     // Gateway gửi một lượt 20 TRB + 5 PSU = 25 x 310 = 7750 byte (hai loại khung cùng 310 byte, phân biệt bằng CMD 23 23 / 81 81):

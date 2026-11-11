@@ -13,11 +13,12 @@ public:
 
     PsuMonitor(core::Link *link, model::PsuStore *store, AlarmEngine *alarms = nullptr, QObject *parent = nullptr);
     quint64 badAddressFrames() const { return m_badAddress; }
-    void setEmptyLimit(int n) { m_emptyLimit = qMax(1, n); }   // số khung rỗng liên tiếp của Gateway để coi PSU mất kết nối (X hiện ngay từ khung đầu)
 
 public slots:
     void onFrame(const core::Frame &frame);
-    void onSilent(int addr);   // PSU không trả lời (xem TrbMonitor::onSilent)
+    // PSU không trả lời lần hỏi (Debug COM hết thời gian chờ): chỉ tính vào thống kê lỗi. KHÔNG đặt X (X chỉ khi nhận khung rỗng);
+    // không nhận được khung nào trong staleMs thì thành "?" nhờ PsuStore::markStale.
+    void onSilent(int addr);
 
 signals:
     void psuUpdated(int addr, bool statusChanged);
@@ -26,8 +27,6 @@ private:
     model::PsuStore *m_store;
     AlarmEngine *m_alarms;
     quint64 m_badAddress = 0;
-    int m_emptyLimit = 3;
-    QHash<int, int> m_emptyRun;
 };
 
 } // namespace services

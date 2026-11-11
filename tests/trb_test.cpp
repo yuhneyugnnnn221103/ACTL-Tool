@@ -1006,7 +1006,8 @@ private slots:
         poller.pollOnce();
         QTRY_COMPARE_WITH_TIMEOUT(poller.timeouts(), quint64(4), 1000);
         QCOMPARE(rig.transport->written.last(), proto::directq::buildPsu(2));
-        QVERIFY(psuStore.psu(2).noReply);
+        QVERIFY(!psuStore.psu(2).noReply);                              // PSU hỏi hết thời gian chờ: không đặt X (X chỉ khi nhận khung rỗng), chỉ tính vào thống kê lỗi
+        QCOMPARE(psuStore.psu(2).reply.emptyTotal, quint64(1));
 
         const int before = rig.transport->written.size();           // đang chờ lệnh trước thì không gửi chồng, đóng đường thì không hỏi
         poller.pollOnce();

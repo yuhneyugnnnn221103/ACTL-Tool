@@ -4,7 +4,7 @@
 // Mask: 4 bit thấp = 4 cụm DCM, 1 = bật, 0 = tắt (mỗi lệnh ghi đè trạng thái). Firmware APSU hiện chỉ có MỘT chân PWR_EN (đóng cả 4 DCM)
 // và chỉ lấy bit0; bit 1..3 bị bỏ qua nên app gửi 0x0F khi bật, 0x00 khi tắt.
 // ClearTrip = 0x01: PSU xóa các trip code. Đang TRIPPED thì lệnh bật trong cùng khung bị bỏ qua (phải gửi lệnh bật ở khung sau);
-// LOCKOUT (>= 3 lần trip liên tiếp) bỏ qua mọi lệnh. Không có ACK.
+// Không có ACK. (Firmware đã bỏ trạng thái LOCKOUT.)
 #include <QByteArray>
 
 namespace proto::psuctl {

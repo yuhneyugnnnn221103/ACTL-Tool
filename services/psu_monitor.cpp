@@ -18,10 +18,7 @@ PsuMonitor::PsuMonitor(core::Link *link, model::PsuStore *store, AlarmEngine *al
 
 void PsuMonitor::onSilent(int addr)
 {
-    if (!m_store->contains(addr)) return;
-    m_store->recordReply(addr, true);
-    m_store->setNoReply(addr, true);
-    if (++m_emptyRun[addr] >= m_emptyLimit) m_store->markSilent(addr);
+    if (m_store->contains(addr)) m_store->recordReply(addr, true);
 }
 
 void PsuMonitor::onFrame(const core::Frame &frame)
@@ -30,12 +27,15 @@ void PsuMonitor::onFrame(const core::Frame &frame)
     const int addr = frame.at(psumon::kOffAddr);
     if (!m_store->contains(addr)) { ++m_badAddress; return; }
 
-    if (frame.empty) { onSilent(addr); return; }   // Gateway báo PSU này không phản hồi
+    if (frame.empty) {                    // khung rỗng (toàn 00) của Gateway: X ngay; khung rỗng không đưa PSU sang "mất kết nối" (không đếm số khung rỗng)
+        m_store->recordReply(addr, true);
+        m_store->markEmpty(addr, frame.timestampMs);
+        return;
+    }
     m_store->recordReply(addr, false);
-    m_emptyRun[addr] = 0;
 
     const QList<double> v = psumon::table().decode(frame.raw);
-    // Như TRB: có trip code khác 0 là Trip, ưu tiên hơn Quá ngưỡng. Thêm: một cụm DCM ở TRIPPED/LOCKOUT (safe_state của cụm) cũng là Trip.
+    // Như TRB: có trip code khác 0 là Trip, ưu tiên hơn Quá ngưỡng. Thêm: một cụm DCM ở TRIPPED (safe_state của cụm) cũng là Trip, kể cả cụm đã OFF (EN = 0).
     // Bảng trip code chưa gán được theo cụm nên trip theo cụm tạm lấy từ safe_state.
     bool trip = false;
     for (int i = 0; i < psumon::kNumTrip; ++i) trip = trip || v.at(psumon::kIdxTrip0 + i) != 0;

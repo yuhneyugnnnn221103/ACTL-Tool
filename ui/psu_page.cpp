@@ -281,7 +281,7 @@ void PsuPage::refresh()
         for (int c = 0; c < psumon::kNumCluster; ++c) {
             const int st = int(s.values.at(psumon::kIdxSafeState(c))), en = int(s.values.at(psumon::kIdxEn(c)));
             m_safe[c]->setText(psumon::safeStateText(st));
-            m_safe[c]->setStyleSheet(st == psumon::SafeTripped || st == psumon::SafeLockout ? QStringLiteral("background:#E24B4A; color:#ffffff; font-weight:bold;")
+            m_safe[c]->setStyleSheet(st == psumon::SafeTripped ? QStringLiteral("background:#E24B4A; color:#ffffff; font-weight:bold;")
                                      : st == psumon::SafeOn ? QStringLiteral("background:#639922; color:#ffffff;") : QString());
             m_en[c]->setText(en & 1 ? QStringLiteral("Bật") : QStringLiteral("Tắt"));
             m_en[c]->setToolTip(QStringLiteral("PWR_EN = %1").arg(en & 1));
@@ -306,19 +306,12 @@ void PsuPage::sendControl()
     const bool on = mask != 0, clear = m_clearTrip->isChecked();
     auto state = [&](int c) { return known ? int(st.values.at(psumon::kIdxSafeState(c))) : -1; };
 
-    // Firmware APSU: LOCKOUT bỏ qua mọi lệnh; TRIPPED từ chối lệnh bật cho tới khi Clear trip (và lệnh bật phải ở khung sau Clear trip).
-    QStringList lockout, needClear;
+    // Firmware APSU: TRIPPED từ chối lệnh bật cho tới khi Clear trip (và lệnh bật phải ở khung sau Clear trip).
+    QStringList needClear;
     bool twoStep = false;
     for (int c = 0; c < 4; ++c) {
         if (!(mask >> c & 1)) continue;
-        if (state(c) == psumon::SafeLockout) lockout << QString::number(c + 1);
         if (state(c) == psumon::SafeTripped) { if (clear) twoStep = true; else needClear << QString::number(c + 1); }
-    }
-    if (!lockout.isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("Điều khiển PSU"),
-                             QStringLiteral("PSU %1 cụm %2 đang ở LOCKOUT (trip liên tiếp từ 3 lần): mọi lệnh bị bỏ qua, chỉ reset phần cứng mới thoát.")
-                                 .arg(proto::psuaddr::displayNo(m_addr)).arg(lockout.join(QStringLiteral(", "))));
-        return;
     }
     if (!needClear.isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("Điều khiển PSU"),

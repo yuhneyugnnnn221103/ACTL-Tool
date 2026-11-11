@@ -38,11 +38,11 @@ constexpr int kIdxTripCount(int c) { return kIdxExt0 + c * kFwPerCluster + 2; }
 constexpr int kIdxSlot = kIdxExt0 + kNumCluster * kFwPerCluster;   // byte +12: slot đang chạy: 'A' (app)
 constexpr int kNumFields = kIdxSlot + 1;   // +13..+16 (byte 252..255) trước đây là version u32, nay là dự phòng 00: version là chuỗi, hỏi bằng GET_VERSION
 
-enum SafeState { SafeBoot = 0, SafeOff = 1, SafeArming = 2, SafeOn = 3, SafeTripped = 4, SafeLockout = 5 };
+enum SafeState { SafeBoot = 0, SafeOff = 1, SafeArming = 2, SafeOn = 3, SafeTripped = 4 };   // firmware đã bỏ LOCKOUT (5)
 QString safeStateText(int state);
 // Trạng thái theo từng cụm DCM (c = 0..3) từ bản tin đã giải mã (values theo thứ tự table()):
-bool clusterTripped(const QList<double> &values, int c);   // safe_state của cụm là TRIPPED hoặc LOCKOUT
-bool clusterOff(const QList<double> &values, int c);       // chân EN tắt và cụm không TRIPPED/LOCKOUT: không so ngưỡng, hiện "OFF"
+bool clusterTripped(const QList<double> &values, int c);   // safe_state của cụm là TRIPPED (kể cả khi EN đã về 0)
+bool clusterOff(const QList<double> &values, int c);       // chân EN tắt và cụm không TRIPPED: không so ngưỡng, hiện "OFF"
 QSet<int> offClusterFields(const QList<double> &values);   // chỉ số các trường đo của mọi cụm đang OFF (bỏ qua khi so ngưỡng)
            // "BOOT", "OFF", ...
 QString tripName(int i);                    // i = 0..9 (Trip 1..10); bảng bit TẠM THỜI của firmware

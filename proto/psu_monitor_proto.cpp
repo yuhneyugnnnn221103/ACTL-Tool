@@ -101,7 +101,7 @@ QByteArray buildFrame(int addr, const QList<double> &values)
 bool clusterTripped(const QList<double> &values, int c)
 {
     const int st = int(values.at(kIdxSafeState(c)));
-    return st == SafeTripped || st == SafeLockout;
+    return st == SafeTripped;
 }
 
 bool clusterOff(const QList<double> &values, int c)
@@ -128,7 +128,6 @@ QString safeStateText(int state)
     case SafeArming:  return QStringLiteral("ARMING");
     case SafeOn:      return QStringLiteral("ON");
     case SafeTripped: return QStringLiteral("TRIPPED");
-    case SafeLockout: return QStringLiteral("LOCKOUT");
     default:          return QStringLiteral("? (%1)").arg(state);
     }
 }
@@ -154,7 +153,7 @@ QString tripBitName(int i, int bit)
     case 3: return bit < 4 ? QStringLiteral("INA%1 BUSOL (quá áp bus)").arg(c) : QStringLiteral("INA%1 BUSUL (sụt áp bus)").arg(c);
     case 4: return bit < 4 ? QStringLiteral("INA%1 TMPOL (quá nhiệt)").arg(c) : QStringLiteral("DCM%1 chân FT báo lỗi").arg(c);
     case 5: {
-        static const char *const kSys[] = {"Mất liên lạc I²C", "Cắt do ALERT, không xác nhận nguyên nhân", "LOCKOUT (trip liên tiếp ≥ 3 lần)", "Cấu hình INA không hợp lệ"};
+        static const char *const kSys[] = {"Mất liên lạc I²C", "Cắt do ALERT, không xác nhận nguyên nhân", "(dự phòng, firmware đã bỏ LOCKOUT)", "Cấu hình INA không hợp lệ"};
         return bit < 4 ? QString::fromUtf8(kSys[bit]) : QString();
     }
     default: return {};

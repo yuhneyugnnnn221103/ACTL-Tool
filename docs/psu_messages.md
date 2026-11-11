@@ -133,7 +133,7 @@ Mỗi trip code là một byte. Bảng bit dưới đây là **TẠM THỜI** th
 | TRIP3 | bit c = INA c+1 báo SHNTOL/POL (quá dòng/công suất); bit 4+c = SHNTUL |
 | TRIP4 | bit c = BUSOL (quá áp bus); bit 4+c = BUSUL (sụt áp bus) |
 | TRIP5 | bit c = TMPOL (quá nhiệt INA); bit 4+c = chân FT của DCM c+1 |
-| TRIP6 | bit0 mất liên lạc I²C; bit1 cắt do ALERT nhưng không xác nhận nguyên nhân; bit2 LOCKOUT; bit3 cấu hình INA không hợp lệ |
+| TRIP6 | bit0 mất liên lạc I²C; bit1 cắt do ALERT nhưng không xác nhận nguyên nhân; bit2 dự phòng (firmware đã bỏ LOCKOUT); bit3 cấu hình INA không hợp lệ |
 | TRIP7..10 | 0 |
 
 Trip code **latch** cho tới khi nhận Clear trip (không tự xóa khi giá trị trở lại bình thường).
@@ -157,18 +157,18 @@ Vùng dự phòng 24 byte được firmware APSU dùng làm vùng mở rộng. O
 
 | Offset | Byte | Dài | Tên trường | Ý nghĩa |
 |---|---|---|---|---|
-| +0..+2 | 239-241 | 3 x 1 | `FW.SAFE_STATE1`, `FW.EN1`, `FW.TRIP_COUNT1` | Cụm 1: trạng thái an toàn (0 BOOT, 1 OFF, 2 ARMING, 3 ON, 4 TRIPPED, 5 LOCKOUT), PWR_EN (1/0), số lần trip liên tiếp |
+| +0..+2 | 239-241 | 3 x 1 | `FW.SAFE_STATE1`, `FW.EN1`, `FW.TRIP_COUNT1` | Cụm 1: trạng thái an toàn (0 BOOT, 1 OFF, 2 ARMING, 3 ON, 4 TRIPPED; LOCKOUT đã bỏ), PWR_EN (1/0), số lần trip liên tiếp |
 | +3..+5 | 242-244 | 3 x 1 | `FW.SAFE_STATE2`, `FW.EN2`, `FW.TRIP_COUNT2` | Cụm 2 (cùng 3 byte) |
 | +6..+8 | 245-247 | 3 x 1 | `FW.SAFE_STATE3`, `FW.EN3`, `FW.TRIP_COUNT3` | Cụm 3 |
 | +9..+11 | 248-250 | 3 x 1 | `FW.SAFE_STATE4`, `FW.EN4`, `FW.TRIP_COUNT4` | Cụm 4 |
 | +12 | 251 | 1 | `FW.SLOT` | Slot đang chạy `A` (app) |
 | +17..+23 | 256-262 | 7 | | 0 (dự phòng) |
 
-Giao diện hiện các giá trị này ở khung "Trạng thái PSU" (cột phải) trên trang PSU. Hai trạng thái **TRIPPED** và **LOCKOUT** ảnh hưởng tới điều khiển (mục 3).
+Giao diện hiện các giá trị này ở khung "Trạng thái PSU" (cột phải) trên trang PSU. Trạng thái **TRIPPED** ảnh hưởng tới điều khiển (mục 3).
 
 ### 2.5a Khung rỗng (X) và quá hạn (?)
 
-Như TRB: PSU không phản hồi thì Gateway thay bằng **khung rỗng** 310 byte `AB CD 81 81 ADDR`, dữ liệu và CRC toàn `00`, `E1 E2` (giả định cùng quy ước với TRB). Nhận khung rỗng thì ô PSU hiện **X** ngay từ khung đầu, kể cả khi chưa có dữ liệu; đủ `system/emptyFramesToLost` khung rỗng liên tiếp (mặc định 3) thì PSU chuyển Mất kết nối và giữ số liệu cuối. Có bản tin thật thì X mất. Quá `system/staleMs` không có khung mới thì hiện **?**.
+Như TRB: PSU không phản hồi thì Gateway thay bằng **khung rỗng** 310 byte `AB CD 81 81 ADDR`, dữ liệu và CRC toàn `00`, `E1 E2` (giả định cùng quy ước với TRB). **X chỉ khi nhận khung rỗng**: ô PSU hiện X ngay từ khung đầu, kể cả khi chưa có dữ liệu; có bản tin thật thì X mất. **? chỉ khi không nhận được khung nào** (kể cả khung rỗng) quá `system/staleMs`: PSU chuyển Mất kết nối, giữ số liệu cuối. **Không còn cơ chế "đủ N khung rỗng liên tiếp thì thành ?"** (cài đặt `system/emptyFramesToLost` chỉ còn áp dụng cho TRB); còn nhận khung rỗng thì vẫn là X, không bao giờ thành ?. Ở chế độ Debug COM, hỏi hết thời gian chờ không đặt X (không có khung nào), chỉ tính vào thống kê lỗi; sau `staleMs` mà vẫn không có khung thì thành **?**.
 
 ### 2.5b Trạng thái từng cụm trên trang tổng quan
 
@@ -176,13 +176,13 @@ Mỗi cụm DCM (và ô Supply) có trạng thái riêng, dựa vào 3 byte theo
 
 | Điều kiện của cụm | Hiện |
 |---|---|
-| `safe_state` là TRIPPED hoặc LOCKOUT (kể cả khi chân EN đã về 0) | **Trip** (đỏ) |
-| Chân EN tắt và không TRIPPED/LOCKOUT | **OFF** (xám nhạt, chữ "OFF"); không so ngưỡng, không tính vào cảnh báo của PSU |
+| `safe_state` là TRIPPED (kể cả khi chân EN đã về 0; **cụm OFF vẫn có thể trip**, lúc đó hiện Trip, không hiện OFF) | **Trip** (đỏ) |
+| Chân EN tắt và không TRIPPED | **OFF** (xám nhạt, chữ "OFF"); không so ngưỡng, không tính vào cảnh báo của PSU |
 | Chân EN bật, có giá trị của cụm vượt ngưỡng | **Quá ngưỡng** (cam) |
 | Chân EN bật, trong ngưỡng | **Tốt** (xanh) |
 
 - Ô **Supply** luôn so ngưỡng, không phụ thuộc EN.
-- Ô tên PSU là **Trip** khi có một cụm TRIPPED/LOCKOUT hoặc có trip code khác 0, còn lại theo cảnh báo của các cụm đang bật và Supply.
+- Ô tên PSU là **Trip** khi có một cụm TRIPPED hoặc có trip code khác 0, còn lại theo cảnh báo của các cụm đang bật và Supply.
 - Trip theo cụm tạm lấy từ `safe_state` vì bảng trip code chưa chuẩn; khi có trip code theo từng cụm thì xác định cụm lỗi qua trip code.
 
 ### 2.6 Cách app xử lý
@@ -210,8 +210,7 @@ Mỗi cụm DCM (và ô Supply) có trạng thái riêng, dựa vào 3 byte theo
 
 - Mỗi lệnh **ghi đè trạng thái bật/tắt**, nên giao diện luôn hỏi xác nhận trước khi gửi. Mỗi cụm DCM (3 DCM) có một chân EN riêng; bit k của Mask điều khiển chân EN cụm k+1. Khi chọn PSU, 4 ô "Bật cụm" được điền sẵn theo `FW.EN1..4` bit0. ****
 - **ClearTrip = `01`:** đang TRIPPED thì xóa trip code và các cờ, về OFF; **lệnh bật trong cùng khung bị bỏ qua** (phải gửi ở khung sau). App tự gửi Clear trip (tắt) rồi, sau 300 ms, gửi lệnh bật ở khung riêng khi PSU đang TRIPPED. Ở trạng thái khác thì xóa trip code và bật/tắt theo Mask trong một khung.
-- **LOCKOUT** (≥ 3 lần trip liên tiếp): mọi lệnh bị bỏ qua, trip code giữ nguyên, chỉ reset phần cứng mới thoát; giao diện chặn gửi và báo rõ.
-- Lệnh bật bị từ chối (đang TRIPPED/LOCKOUT hoặc đang nạp code) thì PSU bỏ qua im lặng.
+- Lệnh bật bị từ chối (đang TRIPPED hoặc đang nạp code) thì PSU bỏ qua im lặng.
 - Không có ACK: app chỉ báo "đã gửi", không biết PSU đã thực hiện hay chưa; kết quả thấy qua bản tin giám sát kế tiếp.
 
 ## 4. Cấu hình
