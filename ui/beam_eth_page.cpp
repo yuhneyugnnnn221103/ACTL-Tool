@@ -198,7 +198,7 @@ bool BeamEthPage::send(bool quiet)
         return false;
     }
     core::Request r;
-    r.data = proto::gwhdr::add(proto::gwhdr::kDevBeam, buildFrame(p));                      // bản tin độc lập, không có trả lời: gửi xong là xong
+    r.data = proto::gwhdr::addBeam(buildFrame(p));                      // bản tin độc lập, không có trả lời: gửi xong là xong
     m_ctx.monitorLink->send(r);
     ++m_sentCount;
     if (quiet) {   // theo chu kỳ: chỉ cập nhật bộ đếm, nhật ký đã ghi lúc bắt đầu và dừng

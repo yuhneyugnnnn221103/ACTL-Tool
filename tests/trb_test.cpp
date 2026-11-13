@@ -380,10 +380,13 @@ private slots:
 
         const QByteArray beam = proto::beameth::buildFrame(proto::beameth::Params{});         // 42 byte = 3 khung 14 byte
         QCOMPARE(beam.size(), 42);
-        const QByteArray sb = gh::insert(gh::kDevBeam, beam);
-        QCOMPARE(sb.size(), 45);
-        QCOMPARE(sb.left(5).toHex(), QByteArray("abcd01002d"));             // một bản tin: LEN = 45, chèn sau AB CD đầu tiên
+        const QByteArray sb = gh::insertBeam(beam);
+        QCOMPARE(sb.size(), 47);
+        QCOMPARE(sb.left(5).toHex(), QByteArray("abcd05002f"));             // AB CD + TYPE 05 + LEN = 47, rồi 42 byte nguyên vẹn
+        QCOMPARE(sb.mid(5), beam);
         QCOMPARE(gh::strip(sb), beam);
+        gh::Unwrapper u;
+        QCOMPARE(u.feed(sb), beam);                                         // Gateway bỏ 5 byte đầu
     }
 
     // ---------- Beam Ethernet ----------

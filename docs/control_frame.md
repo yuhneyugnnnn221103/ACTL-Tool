@@ -6,11 +6,11 @@ Không còn khung điều khiển tổng 107 byte có mask: mỗi lệnh điều
 |---|---|---|---|---|
 | Điều khiển TRB | `A2 A2` | 14 byte | `01` | 17 |
 | Beam TRB | `14 14` | 17 byte | `01` | 20 |
-| Điều khiển beam (RDPU, 3 khung x 14 byte, mục dưới) | không có CMD chung | 42 byte | `01` | 45 (chèn sau `AB CD` của khung đầu tiên) |
+| Điều khiển beam (RDPU, 3 khung x 14 byte, mục dưới) | không có CMD chung | 42 byte | TYPE `05` (đặt 5 byte `AB CD 05 LEN` trước khối) | 47 (5 + 42) |
 | Điều khiển PSU | `01 01` | 13 byte | `02` | 16 |
 
 - Mọi khung TRB và PSU tính CRC từ byte địa chỉ (ngay sau CMD); khung beam tính CRC từ header (mục dưới).
-- DEV của bản tin beam (RDPU) đang đặt là `01` (TRB) vì beam do các TRB thực thi; đổi ở `proto::gwhdr::kDevBeam` nếu Gateway quy định khác.
+- Bản tin beam (RDPU) không chèn vào giữa: phần mềm đặt `AB CD 05 LEN(2, big-endian)` (5 byte) trước nguyên khối 42 byte, LEN = 47; Gateway bỏ 5 byte đầu. Debug COM gửi khối 42 byte trần.
 
 ## Phần điều khiển beam (42 byte)
 

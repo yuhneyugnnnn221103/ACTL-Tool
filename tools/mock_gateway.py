@@ -511,6 +511,22 @@ class ConfigResponder:
             if b[0] != H1 or b[1] != H2:
                 del b[0]
                 continue
+            if b[2] == 5 and not unwrapped:                   # beam RDPU: AB CD 05 LEN(2, BE) + khối 42 byte; Gateway bỏ 5 byte đầu
+                if len(b) < 5:
+                    break
+                n = b[3] << 8 | b[4]
+                if n < 9 or n > 8192:
+                    del b[0]
+                    continue
+                if len(b) < n:
+                    break
+                inner = bytes(b[5:n])
+                self.log(f"  [TYPE 05, LEN {n}] -> khối beam {n - 5} byte")
+                kind = control_kind(inner)
+                if kind is not None:
+                    self.log(f"  {decode_section(kind, inner)}")
+                del b[:n]
+                continue
             if b[2] in (1, 2, 3) and not unwrapped:           # DEV (01 TRB, 02 PSU, 03 TRSU) + LEN 2 byte big-endian = tổng độ dài khung
                 if len(b) < 5:
                     break
@@ -660,8 +676,11 @@ def cmd_selftest(_args):
         k[6:8] = freq.to_bytes(2, "little"); k[8], k[9] = mode, m
         k[10:12] = crc16(bytes(k[:10])).to_bytes(2, "little"); k[12], k[13] = 0xEF, 0xFF
         bm += k
-    check(env(1, bytes(bm))[:5] == b"\xAB\xCD\x01\x00\x2D", "beam 42 byte: DEV 01, LEN = 45, chèn sau AB CD đầu tiên")
-    lines = decoded(1, bytes(bm))
+    bw = b"\xAB\xCD\x05\x00\x2F" + bytes(bm)
+    check(len(bw) == 47, "beam 42 byte: AB CD 05 LEN=47 đặt trước khối 42 byte")
+    lines = []
+    ConfigResponder(rng=random.Random(9), log=lines.append).feed(bw)
+    lines = [l for l in lines if "TYPE" not in l]
     check(len(lines) == 1 and "[01] Esp=12.3 Beta=-4.5 Freq=2400 MHz Mode=5" in lines[0] and "[10] Esp=-1.0" in lines[0]
           and "[11] Esp=3276.7 Beta=-3276.8 Freq=65535 MHz Mode=255" in lines[0] and "đúng" in lines[0], "điều khiển beam (giá trị riêng từng mode, CRC từ header)")
 
