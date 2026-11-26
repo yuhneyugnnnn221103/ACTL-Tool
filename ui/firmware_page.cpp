@@ -369,8 +369,6 @@ QWidget *FirmwarePage::buildStmTab()
         h->addWidget(browse);
         form->addRow(QStringLiteral("File firmware (.bin, tối đa 639 KB)"), h);
     }
-    m_stmAutoCommit = new QCheckBox(QStringLiteral("Tự kích hoạt (COMMIT, thiết bị reset, bootloader chạy app mới) ngay khi CRC32 đúng"));
-    form->addRow(QString(), m_stmAutoCommit);
 
     auto button = [this](const QString &text, auto slot) {
         auto *b = new QPushButton(text);
@@ -402,7 +400,7 @@ QWidget *FirmwarePage::buildStmTab()
         if (!m_ctx.auth->unlock(this)) return;
         for (int r = 0; r < count; ++r) { m_stmTable->item(r, 3)->setText({}); m_stmTable->item(r, 4)->setText({}); m_stmTable->item(r, 4)->setBackground({}); }
         setBusy(true);
-        m_ctx.stmOta->start(selected(), m_stmImage, m_stmVersionName.text, m_stmAutoCommit->isChecked());
+        m_ctx.stmOta->start(selected(), m_stmImage, m_stmVersionName.text);
     }));
     buttons->addWidget(m_stmCancel);
     for (QPushButton *b : m_stmActions) theme::setRole(b, b->text().startsWith(QStringLiteral("Nạp")) ? "danger" : "secondary");
@@ -424,10 +422,6 @@ QWidget *FirmwarePage::buildStmTab()
     connect(ota, &services::StmOta::deviceFinished, this, [=](int addr, bool ok, const QString &m) {
         m_stmTable->item(row(addr), 4)->setText(m);
         m_stmTable->item(row(addr), 4)->setBackground(QBrush(ok ? QColor(0xC0DD97) : QColor(0xF09595)));
-    });
-    connect(ota, &services::StmOta::commitRequested, this, [=](int addr) {
-        m_ctx.stmOta->confirmCommit(yes(this, QStringLiteral("Kích hoạt firmware"),
-            QStringLiteral("PSU %1 đã nhận đủ ảnh và CRC32 đúng.\n\nKích hoạt ngay? Thiết bị sẽ reset và bootloader chạy app mới.").arg(proto::psuaddr::displayNo(addr))));
     });
     connect(ota, &services::StmOta::finished, this, [=] { setBusy(false); });
 

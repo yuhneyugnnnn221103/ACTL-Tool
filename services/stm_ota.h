@@ -19,8 +19,7 @@ public:
     bool busy() const { return m_state != State::Idle; }
 
     void queryInfo(const QList<int> &addrs);
-    void start(const QList<int> &addrs, const QByteArray &image, const QString &version, bool autoCommit);   // version rỗng = không gửi SET_VERSION
-    void confirmCommit(bool commit); // trả lời cho commitRequested() khi không tự commit
+    void start(const QList<int> &addrs, const QByteArray &image, const QString &version);   // version rỗng = không gửi SET_VERSION
     void cancel();
 
 signals:
@@ -28,11 +27,10 @@ signals:
     void deviceVersion(int addr, const QString &version);   // trả lời GET_VERSION; rỗng = chưa đặt
     void deviceProgress(int addr, int percent, const QString &text);
     void deviceFinished(int addr, bool ok, const QString &message);
-    void commitRequested(int addr);
     void finished(int okCount, int failCount);
 
 private:
-    enum class State { Idle, Info, EnterRec, WaitRecovery, Erase, Begin, SetVersion, Data, End, AwaitUser, Commit, PostCommit, PostInfo, GetVersion };
+    enum class State { Idle, Info, EnterRec, WaitRecovery, Erase, Begin, SetVersion, Data, End, Commit, PostCommit, PostInfo, GetVersion };
     static constexpr int kMaxRetries = 5;
     static constexpr int kReplyMs = 200;           // chờ ACK của INFO, ENTER_REC, BEGIN, DATA, COMMIT
     static constexpr int kEraseMs = 40000;         // ERASE xóa 5 sector, một ACK khi xong; yêu cầu PC chờ >= 30 s (chưa đo), lấy dư
@@ -61,7 +59,7 @@ private:
     QByteArray m_image;
     QString m_version, m_got;
     char m_slot = 0;
-    bool m_autoCommit = false, m_infoOnly = false;
+    bool m_infoOnly = false;
     State m_state = State::Idle;
     int m_addr = 0, m_seq = 0, m_chunks = 0, m_retries = 0, m_polls = 0, m_ok = 0, m_fail = 0;
     QTimer m_timer;

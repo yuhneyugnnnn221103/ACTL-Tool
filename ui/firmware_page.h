@@ -42,7 +42,6 @@ private:
 
     QTableWidget *m_stmTable;
     proto::stmota::VersionName m_stmVersionName;   // chuỗi version lấy từ tên file .bin đã chọn
-    QCheckBox *m_stmAutoCommit;
     QList<QPushButton *> m_stmActions;
     QPushButton *m_stmCancel;
     QByteArray m_stmImage;

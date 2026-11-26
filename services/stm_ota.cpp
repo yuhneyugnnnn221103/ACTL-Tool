@@ -23,13 +23,12 @@ void StmOta::queryInfo(const QList<int> &addrs)
     nextDevice();
 }
 
-void StmOta::start(const QList<int> &addrs, const QByteArray &image, const QString &version, bool autoCommit)
+void StmOta::start(const QList<int> &addrs, const QByteArray &image, const QString &version)
 {
     if (busy() || addrs.isEmpty()) return;
     m_queue = addrs;
     m_image = image;
     m_version = version;
-    m_autoCommit = autoCommit;
     m_infoOnly = false;
     m_ok = m_fail = 0;
     nextDevice();
@@ -113,13 +112,6 @@ void StmOta::done(bool ok, const QString &message)
     ++(ok ? m_ok : m_fail);
     emit deviceFinished(m_addr, ok, message);
     nextDevice();
-}
-
-void StmOta::confirmCommit(bool commit)
-{
-    if (m_state != State::AwaitUser) return;
-    if (commit) send(stmota::buildCtrl(quint8(m_addr), stmota::kCommit), State::Commit, kReplyMs);
-    else done(true, QStringLiteral("đã nạp và kiểm tra CRC32, CHƯA kích hoạt (PSU vẫn ở recovery)"));
 }
 
 void StmOta::onFrame(const core::Frame &frame)
@@ -220,10 +212,7 @@ void StmOta::onFrame(const core::Frame &frame)
         if (a.ackCmd != stmota::kEnd) return;
         if (a.status != stmota::Ok) { done(false, QStringLiteral("END: %1 (CRC thiết bị tính = 0x%2)").arg(why).arg(a.info, 8, 16, QLatin1Char('0'))); return; }
         emit deviceProgress(m_addr, 100, QStringLiteral("CRC32 đúng"));
-        if (m_autoCommit) { send(stmota::buildCtrl(quint8(m_addr), stmota::kCommit), State::Commit, kReplyMs); return; }
-        m_timer.stop();
-        m_state = State::AwaitUser;
-        emit commitRequested(m_addr);
+        send(stmota::buildCtrl(quint8(m_addr), stmota::kCommit), State::Commit, kReplyMs);   // COMMIT bắt buộc, không còn tùy chọn
         break;
 
     case State::Commit:

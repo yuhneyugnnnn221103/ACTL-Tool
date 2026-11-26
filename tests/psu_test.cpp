@@ -500,7 +500,7 @@ private slots:
         services::StmOta ota(&link);
         QSignalSpy info(&ota, &services::StmOta::deviceInfo), fin(&ota, &services::StmOta::deviceFinished);
         QSignalSpy ver(&ota, &services::StmOta::deviceVersion);
-        ota.start({3}, QByteArray(300, 'b'), QStringLiteral("PSU_v1.2.3_abc123"), true);   // 300 byte = 2 gói
+        ota.start({3}, QByteArray(300, 'b'), QStringLiteral("PSU_v1.2.3_abc123"));   // 300 byte = 2 gói
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 8000);
         // SET_VERSION ngay sau BEGIN; sau COMMIT hỏi INFO (slot A) rồi GET_VERSION.
         const QList<quint8> expect{stmota::kInfo, stmota::kEnterRec, stmota::kInfo, stmota::kErase, stmota::kBegin, stmota::kSetVersion,
@@ -533,7 +533,7 @@ private slots:
         psu.attach(tp);
         services::StmOta ota(&link);
         QSignalSpy fin(&ota, &services::StmOta::deviceFinished);
-        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"), true);
+        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"));
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 8000);
         const QList<quint8> expect{stmota::kInfo, stmota::kInfo, stmota::kInfo, stmota::kErase, stmota::kBegin, stmota::kSetVersion, stmota::kData,
                                    stmota::kEnd, stmota::kCommit, stmota::kInfo, stmota::kGetVersion};
@@ -553,12 +553,12 @@ private slots:
         services::StmOta ota(&link);
         QSignalSpy fin(&ota, &services::StmOta::deviceFinished);
 
-        ota.start({3}, {}, QStringLiteral("v1"), true);                                        // chưa chọn file: không ENTER_REC, không xóa app
+        ota.start({3}, {}, QStringLiteral("v1"));                                        // chưa chọn file: không ENTER_REC, không xóa app
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
         QVERIFY(!fin.last().at(1).toBool());
         QCOMPARE(psu.cmds, (QList<quint8>{stmota::kInfo}));
         psu.cmds.clear();
-        ota.start({3}, QByteArray(stmota::kMaxImageBytes + 1, 'x'), QStringLiteral("v1"), true);   // quá 639 KB
+        ota.start({3}, QByteArray(stmota::kMaxImageBytes + 1, 'x'), QStringLiteral("v1"));   // quá 639 KB
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
         QVERIFY(!fin.last().at(1).toBool());
         QVERIFY(fin.last().at(2).toString().contains("639"));
@@ -567,7 +567,7 @@ private slots:
 
         psu.cmds.clear();
         psu.enterStatus = stmota::Refused;                                  // còn cụm chưa OFF: ENTER_REC bị từ chối, app vẫn chạy
-        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"), true);
+        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"));
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 3000);
         QVERIFY(!fin.last().at(1).toBool());
         QVERIFY(fin.last().at(2).toString().contains("ENTER_REC") && fin.last().at(2).toString().contains("DCM"));
@@ -575,7 +575,7 @@ private slots:
 
         psu.enterStatus = stmota::Ok;                                       // vào được recovery nhưng xóa lỗi
         psu.eraseStatus = stmota::EraseFail;
-        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"), true);
+        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"));
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 6000);
         QVERIFY(!fin.last().at(1).toBool());
         QVERIFY(fin.last().at(2).toString().contains("xóa"));
@@ -584,7 +584,7 @@ private slots:
         psu.eraseStatus = stmota::Ok;
         psu.ignoreSetVersion = true;
         psu.cmds.clear();
-        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"), true);
+        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"));
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 8000);
         QVERIFY(!fin.last().at(1).toBool());
         QVERIFY(fin.last().at(2).toString().contains("SET_VERSION"));
@@ -595,7 +595,7 @@ private slots:
         // Version đọc lại không khớp chuỗi đã gửi: báo lỗi (ảnh đã kích hoạt).
         psu.slot = 'R';
         psu.mangleVersion = QStringLiteral("khac");
-        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"), true);
+        ota.start({3}, QByteArray(100, 'a'), QStringLiteral("v1"));
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 8000);
         QVERIFY(!fin.last().at(1).toBool());
         QVERIFY(fin.last().at(2).toString().contains("không khớp"));
@@ -604,7 +604,7 @@ private slots:
         // Không có version (chuỗi rỗng): bỏ qua SET_VERSION, vẫn nạp được.
         psu.slot = 'R';
         psu.cmds.clear();
-        ota.start({3}, QByteArray(100, 'a'), QString(), true);
+        ota.start({3}, QByteArray(100, 'a'), QString());
         QTRY_VERIFY_WITH_TIMEOUT(!ota.busy(), 8000);
         QVERIFY(fin.last().at(1).toBool());
         QCOMPARE(psu.cmds.count(stmota::kSetVersion), 0);

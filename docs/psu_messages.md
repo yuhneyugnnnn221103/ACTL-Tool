@@ -457,7 +457,7 @@ Stop-and-wait: app chờ ACK rồi mới gửi khung kế.
 5. **SET_VERSION** (ngay sau ACK của BEGIN; chờ ACK 200 ms, thử tối đa 3 lần): đặt chuỗi version ASCII = tên file `.bin` bỏ đuôi. PSU giữ chuỗi trong RAM rồi ghi vào header ảnh khi nhận END. Không có ACK hoặc status khác `0` thì **dừng** và báo lỗi (firmware cũ không biết lệnh này).
 6. **DATA** từng gói 256 byte, khung luôn 269 byte, gói cuối đệm `FF` (chờ ACK 200 ms; hết giờ thì gửi lại, tối đa 5 lần). `BadSeq` thì nhảy theo seq PSU báo (`Info + 1`), tối đa 5 lần. `ProgFail` thì dừng.
 7. **END** (chờ 3 s): PSU kiểm CRC32; sai thì báo kèm CRC thiết bị tính được.
-8. **COMMIT** (chờ 200 ms): có tùy chọn tự kích hoạt ngay khi CRC32 đúng, hoặc hỏi người dùng trước. PSU ACK rồi reset, bootloader chạy app mới. Mất ACK COMMIT (PSU thường reset trước khi trả lời) không coi là lỗi.
+8. **COMMIT** (chờ 200 ms): bắt buộc, gửi ngay khi CRC32 đúng (không còn tùy chọn hỏi người dùng). PSU ACK rồi reset, bootloader chạy app mới. Mất ACK COMMIT (PSU thường reset trước khi trả lời) không coi là lỗi.
 9. **Xác nhận:** chờ ~1 s, hỏi **INFO** lặp lại tới khi slot `A`, rồi **GET_VERSION** (chờ 200 ms, thử tối đa 3 lần): chuỗi đọc về phải **bằng** chuỗi đã gửi, khác thì báo "version đọc lại không khớp".
 10. Hủy giữa chừng: PSU đã ở recovery với vùng app chưa hoàn chỉnh, cần nạp lại để khởi động app.
 
